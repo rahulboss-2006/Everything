@@ -32,7 +32,7 @@ import {
 } from "./services/converterApi";
 
 import {
-  BrowserRouter,
+  HashRouter,
   Routes,
   Route,
 } from "react-router-dom";
@@ -79,7 +79,7 @@ function AppLayout({ children }) {
 
 function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
 
       <Routes>
 
@@ -256,7 +256,7 @@ function App() {
 
       </Routes>
 
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
@@ -756,3 +756,4 @@ function FeatureCard({
 
 
 export default App;
+
