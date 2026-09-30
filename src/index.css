@@ -1,0 +1,731 @@
+@import "tailwindcss";
+
+/* =========================================================
+   TAILWIND DARK MODE
+========================================================= */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+
+/* =========================================================
+   ROOT
+========================================================= */
+
+:root {
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  color-scheme: light;
+
+  --page-bg: #ffffff;
+  --page-text: #0f172a;
+  --muted-text: #64748b;
+  --border-color: #e2e8f0;
+}
+
+
+/* =========================================================
+   DARK ROOT
+========================================================= */
+
+html.dark {
+  color-scheme: dark;
+
+  --page-bg: #020617;
+  --page-text: #f8fafc;
+  --muted-text: #94a3b8;
+  --border-color: #1e293b;
+}
+
+
+/* =========================================================
+   LIGHT ROOT
+========================================================= */
+
+html.light {
+  color-scheme: light;
+
+  --page-bg: #ffffff;
+  --page-text: #0f172a;
+  --muted-text: #64748b;
+  --border-color: #e2e8f0;
+}
+
+
+/* =========================================================
+   GLOBAL
+========================================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--page-bg);
+}
+
+body {
+  margin: 0;
+
+  min-width: 320px;
+  min-height: 100vh;
+
+  background: var(--page-bg);
+  color: var(--page-text);
+
+  transition:
+    background-color 300ms ease,
+    color 300ms ease;
+}
+
+
+/* =========================================================
+   SELECTION
+========================================================= */
+
+::selection {
+  background: #0f172a;
+  color: white;
+}
+
+html.dark ::selection {
+  background: white;
+  color: #020617;
+}
+
+
+/* =========================================================
+   FORM ELEMENTS
+========================================================= */
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+
+/* =========================================================
+   LINKS
+========================================================= */
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--page-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+
+/* =========================================================
+   FOCUS
+========================================================= */
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+
+/* =========================================================
+   IMAGE
+========================================================= */
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
+
+html.dark .footer-text::before {
+  background-color: #020618;
+}
+
+html.light .footer-text::before {
+  background-color: #ffffff;
+}
+
+.footer-text::before {
+  content: "";
+
+  position: absolute;
+
+  width: 50px;
+  height: 30px;
+
+  background-color: #020618;
+
+  top: 9px;
+
+  z-index: -1;
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  /*
+    IMPORTANT:
+    Do NOT completely disable the AI loader animation.
+    Only make normal page animations shorter.
+  */
+
+  *:not(.ai-background-loader),
+  *:not(.ai-background-loader)::before,
+  *:not(.ai-background-loader)::after {
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================================
+   PREMIUM AI BACKGROUND REMOVAL LOADER
+========================================================= */
+
+.ai-background-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  border-radius: 0;
+  pointer-events: none;
+
+  background:
+    linear-gradient(135deg,
+      rgba(2, 6, 23, 0.78),
+      rgba(15, 23, 42, 0.55),
+      rgba(2, 6, 23, 0.78));
+
+  backdrop-filter: blur(28px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(125%);
+
+  isolation: isolate;
+}
+
+
+/* =========================================
+   RED / BLUE DIAGONAL AI SCAN
+========================================= */
+
+.ai-background-loader::before {
+  content: "";
+
+  position: absolute;
+  inset: -80%;
+
+  background:
+    repeating-linear-gradient(135deg,
+      transparent 0px,
+      transparent 42px,
+
+      rgba(255, 30, 80, 0.00) 43px,
+      rgba(255, 30, 80, 0.16) 45px,
+      rgba(255, 30, 80, 0.00) 48px,
+
+      transparent 92px,
+
+      rgba(0, 180, 255, 0.00) 94px,
+      rgba(0, 180, 255, 0.14) 97px,
+      rgba(0, 180, 255, 0.00) 100px);
+
+  transform: translate3d(-20%, -20%, 0);
+
+  animation:
+    aiDiagonalScan 2.2s linear infinite;
+
+  mix-blend-mode: screen;
+}
+
+
+/* =========================================
+   MOVING WHITE LIGHT SWEEP
+========================================= */
+
+.ai-background-loader::after {
+  content: "";
+
+  position: absolute;
+
+  width: 24%;
+  height: 180%;
+
+  left: -45%;
+  top: -40%;
+
+  transform: rotate(38deg);
+
+  background:
+    linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.02) 35%,
+      rgba(255, 255, 255, 0.15) 43%,
+      rgba(255, 255, 255, 0.85) 49%,
+      rgba(255, 255, 255, 1) 50%,
+      rgba(255, 255, 255, 0.65) 51%,
+      rgba(255, 255, 255, 0.12) 58%,
+      transparent 75%);
+
+  filter:
+    blur(7px) drop-shadow(0 0 25px rgba(255, 255, 255, .45));
+
+  animation:
+    aiLightSweep 2.4s cubic-bezier(.45, 0, .25, 1) infinite;
+}
+
+
+/* =========================================
+   EXTRA GLOW
+========================================= */
+
+.ai-glow {
+  position: absolute;
+  inset: -20%;
+
+  background:
+    radial-gradient(circle at 20% 20%,
+      rgba(255, 30, 80, 0.20),
+      transparent 32%),
+    radial-gradient(circle at 80% 80%,
+      rgba(0, 170, 255, 0.20),
+      transparent 32%);
+
+  filter: blur(35px);
+
+  animation:
+    aiGlowMove 3s ease-in-out infinite alternate;
+
+  mix-blend-mode: screen;
+}
+
+
+/* =========================================
+   SCAN LINE
+========================================= */
+
+.ai-scan-line {
+  position: absolute;
+
+  left: 0;
+  width: 100%;
+  height: 2px;
+
+  background:
+    linear-gradient(90deg,
+      transparent,
+      rgba(0, 200, 255, .2),
+      rgba(255, 255, 255, .95),
+      rgba(255, 30, 80, .35),
+      transparent);
+
+  box-shadow:
+    0 0 10px rgba(0, 200, 255, .8),
+    0 0 25px rgba(255, 30, 80, .5);
+
+  animation:
+    aiHorizontalScan 2.1s ease-in-out infinite;
+}
+
+
+/* =========================================
+   KEYFRAMES
+========================================= */
+
+@keyframes aiDiagonalScan {
+
+  0% {
+    transform:
+      translate3d(-25%, -25%, 0) rotate(0deg);
+  }
+
+  100% {
+    transform:
+      translate3d(25%, 25%, 0) rotate(0deg);
+  }
+}
+
+
+@keyframes aiLightSweep {
+
+  0% {
+    left: -45%;
+    opacity: 0;
+  }
+
+  12% {
+    opacity: .35;
+  }
+
+  35% {
+    opacity: .8;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  75% {
+    opacity: .55;
+  }
+
+  100% {
+    left: 125%;
+    opacity: 0;
+  }
+}
+
+
+@keyframes aiGlowMove {
+
+  0% {
+    transform:
+      translate3d(-5%, -5%, 0) scale(.9);
+
+    opacity: .45;
+  }
+
+  50% {
+    transform:
+      translate3d(5%, 4%, 0) scale(1.05);
+
+    opacity: .9;
+  }
+
+  100% {
+    transform:
+      translate3d(-2%, 8%, 0) scale(1);
+
+    opacity: .55;
+  }
+}
+
+
+@keyframes aiHorizontalScan {
+
+  0% {
+    top: -5%;
+    opacity: 0;
+  }
+
+  15% {
+    opacity: .8;
+  }
+
+  50% {
+    top: 50%;
+    opacity: 1;
+  }
+
+  85% {
+    opacity: .7;
+  }
+
+  100% {
+    top: 105%;
+    opacity: 0;
+  }
+}
+
+/* =========================================================
+   PROGRESS SHINE
+   ========================================================= */
+
+@keyframes aiProgressShine {
+
+  0% {
+    left: -80px;
+  }
+
+  100% {
+    left: 100%;
+  }
+
+}
+
+
+
+
+/* =========================================
+   REDUCED MOTION
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .ai-background-loader,
+  .ai-background-loader::before,
+  .ai-background-loader::after,
+  .ai-glow,
+  .ai-scan-line {
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* =========================================================
+   AI PROGRESS CONTENT
+========================================================= */
+
+.ai-progress-content {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  pointer-events: none;
+}
+
+.ai-progress-card {
+  min-width: 250px;
+  padding: 20px 24px;
+
+  text-align: center;
+
+  background: rgba(2, 6, 23, 0.041);
+
+  border: 1px solid rgba(255, 255, 255, 0.027);
+  border-radius: 18px;
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.45),
+    0 0 35px rgba(0, 180, 255, 0.08);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.ai-progress-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  margin-bottom: 8px;
+
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-progress-percent {
+  margin-bottom: 10px;
+
+  color: #fff;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 800;
+
+  text-shadow:
+    0 0 15px rgba(0, 200, 255, 0.35);
+}
+
+.ai-progress-track {
+  position: relative;
+
+  width: 210px;
+  height: 6px;
+
+  overflow: hidden;
+
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.ai-progress-fill {
+  position: relative;
+
+  height: 100%;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      90deg,
+      #00b3ff36,
+      #7c3aed2d,
+      #ff1e4f2d
+    );
+
+  box-shadow:
+    0 0 12px rgba(0, 180, 255, 0.55),
+    0 0 20px rgba(255, 30, 80, 0.25);
+
+  transition: width 0.15s linear;
+}
+
+.ai-progress-fill::after {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  left: -80px;
+
+  width: 80px;
+  height: 100%;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.8),
+      transparent
+    );
+
+  animation: aiProgressShine 1.1s linear infinite;
+}
+
+.ai-progress-text {
+  margin-top: 9px;
+
+  color: rgba(255, 255, 255, 0.5);
+
+  font-size: 10px;
+  letter-spacing: 0.2px;
+}
+
+
+/* Spinner */
+
+.ai-progress-spinner {
+  width: 15px;
+  height: 15px;
+
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #00b3ff77;
+  border-right-color: #ff1e4f57;
+
+  border-radius: 50%;
+
+  animation: aiProgressSpin 0.8s linear infinite;
+}
+
+
+@keyframes aiProgressSpin {
+
+  to {
+    transform: rotate(360deg);
+  }
+
+}
+
+/* =========================================================
+   MIDDLE-SIDE RESIZE HANDLES
+   EXACT CENTER OF EACH SIDE
+========================================================= */
+
+.everything-rnd-handle {
+  position: absolute !important;
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 6px !important;
+  border: 2px solid white !important;
+  background: rgb(124, 58, 237) !important;
+  box-shadow:
+    0 0 0 2px rgba(124, 58, 237, 0.35),
+    0 5px 18px rgba(0, 0, 0, 0.28) !important;
+  z-index: 80 !important;
+}
+
+/* TOP - exact horizontal center */
+.everything-rnd-handle-top {
+  width: 22px !important;
+  height: 12px !important;
+  left: 50% !important;
+  top: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 999px !important;
+}
+
+/* BOTTOM - exact horizontal center */
+.everything-rnd-handle-bottom {
+  width: 22px !important;
+  height: 12px !important;
+  left: 50% !important;
+  bottom: 0 !important;
+  transform: translate(-50%, 50%) !important;
+  border-radius: 999px !important;
+}
+
+/* LEFT - exact vertical center */
+.everything-rnd-handle-left {
+  width: 12px !important;
+  height: 22px !important;
+  left: 0 !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 999px !important;
+}
+
+/* RIGHT - exact vertical center */
+.everything-rnd-handle-right {
+  width: 12px !important;
+  height: 22px !important;
+  right: 0 !important;
+  top: 50% !important;
+  transform: translate(50%, -50%) !important;
+  border-radius: 999px !important;
+}
+
+/* Hover */
+.everything-rnd-handle:hover {
+  background: rgb(139, 92, 246) !important;
+}
