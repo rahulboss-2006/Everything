@@ -30,7 +30,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function Auth() {
   const initialMode =
-    window.location.pathname === "/register"
+    window.location.hash === "#/register"
       ? "register"
       : "login";
 
@@ -92,9 +92,7 @@ export default function Auth() {
 
     setOtp("");
 
-    window.history.replaceState(
-      {},
-      "",
+    navigate(
       nextMode === "register"
         ? "/register"
         : "/login"
@@ -315,11 +313,7 @@ export default function Auth() {
 
       setOtp("");
 
-      window.history.replaceState(
-        {},
-        "",
-        "/login"
-      );
+      navigate("/login");
     } catch (err) {
       console.error(
         "OTP ERROR:",
@@ -744,6 +738,7 @@ export default function Auth() {
     </div>
   );
 }
+
 
 
 
