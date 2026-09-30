@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useState,
@@ -421,7 +421,7 @@ function UploadBox() {
 
 
         /* =================================
-           IMAGE → PDF
+           IMAGE â†’ PDF
         ================================= */
 
         if (
@@ -440,7 +440,7 @@ function UploadBox() {
 
 
         /* =================================
-           IMAGE → IMAGE
+           IMAGE â†’ IMAGE
         ================================= */
 
         else if (
@@ -461,7 +461,7 @@ function UploadBox() {
 
 
         /* =================================
-           PDF → IMAGE
+           PDF â†’ IMAGE
         ================================= */
 
         else {
@@ -549,7 +549,7 @@ function UploadBox() {
         ================================= */
 
         setConversionStatus(
-          "✓ Conversion complete"
+          "âœ“ Conversion complete"
         );
 
 
@@ -756,4 +756,5 @@ function FeatureCard({
 
 
 export default App;
+
 
