@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useState,
@@ -153,7 +153,7 @@ const Home = () => {
 
       let result;
 
-      // Image → PDF
+      // Image â†’ PDF
       if (
         extension !== "pdf" &&
         selectedFormat === "pdf"
@@ -165,7 +165,7 @@ const Home = () => {
         result = await convertImageToPdf(file);
       }
 
-      // Image → Image
+      // Image â†’ Image
       else if (extension !== "pdf") {
         setConversionStatus(
           `Converting to ${selectedFormat.toUpperCase()}...`
@@ -177,7 +177,7 @@ const Home = () => {
         );
       }
 
-      // PDF → Image
+      // PDF â†’ Image
       else {
         setConversionStatus(
           `Converting PDF to ${selectedFormat.toUpperCase()}...`
@@ -231,7 +231,7 @@ const Home = () => {
       }
 
       setConversionStatus(
-        "✓ Conversion complete"
+        "âœ“ Conversion complete"
       );
 
       // -----------------------------
@@ -254,7 +254,7 @@ const Home = () => {
     setConversionStatus("");
     setIsConverting(false);
 
-    window.location.href = "/recharge";
+    window.location.hash = "#/recharge";
     return;
   }
 

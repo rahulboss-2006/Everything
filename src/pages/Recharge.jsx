@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
@@ -72,7 +72,7 @@ export default function Recharge() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      window.location.href = "/login";
+      window.location.hash = "#/login";
     }
   }, [authLoading, user]);
 
@@ -91,7 +91,7 @@ export default function Recharge() {
   /*
    * Calculate custom credits.
    *
-   * ৳1 = 2 credits
+   * à§³1 = 2 credits
    */
 
   const customCredits = useMemo(() => {
@@ -229,7 +229,7 @@ export default function Recharge() {
 
       if (amount < 10) {
         setError(
-          "Minimum recharge amount is ৳10."
+          "Minimum recharge amount is à§³10."
         );
 
         return;
@@ -276,8 +276,7 @@ export default function Recharge() {
 
 
       if (!token) {
-        window.location.href =
-          "/login";
+        window.location.hash = "#/login";
 
         return;
       }
@@ -415,12 +414,12 @@ export default function Recharge() {
           <button
             type="button"
             onClick={() => {
-              window.location.href = "/";
+              window.location.hash = "#/";
             }}
             className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black"
           >
             <span className="text-lg">
-              ←
+              â†
             </span>
 
             <span>
@@ -457,7 +456,7 @@ export default function Recharge() {
 
 
           <div className="mx-auto mt-3 inline-flex rounded-full border px-4 py-2 text-sm">
-            ৳1 = 2 credits
+            à§³1 = 2 credits
           </div>
 
         </div>
@@ -540,7 +539,7 @@ export default function Recharge() {
 
                   {isSelected && (
                     <div className="absolute right-4 top-4 rounded-full px-2 py-1 text-xs font-semibold">
-                      ✓
+                      âœ“
                     </div>
                   )}
 
@@ -551,7 +550,7 @@ export default function Recharge() {
 
 
                   <p className="mt-5 text-3xl font-bold">
-                    ৳{pkg.price}
+                    à§³{pkg.price}
                   </p>
 
 
@@ -561,7 +560,7 @@ export default function Recharge() {
 
 
                   <p className="mt-2 text-sm opacity-60">
-                    ৳1 = 2 credits
+                    à§³1 = 2 credits
                   </p>
 
 
@@ -604,7 +603,7 @@ export default function Recharge() {
             <div className="mt-2 flex items-center rounded-xl border px-4">
 
               <span className="mr-2 text-lg font-semibold">
-                ৳
+                à§³
               </span>
 
 
@@ -644,12 +643,12 @@ export default function Recharge() {
 
 
             <p className="mt-4 text-xs opacity-60">
-              Minimum amount: ৳10
+              Minimum amount: à§³10
             </p>
 
 
             <p className="mt-1 text-xs opacity-60">
-              Credit rate: ৳1 = 2 credits
+              Credit rate: à§³1 = 2 credits
             </p>
 
           </div>
@@ -701,7 +700,7 @@ export default function Recharge() {
 
                     {isSelected && (
                       <span className="ml-2">
-                        ✓
+                        âœ“
                       </span>
                     )}
 
@@ -765,10 +764,10 @@ export default function Recharge() {
               ? "Creating Payment..."
               : mode === "package" &&
                 selectedPackageData
-              ? `Pay ৳${selectedPackageData.price}`
+              ? `Pay à§³${selectedPackageData.price}`
               : mode === "custom" &&
                 customAmount
-              ? `Pay ৳${customAmount}`
+              ? `Pay à§³${customAmount}`
               : "Continue to Payment"}
 
           </button>
