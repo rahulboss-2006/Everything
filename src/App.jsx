@@ -50,6 +50,7 @@ import Auth from "./pages/Auth";
 import Recharge from "./pages/Recharge";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import AdminPanel from "./admin/AdminPanel";
 
 
 /* =========================================
@@ -204,6 +205,14 @@ function App() {
               <Contact />
             </AppLayout>
           }
+        />
+
+
+        {/* ADMIN PANEL */}
+
+        <Route
+          path="/admin"
+          element={<AdminPanel />}
         />
 
 
