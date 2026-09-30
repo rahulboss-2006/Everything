@@ -5,6 +5,7 @@ import {
   Eye,
   EyeOff,
   Mail,
+  Phone,
   Lock,
   ShieldCheck,
   Sparkles,
@@ -40,6 +41,9 @@ export default function Auth() {
     useState(initialMode);
 
   const [email, setEmail] =
+    useState("");
+
+  const [phone, setPhone] =
     useState("");
 
   const [password, setPassword] =
@@ -128,6 +132,12 @@ export default function Auth() {
         );
       }
 
+      if (mode === "register" && !phone.trim()) {
+        throw new Error(
+          "Please enter your phone number."
+        );
+      }
+
 
       /* ================================
          REGISTER
@@ -137,7 +147,8 @@ export default function Auth() {
         const result =
           await registerUser(
             email.trim(),
-            password
+            password,
+            phone.trim()
           );
 
         if (!result?.success) {
@@ -579,6 +590,33 @@ export default function Auth() {
                   </div>
 
                 </div>
+
+
+                {mode === "register" && (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold">
+                      Phone number
+                    </label>
+
+                    <div className="relative">
+                      <Phone
+                        size={18}
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                      />
+
+                      <input
+                        type="tel"
+                        autoComplete="tel"
+                        value={phone}
+                        onChange={(event) =>
+                          setPhone(event.target.value)
+                        }
+                        placeholder="+8801XXXXXXXXX"
+                        className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-11 pr-4 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:focus:ring-slate-800"
+                      />
+                    </div>
+                  </div>
+                )}
 
 
                 {/* =============================

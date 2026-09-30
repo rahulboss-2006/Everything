@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
   Activity, AlertCircle, Check, ChevronLeft, ChevronRight,
   CircleDollarSign, CreditCard, LayoutDashboard, LogOut, Mail, Menu, Moon,
@@ -16,11 +16,11 @@ const nav = [
 ];
 
 function money(value) {
-  return `৳${Number(value || 0).toLocaleString("en-BD", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  return `à§³${Number(value || 0).toLocaleString("en-BD", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 function date(value) {
-  if (!value) return "—";
+  if (!value) return "â€”";
   return new Date(value).toLocaleString("en-BD", { dateStyle: "medium", timeStyle: "short" });
 }
 
@@ -53,7 +53,7 @@ function Login({ onLogin }) {
     <h1>Welcome back</h1><p>Sign in to manage users, payments and messages.</p>
     {error && <div className="error-box"><AlertCircle size={16} />{error}</div>}
     <label>Email<input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@example.com" required /></label>
-    <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required /></label>
+    <label>Password<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required /></label>
     <button className="primary-btn full" disabled={loading}>{loading ? <><RefreshCw size={16} className="spin" /> Signing in...</> : <><ShieldCheck size={16} /> Sign in</>}</button>
   </form></div>;
 }
@@ -70,9 +70,9 @@ function Dashboard({ data, loading, reload }) {
   return <>
     <Header title="Dashboard" subtitle="Overview of your Everything service." onRefresh={reload} loading={loading}/>
     <div className="stats-grid">
-      <Stat icon={Users} label="Total users" value={s.users ?? "—"} hint={`${s.activeUsers ?? 0} active`} />
-      <Stat icon={UserCheck} label="Verified users" value={s.verifiedUsers ?? "—"} />
-      <Stat icon={CreditCard} label="Pending payments" value={s.pendingPayments ?? "—"} hint="Needs review" />
+      <Stat icon={Users} label="Total users" value={s.users ?? "â€”"} hint={`${s.activeUsers ?? 0} active`} />
+      <Stat icon={UserCheck} label="Verified users" value={s.verifiedUsers ?? "â€”"} />
+      <Stat icon={CreditCard} label="Pending payments" value={s.pendingPayments ?? "â€”"} hint="Needs review" />
       <Stat icon={CircleDollarSign} label="Revenue" value={money(s.revenue)} hint={`${s.creditsSold ?? 0} credits sold`} />
     </div>
     <div className="dashboard-grid">
@@ -88,14 +88,115 @@ function Header({ title, subtitle, onRefresh, loading }) { return <div className
 function PanelTitle({ title, action }) { return <div className="panel-title"><h3>{title}</h3>{action}</div>; }
 
 function UsersPage() {
-  const [items, setItems] = useState([]); const [pagination, setPagination] = useState(null); const [search, setSearch] = useState(""); const [page, setPage] = useState(1); const [loading, setLoading] = useState(false); const [notice, setNotice] = useState("");
-  async function load(p = page, q = search) { setLoading(true); try { const d = await adminRequest(`/admin/users?page=${p}&limit=20&search=${encodeURIComponent(q)}`); setItems(d.items); setPagination(d.pagination); } catch(e){ setNotice(e.message); } finally { setLoading(false); } }
+  const [items, setItems] = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [deleteUser, setDeleteUser] = useState(null);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [sendEmail, setSendEmail] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  async function load(p = page, q = search) {
+    setLoading(true);
+    try {
+      const d = await adminRequest(`/admin/users?page=${p}&limit=20&search=${encodeURIComponent(q)}`);
+      setItems(d.items);
+      setPagination(d.pagination);
+    } catch (e) {
+      setNotice(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => { load(1, ""); }, []);
-  async function save(u, patch) { try { const d = await adminRequest(`/admin/users/${u._id}`, { method:"PATCH", body:JSON.stringify(patch) }); setItems(prev => prev.map(x => x._id === u._id ? {...x, ...d.user} : x)); setNotice("User updated."); } catch(e){ setNotice(e.message); } }
-  return <><Header title="Users" subtitle="Manage accounts, verification and credit balances." onRefresh={() => load()} loading={loading}/><div className="toolbar"><div className="search-box"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key === "Enter" && (setPage(1), load(1, search))} placeholder="Search by email..."/></div><button className="secondary-btn" onClick={()=>{setPage(1);load(1,search)}}>Search</button></div>{notice && <div className="notice">{notice}</div>}<section className="panel"><div className="table-wrap"><table><thead><tr><th>User</th><th>Credits</th><th>Verified</th><th>Active</th><th>Joined</th><th>Actions</th></tr></thead><tbody>{items.map(u => <UserRow key={u._id} user={u} onSave={save}/>)}</tbody></table></div>{!items.length && !loading && <Empty text="No users found"/>}<Pagination pagination={pagination} onPage={p=>{setPage(p);load(p,search)}}/></section></>;
+
+  async function save(u, patch) {
+    try {
+      const d = await adminRequest(`/admin/users/${u._id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      setItems(prev => prev.map(x => x._id === u._id ? { ...x, ...d.user } : x));
+      setNotice("User updated.");
+    } catch (e) {
+      setNotice(e.message);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteUser) return;
+    const reason = deleteReason.trim();
+    if (reason.length < 5) {
+      setNotice("Please enter a deletion reason of at least 5 characters.");
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const d = await adminRequest(`/admin/users/${deleteUser._id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ reason, sendEmail }),
+      });
+      setItems(prev => prev.filter(x => x._id !== deleteUser._id));
+      setDeleteUser(null);
+      setDeleteReason("");
+      setNotice(d.email?.sent ? "User deleted and email sent successfully." : "User deleted successfully.");
+      if (pagination && items.length === 1 && page > 1) {
+        setPage(page - 1);
+        load(page - 1, search);
+      }
+    } catch (e) {
+      setNotice(e.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return <>
+    <Header title="Users" subtitle="Manage accounts, verification, credits and account deletion." onRefresh={() => load()} loading={loading}/>
+    <div className="toolbar">
+      <div className="search-box"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key === "Enter" && (setPage(1), load(1, search))} placeholder="Search by email..."/></div>
+      <button className="secondary-btn" onClick={()=>{setPage(1);load(1,search)}}>Search</button>
+    </div>
+    {notice && <div className="notice">{notice}</div>}
+    <section className="panel">
+      <div className="table-wrap"><table><thead><tr><th>User</th><th>Credits</th><th>Verified</th><th>Active</th><th>Joined</th><th>Actions</th></tr></thead><tbody>
+        {items.map(u => <UserRow key={u._id} user={u} onSave={save} onDelete={()=>{setDeleteUser(u);setDeleteReason("");setSendEmail(true)}} />)}
+      </tbody></table></div>
+      {!items.length && !loading && <Empty text="No users found"/>}
+      <Pagination pagination={pagination} onPage={p=>{setPage(p);load(p,search)}}/>
+    </section>
+
+    {deleteUser && <div className="modal-backdrop"><div className="modal delete-user-modal">
+      <button className="modal-close" onClick={()=>setDeleteUser(null)}><X/></button>
+      <div className="eyebrow">DELETE USER</div>
+      <h3>Delete {deleteUser.email}?</h3>
+      <p>This permanently removes the account. Existing payment records are retained without the deleted user account.</p>
+      <label>Deletion reason <span className="required">*</span>
+        <textarea rows="4" value={deleteReason} onChange={e=>setDeleteReason(e.target.value)} placeholder="Explain why this account is being deleted..." />
+      </label>
+      <label className="checkbox-row"><input type="checkbox" checked={sendEmail} onChange={e=>setSendEmail(e.target.checked)} /> Send this reason to the user by email</label>
+      <div className="delete-meta"><span>Email</span><b>{deleteUser.email || "No email address"}</b></div>
+      <div className="modal-actions"><button className="secondary-btn" onClick={()=>setDeleteUser(null)} disabled={deleting}>Cancel</button><button className="reject-btn" onClick={confirmDelete} disabled={deleting}><Trash2 size={16}/>{deleting ? "Deleting..." : "Delete User"}</button></div>
+    </div></div>}
+  </>;
 }
 
-function UserRow({ user, onSave }) { const [credits,setCredits]=useState(user.credits); return <tr><td><b>{user.email}</b><small>{user._id}</small></td><td><div className="inline-edit"><input type="number" min="0" value={credits} onChange={e=>setCredits(e.target.value)}/><button className="mini-btn" onClick={()=>onSave(user,{credits:Number(credits)})}><Check size={14}/></button></div></td><td><button className={`toggle ${user.emailVerified ? "on":""}`} onClick={()=>onSave(user,{emailVerified:!user.emailVerified})}>{user.emailVerified ? "Verified":"Unverified"}</button></td><td><button className={`toggle ${user.active ? "on":"off"}`} onClick={()=>onSave(user,{active:!user.active})}>{user.active ? "Active":"Disabled"}</button></td><td>{date(user.createdAt)}</td><td><button className="mini-btn" onClick={()=>onSave(user,{credits:Number(credits)})}>Save</button></td></tr>; }
+function UserRow({ user, onSave, onDelete }) {
+  const [credits,setCredits]=useState(user.credits);
+  return <tr>
+    <td><b>{user.email}</b><small>{user.phone || "No phone"}</small><small>{user._id}</small></td>
+    <td><div className="inline-edit"><input type="number" min="0" value={credits} onChange={e=>setCredits(e.target.value)}/><button className="mini-btn" onClick={()=>onSave(user,{credits:Number(credits)})}><Check size={14}/></button></div></td>
+    <td><button className={`toggle ${user.emailVerified ? "on":""}`} onClick={()=>onSave(user,{emailVerified:!user.emailVerified})}>{user.emailVerified ? "Verified":"Unverified"}</button></td>
+    <td><button className={`toggle ${user.active ? "on":"off"}`} onClick={()=>onSave(user,{active:!user.active})}>{user.active ? "Active":"Disabled"}</button></td>
+    <td>{date(user.createdAt)}</td>
+    <td><div className="action-row"><button className="mini-btn" onClick={()=>onSave(user,{credits:Number(credits)})}>Save</button><button className="danger-icon" title="Delete user" onClick={onDelete}><Trash2 size={15}/></button></div></td>
+  </tr>;
+}
 
 function PaymentsPage() {
   const [items,setItems]=useState([]); const [pagination,setPagination]=useState(null); const [page,setPage]=useState(1); const [status,setStatus]=useState(""); const [provider,setProvider]=useState(""); const [loading,setLoading]=useState(false); const [modal,setModal]=useState(null); const [notice,setNotice]=useState("");
@@ -103,7 +204,7 @@ function PaymentsPage() {
   useEffect(()=>{load(1)},[status,provider]);
   async function approve(){ if(!modal?.transactionId)return setNotice("Transaction ID is required."); try { await adminRequest(`/admin/payments/${modal._id}/approve`,{method:"POST",body:JSON.stringify({transactionId:modal.transactionId,amount:Number(modal.amount)})});setModal(null);setNotice("Payment approved and credits added.");load(page);}catch(e){setNotice(e.message)} }
   async function reject(id){if(!confirm("Reject this payment?"))return;try{await adminRequest(`/admin/payments/${id}/reject`,{method:"POST",body:JSON.stringify({reason:"Rejected by admin"})});setNotice("Payment rejected.");load(page)}catch(e){setNotice(e.message)}}
-  return <><Header title="Payments" subtitle="Review recharge requests and safely apply credits." onRefresh={()=>load()} loading={loading}/><div className="filters"><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option><option value="created">Created</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="failed">Failed</option></select><select value={provider} onChange={e=>setProvider(e.target.value)}><option value="">All providers</option><option value="bkash">bKash</option><option value="nagad">Nagad</option></select></div>{notice&&<div className="notice">{notice}</div>}<section className="panel"><div className="table-wrap"><table><thead><tr><th>User</th><th>Provider</th><th>Amount</th><th>Credits</th><th>Transaction</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map(p=><tr key={p._id}><td><b>{p.user?.email||"Unknown"}</b><small>{p._id}</small></td><td className="capitalize">{p.provider}</td><td>{money(p.amount)}</td><td>{p.credits}</td><td>{p.transactionId||"—"}</td><td><span className={statusClass(p.status)}>{p.status}</span></td><td>{["created","pending"].includes(p.status)&&!p.creditsApplied?<div className="action-row"><button className="approve-btn" onClick={()=>setModal({...p,transactionId:"",amount:p.amount})}><Check size={14}/> Approve</button><button className="reject-btn" onClick={()=>reject(p._id)}><X size={14}/> Reject</button></div>:<span className="muted">Processed</span>}</td></tr>)}</tbody></table></div>{!items.length&&!loading&&<Empty text="No payments found"/>}<Pagination pagination={pagination} onPage={p=>{setPage(p);load(p)}}/></section>{modal&&<div className="modal-backdrop"><div className="modal"><button className="modal-close" onClick={()=>setModal(null)}><X/></button><div className="eyebrow">PAYMENT APPROVAL</div><h3>Confirm payment</h3><p>{modal.user?.email||"Unknown user"} · {money(modal.amount)} · {modal.provider}</p><label>Transaction ID<input autoFocus value={modal.transactionId} onChange={e=>setModal({...modal,transactionId:e.target.value})} placeholder="e.g. 8A7B6C..."/></label><label>Verified amount<input type="number" min="10" step="0.01" value={modal.amount} onChange={e=>setModal({...modal,amount:e.target.value})}/></label><div className="modal-actions"><button className="secondary-btn" onClick={()=>setModal(null)}>Cancel</button><button className="primary-btn" onClick={approve}><Check size={16}/> Approve & add credits</button></div></div></div>}</>;
+  return <><Header title="Payments" subtitle="Review recharge requests and safely apply credits." onRefresh={()=>load()} loading={loading}/><div className="filters"><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">All statuses</option><option value="created">Created</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="failed">Failed</option></select><select value={provider} onChange={e=>setProvider(e.target.value)}><option value="">All providers</option><option value="bkash">bKash</option><option value="nagad">Nagad</option></select></div>{notice&&<div className="notice">{notice}</div>}<section className="panel"><div className="table-wrap"><table><thead><tr><th>User</th><th>Provider</th><th>Amount</th><th>Credits</th><th>Transaction</th><th>Status</th><th>Actions</th></tr></thead><tbody>{items.map(p=><tr key={p._id}><td><b>{p.user?.email||"Unknown"}</b><small>{p._id}</small></td><td className="capitalize">{p.provider}</td><td>{money(p.amount)}</td><td>{p.credits}</td><td>{p.transactionId||"â€”"}</td><td><span className={statusClass(p.status)}>{p.status}</span></td><td>{["created","pending"].includes(p.status)&&!p.creditsApplied?<div className="action-row"><button className="approve-btn" onClick={()=>setModal({...p,transactionId:"",amount:p.amount})}><Check size={14}/> Approve</button><button className="reject-btn" onClick={()=>reject(p._id)}><X size={14}/> Reject</button></div>:<span className="muted">Processed</span>}</td></tr>)}</tbody></table></div>{!items.length&&!loading&&<Empty text="No payments found"/>}<Pagination pagination={pagination} onPage={p=>{setPage(p);load(p)}}/></section>{modal&&<div className="modal-backdrop"><div className="modal"><button className="modal-close" onClick={()=>setModal(null)}><X/></button><div className="eyebrow">PAYMENT APPROVAL</div><h3>Confirm payment</h3><p>{modal.user?.email||"Unknown user"} Â· {money(modal.amount)} Â· {modal.provider}</p><label>Transaction ID<input autoFocus value={modal.transactionId} onChange={e=>setModal({...modal,transactionId:e.target.value})} placeholder="e.g. 8A7B6C..."/></label><label>Verified amount<input type="number" min="10" step="0.01" value={modal.amount} onChange={e=>setModal({...modal,amount:e.target.value})}/></label><div className="modal-actions"><button className="secondary-btn" onClick={()=>setModal(null)}>Cancel</button><button className="primary-btn" onClick={approve}><Check size={16}/> Approve & add credits</button></div></div></div>}</>;
 }
 
 function ContactsPage() {
@@ -112,7 +213,7 @@ function ContactsPage() {
   useEffect(()=>{load()},[status]);
   async function mark(id,next){try{await adminRequest(`/admin/contacts/${id}`,{method:"PATCH",body:JSON.stringify({status:next})});load()}catch(e){setNotice(e.message)}}
   async function del(id){if(!confirm("Delete this message?"))return;try{await adminRequest(`/admin/contacts/${id}`,{method:"DELETE"});load()}catch(e){setNotice(e.message)}}
-  return <><Header title="Messages" subtitle="Contact form messages saved from your website." onRefresh={load} loading={loading}/><div className="filters"><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">All messages</option><option value="unread">Unread</option><option value="read">Read</option></select></div>{notice&&<div className="notice">{notice}</div>}<div className="message-grid">{items.map(m=><article className={`message-card ${m.status}`} key={m._id}><div className="message-top"><div><b>{m.subject}</b><small>{m.name} · {m.email}</small></div><span className={statusClass(m.status)}>{m.status}</span></div><p>{m.message}</p><div className="message-bottom"><span>{date(m.createdAt)}</span><div><button className="mini-btn" onClick={()=>mark(m._id,m.status==="read"?"unread":"read")}>{m.status==="read"?"Mark unread":"Mark read"}</button><button className="danger-icon" onClick={()=>del(m._id)}><Trash2 size={15}/></button></div></div></article>)}{!items.length&&!loading&&<Empty text="No contact messages"/>}</div></>;
+  return <><Header title="Messages" subtitle="Contact form messages saved from your website." onRefresh={load} loading={loading}/><div className="filters"><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">All messages</option><option value="unread">Unread</option><option value="read">Read</option></select></div>{notice&&<div className="notice">{notice}</div>}<div className="message-grid">{items.map(m=><article className={`message-card ${m.status}`} key={m._id}><div className="message-top"><div><b>{m.subject}</b><small>{m.name} Â· {m.email}</small></div><span className={statusClass(m.status)}>{m.status}</span></div><p>{m.message}</p><div className="message-bottom"><span>{date(m.createdAt)}</span><div><button className="mini-btn" onClick={()=>mark(m._id,m.status==="read"?"unread":"read")}>{m.status==="read"?"Mark unread":"Mark read"}</button><button className="danger-icon" onClick={()=>del(m._id)}><Trash2 size={15}/></button></div></div></article>)}{!items.length&&!loading&&<Empty text="No contact messages"/>}</div></>;
 }
 
 function AuditPage() { const [items,setItems]=useState([]);const [loading,setLoading]=useState(false);async function load(){setLoading(true);try{const d=await adminRequest("/admin/audit-logs?limit=100");setItems(d.items)}finally{setLoading(false)}}useEffect(()=>{load()},[]);return <><Header title="Audit Logs" subtitle="Security trail for admin actions." onRefresh={load} loading={loading}/><section className="panel"><div className="table-wrap"><table><thead><tr><th>Time</th><th>Admin</th><th>Action</th><th>Target</th><th>Details</th></tr></thead><tbody>{items.map(x=><tr key={x._id}><td>{date(x.createdAt)}</td><td>{x.adminEmail}</td><td><span className="badge badge-created">{x.action}</span></td><td>{x.targetType}{x.targetId&&<small>{x.targetId}</small>}</td><td><code>{JSON.stringify(x.details||{})}</code></td></tr>)}</tbody></table></div>{!items.length&&!loading&&<Empty text="No audit events"/>}</section></> }
@@ -130,3 +231,4 @@ function AdminApp() {
 }
 
 export default AdminApp;
+

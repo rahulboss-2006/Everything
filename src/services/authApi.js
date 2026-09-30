@@ -13,7 +13,8 @@ import {
 
 export async function registerUser(
   email,
-  password
+  password,
+  phone
 ) {
   return apiRequest(
     "/auth/register",
@@ -28,6 +29,7 @@ export async function registerUser(
       body: JSON.stringify({
         email,
         password,
+        phone,
       }),
     }
   );
