@@ -9,6 +9,9 @@ export default defineConfig({
     tailwindcss(),
   ],
 
+  // GitHub Pages
+  base: "/Everything/",
+
   // Enable cross-origin isolation
   // Required for WebAssembly multi-threading
   server: {
