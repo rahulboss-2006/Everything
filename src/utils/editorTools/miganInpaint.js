@@ -24,8 +24,14 @@ export async function getMiGanSession(onProgress) {
       as `_OrtGetInputName is not a function`). Let ONNX Runtime Web resolve
       its own bundled WASM files.
     */
-    ort.env.wasm.numThreads = 1;
-ort.env.wasm.simd = true;
+const canUseWasmThreads =
+  typeof window !== "undefined" &&
+  window.crossOriginIsolated === true;
+
+ort.env.wasm.numThreads = canUseWasmThreads
+  ? Math.min(4, navigator.hardwareConcurrency || 2)
+  : 1;
+    ort.env.wasm.simd = true;
     ort.env.wasm.wasmPaths = undefined;
 
     // WASM keeps the MI-GAN path stable on browsers with partial WebGPU support.
@@ -452,5 +458,13 @@ export async function runLocalAIObjectRemoval(
   return finalCanvas;
 }
 
+const canUseWasmThreads =
+  typeof window !== "undefined" &&
+  window.crossOriginIsolated === true;
+
+ort.env.wasm.numThreads = canUseWasmThreads
+  ? Math.min(4, navigator.hardwareConcurrency || 2)
+  : 1;
+    ort.env.wasm.simd = true;
 
 
