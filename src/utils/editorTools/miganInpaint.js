@@ -1,4 +1,4 @@
-/* =========================================================
+﻿/* =========================================================
    LOCAL AI OBJECT REMOVAL (MI-GAN / ONNX)
    Runs in-browser. The image is NOT sent to a server.
 ========================================================= */
@@ -24,10 +24,13 @@ export async function getMiGanSession(onProgress) {
       as `_OrtGetInputName is not a function`). Let ONNX Runtime Web resolve
       its own bundled WASM files.
     */
-    ort.env.wasm.numThreads = Math.min(
-      4,
-      Math.max(1, navigator.hardwareConcurrency || 2)
-    );
+    const canUseWasmThreads =
+      typeof window !== "undefined" &&
+      window.crossOriginIsolated === true;
+
+    ort.env.wasm.numThreads = canUseWasmThreads
+      ? Math.min(4, Math.max(1, navigator.hardwareConcurrency || 2))
+      : 1;
     ort.env.wasm.simd = true;
     ort.env.wasm.wasmPaths = undefined;
 
@@ -267,7 +270,7 @@ export function outputTensorToCanvas(outputTensor, width, height) {
   canvas.width = width;
   canvas.height = height;
 
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Could not create the AI result canvas.");
 
   const imageData = ctx.createImageData(width, height);
@@ -311,7 +314,7 @@ export function compositeAIResultOnlyInsideMask(
   const alphaCanvas = document.createElement("canvas");
   alphaCanvas.width = width;
   alphaCanvas.height = height;
-  const alphaCtx = alphaCanvas.getContext("2d");
+  const alphaCtx = alphaCanvas.getContext("2d", { willReadFrequently: true });
 
   if (!alphaCtx) throw new Error("Could not create the AI blend mask.");
 
@@ -332,7 +335,7 @@ export function compositeAIResultOnlyInsideMask(
   const featherCanvas = document.createElement("canvas");
   featherCanvas.width = width;
   featherCanvas.height = height;
-  const featherCtx = featherCanvas.getContext("2d");
+  const featherCtx = featherCanvas.getContext("2d", { willReadFrequently: true });
 
   if (!featherCtx) throw new Error("Could not create the AI feather mask.");
 
@@ -343,7 +346,7 @@ export function compositeAIResultOnlyInsideMask(
   const generatedMasked = document.createElement("canvas");
   generatedMasked.width = width;
   generatedMasked.height = height;
-  const gmCtx = generatedMasked.getContext("2d");
+  const gmCtx = generatedMasked.getContext("2d", { willReadFrequently: true });
 
   if (!gmCtx) throw new Error("Could not prepare the AI composite.");
 
@@ -354,7 +357,7 @@ export function compositeAIResultOnlyInsideMask(
   const finalCanvas = document.createElement("canvas");
   finalCanvas.width = width;
   finalCanvas.height = height;
-  const finalCtx = finalCanvas.getContext("2d");
+  const finalCtx = finalCanvas.getContext("2d", { willReadFrequently: true });
 
   if (!finalCtx) throw new Error("Could not create final AI image.");
 
@@ -454,3 +457,5 @@ export async function runLocalAIObjectRemoval(
   onProgress?.(100, "Object removed successfully.");
   return finalCanvas;
 }
+
+

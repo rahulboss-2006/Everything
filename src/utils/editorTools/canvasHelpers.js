@@ -1,4 +1,4 @@
-export function clamp(value, min, max) {
+﻿export function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
@@ -45,7 +45,7 @@ export function dataURLToCanvas(dataURL) {
       const canvas = document.createElement("canvas");
       canvas.width = img.naturalWidth || img.width;
       canvas.height = img.naturalHeight || img.height;
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) return resolve(null);
       ctx.drawImage(img, 0, 0);
       resolve(canvas);
@@ -62,7 +62,7 @@ export function captureStandardObjectMask(baseCanvas, editedCanvas) {
   mask.height = baseCanvas.height;
   const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
   const editCtx = editedCanvas.getContext("2d", { willReadFrequently: true });
-  const maskCtx = mask.getContext("2d");
+  const maskCtx = mask.getContext("2d", { willReadFrequently: true });
   if (!baseCtx || !editCtx || !maskCtx) return "";
   const base = baseCtx.getImageData(0, 0, baseCanvas.width, baseCanvas.height);
   const edited = editCtx.getImageData(
@@ -103,3 +103,4 @@ export function getClampedCanvasPoint(canvas, event) {
     y: clamp(point.y, 0, canvas.height),
   };
 }
+

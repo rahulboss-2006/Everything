@@ -1,4 +1,4 @@
-/* =========================================================
+﻿/* =========================================================
    aiObjectRemoval.js
    AI OBJECT REMOVAL / MI-GAN INPAINTING
 ========================================================= */
@@ -475,7 +475,7 @@ export function outputTensorToCanvas(
     height;
 
   const ctx =
-    canvas.getContext("2d");
+    canvas.getContext("2d", { willReadFrequently: true });
 
   if (!ctx) {
     throw new Error(
