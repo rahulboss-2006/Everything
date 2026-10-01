@@ -5,14 +5,7 @@
 
 import * as ort from "onnxruntime-web";
 
-const canUseWasmThreads =
-  typeof window !== "undefined" &&
-  window.crossOriginIsolated === true;
-
-ort.env.wasm.numThreads = canUseWasmThreads
-  ? Math.min(4, Math.max(1, navigator.hardwareConcurrency || 2))
-  : 1;
-
+ort.env.wasm.numThreads = 1;
 ort.env.wasm.simd = true;
 
 
@@ -1112,4 +1105,5 @@ export function hasAIObjectSelection(
 
   return false;
 }
+
 
