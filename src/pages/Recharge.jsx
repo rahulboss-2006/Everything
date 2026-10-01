@@ -85,6 +85,15 @@ export default function Recharge() {
     useState(null);
 
   /*
+   * Payment number entered by user.
+   *
+   * This is the number from which the user
+   * actually sends the bKash/Nagad payment.
+   */
+  const [payerPhone, setPayerPhone] =
+    useState("");
+
+  /*
    * Transaction ID entered by user.
    */
   const [transactionId, setTransactionId] =
@@ -345,8 +354,9 @@ export default function Recharge() {
       );
 
       /*
-       * Clear previous transaction ID.
+       * Clear previous payment information.
        */
+      setPayerPhone("");
       setTransactionId("");
 
       /*
@@ -378,6 +388,26 @@ export default function Recharge() {
   }
 
   /*
+   * Payment Number input.
+   */
+  function handlePayerPhoneChange(event) {
+    /*
+     * Keep numbers only.
+     *
+     * Example:
+     * 01712345678
+     */
+    const value =
+      event.target.value
+        .replace(/\D/g, "")
+        .slice(0, 11);
+
+    setPayerPhone(value);
+    setMessage("");
+    setError("");
+  }
+
+  /*
    * Transaction ID input.
    */
   function handleTransactionIdChange(event) {
@@ -395,162 +425,198 @@ export default function Recharge() {
    * Verify payment.
    */
   async function handleVerifyPayment() {
-  setMessage("");
-  setError("");
+    setMessage("");
+    setError("");
 
-  /*
-   * Backend may return either:
-   * id or _id
-   */
-  const paymentId =
-    createdPayment?.id ||
-    createdPayment?._id;
+    /*
+     * Backend may return either:
+     * id or _id
+     */
+    const paymentId =
+      createdPayment?.id ||
+      createdPayment?._id;
 
-  if (!paymentId) {
-    setError(
-      "Payment information is missing."
-    );
-
-    console.error(
-      "VERIFY PAYMENT: Missing payment ID",
-      createdPayment
-    );
-
-    return;
-  }
-
-  const cleanTransactionId =
-    transactionId.trim().toUpperCase();
-
-  if (!cleanTransactionId) {
-    setError(
-      "Please enter your Transaction ID."
-    );
-
-    return;
-  }
-
-  if (
-    cleanTransactionId.length < 4
-  ) {
-    setError(
-      "Please enter a valid Transaction ID."
-    );
-
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    const token =
-      localStorage.getItem(
-        "accessToken"
+    if (!paymentId) {
+      setError(
+        "Payment information is missing."
       );
 
-    if (!token) {
-      navigate("/login");
+      console.error(
+        "VERIFY PAYMENT: Missing payment ID",
+        createdPayment
+      );
+
       return;
     }
 
     /*
-     * Verify payment.
+     * Validate Payment Number.
      */
-    const verifyUrl =
-      `${API_BASE_URL}/recharge/payment/${paymentId}/verify`;
+    const cleanPayerPhone =
+      payerPhone.trim();
 
-    console.log(
-      "VERIFY PAYMENT URL:",
-      verifyUrl
-    );
-
-    const response =
-      await fetch(
-        verifyUrl,
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-
-            Authorization:
-              `Bearer ${token}`,
-          },
-
-          body:
-            JSON.stringify({
-              transactionId:
-                cleanTransactionId,
-            }),
-        }
+    if (!cleanPayerPhone) {
+      setError(
+        "Please enter your Payment Number."
       );
 
-    let data = {};
-
-    try {
-      data =
-        await response.json();
-    } catch {
-      data = {};
+      return;
     }
 
-    console.log(
-      "VERIFY PAYMENT RESPONSE:",
-      response.status,
-      data
-    );
+    /*
+     * Basic Bangladesh mobile number validation.
+     */
+    if (
+      !/^01\d{9}$/.test(
+        cleanPayerPhone
+      )
+    ) {
+      setError(
+        "Please enter a valid 11-digit Payment Number."
+      );
+
+      return;
+    }
+
+    /*
+     * Validate Transaction ID.
+     */
+    const cleanTransactionId =
+      transactionId.trim().toUpperCase();
+
+    if (!cleanTransactionId) {
+      setError(
+        "Please enter your Transaction ID."
+      );
+
+      return;
+    }
 
     if (
-      !response.ok ||
-      !data.success
+      cleanTransactionId.length < 4
     ) {
-      throw new Error(
-        data.message ||
-          `Could not verify payment. Server returned ${response.status}.`
+      setError(
+        "Please enter a valid Transaction ID."
       );
+
+      return;
     }
 
-    /*
-     * Payment completed.
-     */
-    setCreatedPayment(
-      data.payment
-    );
+    try {
+      setLoading(true);
 
-    setPaymentStep("success");
+      const token =
+        localStorage.getItem(
+          "accessToken"
+        );
 
-    setTransactionId("");
+      if (!token) {
+        navigate("/login");
+        return;
+      }
 
-    setMessage(
-      data.message ||
-        "Payment verified and credits added successfully."
-    );
+      /*
+       * Verify payment.
+       */
+      const verifyUrl =
+        `${API_BASE_URL}/recharge/payment/${paymentId}/verify`;
 
-    setError("");
+      console.log(
+        "VERIFY PAYMENT URL:",
+        verifyUrl
+      );
 
-    /*
-     * Refresh user balance.
-     */
-    setTimeout(() => {
-      window.location.reload();
-    }, 1200);
+      const response =
+        await fetch(
+          verifyUrl,
+          {
+            method: "POST",
 
-  } catch (err) {
-    console.error(
-      "VERIFY PAYMENT ERROR:",
-      err
-    );
+            headers: {
+              "Content-Type":
+                "application/json",
 
-    setError(
-      err?.message ||
-        "Could not verify payment."
-    );
+              Authorization:
+                `Bearer ${token}`,
+            },
 
-  } finally {
-    setLoading(false);
+            body:
+              JSON.stringify({
+                transactionId:
+                  cleanTransactionId,
+
+                payerPhone:
+                  cleanPayerPhone,
+              }),
+          }
+        );
+
+      let data = {};
+
+      try {
+        data =
+          await response.json();
+      } catch {
+        data = {};
+      }
+
+      console.log(
+        "VERIFY PAYMENT RESPONSE:",
+        response.status,
+        data
+      );
+
+      if (
+        !response.ok ||
+        !data.success
+      ) {
+        throw new Error(
+          data.message ||
+            `Could not verify payment. Server returned ${response.status}.`
+        );
+      }
+
+      /*
+       * Payment completed.
+       */
+      setCreatedPayment(
+        data.payment
+      );
+
+      setPaymentStep("success");
+
+      setPayerPhone("");
+      setTransactionId("");
+
+      setMessage(
+        data.message ||
+          "Payment verified and credits added successfully."
+      );
+
+      setError("");
+
+      /*
+       * Refresh user balance.
+       */
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+
+    } catch (err) {
+      console.error(
+        "VERIFY PAYMENT ERROR:",
+        err
+      );
+
+      setError(
+        err?.message ||
+          "Could not verify payment."
+      );
+
+    } finally {
+      setLoading(false);
+    }
   }
-}
 
   /*
    * Go back from payment screen.
@@ -562,6 +628,7 @@ export default function Recharge() {
 
     setPaymentStep("select");
     setCreatedPayment(null);
+    setPayerPhone("");
     setTransactionId("");
     setMessage("");
     setError("");
@@ -1047,16 +1114,47 @@ export default function Recharge() {
                   </li>
 
                   <li>
-                    5. Enter the Transaction ID below.
+                    5. Enter your Payment Number below.
+                  </li>
+
+                  <li>
+                    6. Enter the Transaction ID below.
                   </li>
 
                 </ol>
 
               </div>
 
-              {/* Transaction ID */}
+              {/* Payment Number */}
 
               <div className="mt-6">
+
+                <label className="block text-sm font-semibold">
+                  Payment Number
+                </label>
+
+                <input
+                  type="tel"
+                  value={payerPhone}
+                  onChange={
+                    handlePayerPhoneChange
+                  }
+                  placeholder="01XXXXXXXXX"
+                  autoComplete="tel"
+                  inputMode="numeric"
+                  maxLength={11}
+                  className="mt-2 w-full rounded-xl border bg-transparent px-4 py-4 text-base !outline-none focus:!border-blue-500"
+                />
+
+                <p className="mt-2 text-xs opacity-50">
+                  Enter the number from which you sent the payment.
+                </p>
+
+              </div>
+
+              {/* Transaction ID */}
+
+              <div className="mt-5">
 
                 <label className="block text-sm font-semibold">
                   Transaction ID
@@ -1095,6 +1193,7 @@ export default function Recharge() {
                 }
                 disabled={
                   loading ||
+                  !payerPhone.trim() ||
                   !transactionId.trim()
                 }
                 className="mt-6 w-full rounded-xl bg-black px-6 py-4 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
@@ -1123,7 +1222,8 @@ export default function Recharge() {
 
             <p className="mt-5 text-center text-xs opacity-50">
               Do not close this page until your
-              Transaction ID has been submitted.
+              Payment Number and Transaction ID
+              have been submitted.
             </p>
 
           </div>
