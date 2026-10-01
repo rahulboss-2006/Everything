@@ -1,4 +1,4 @@
-name: Deploy Everything Frontend to GitHub Pages
+﻿name: Deploy Everything Frontend to GitHub Pages
 
 on:
   push:
@@ -32,6 +32,8 @@ jobs:
         run: npm ci
 
       - name: Build frontend
+        env:
+          VITE_API_URL: https://everything-backend-0fwg.onrender.com/api
         run: npm run build
 
       - name: Setup GitHub Pages
