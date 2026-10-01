@@ -1,0 +1,36 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "dependencies": {
+    "@napi-rs/canvas": "^1.0.9",
+    "archiver": "^8.0.0",
+    "argon2": "^0.45.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.3",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.7.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.6.0",
+    "mongoose": "^9.10.2",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.0.10",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.3.289",
+    "sharp": "^0.35.4",
+    "uuid": "^14.0.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

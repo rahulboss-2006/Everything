@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.*
+!.env.example
+uploads/
+outputs/
+*.log
+npm-debug.log*
+.DS_Store
+
+# Backup files
+*.backup.js
+*.before-delete-route-removal.js
