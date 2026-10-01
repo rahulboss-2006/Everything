@@ -1,4 +1,4 @@
-﻿import {
+import {
   useEffect,
   useMemo,
   useState,
@@ -32,7 +32,7 @@ import {
 } from "./services/converterApi";
 
 import {
-  HashRouter,
+  BrowserRouter,
   Routes,
   Route,
 } from "react-router-dom";
@@ -51,6 +51,9 @@ import Recharge from "./pages/Recharge";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import AdminPanel from "./admin/AdminPanel";
+import {
+  useAuth,
+} from "./context/AuthContext";
 
 
 /* =========================================
@@ -79,8 +82,9 @@ function AppLayout({ children }) {
 ========================================= */
 
 function App() {
+  const { user } = useAuth();
   return (
-    <HashRouter>
+    <BrowserRouter basename="/Everything">
 
       <Routes>
 
@@ -265,7 +269,7 @@ function App() {
 
       </Routes>
 
-    </HashRouter>
+    </BrowserRouter>
   );
 }
 
@@ -391,6 +395,13 @@ function UploadBox() {
 
   const handleConvert =
     async () => {
+
+    console.log("CONVERT CREDIT CHECK:", user?.credits, "USER:", user);
+
+    if ((user?.credits ?? 0) <= 0) {
+      window.location.href = "/Everything/recharge";
+      return;
+    }
 
       if (!file) {
 
@@ -765,5 +776,3 @@ function FeatureCard({
 
 
 export default App;
-
-

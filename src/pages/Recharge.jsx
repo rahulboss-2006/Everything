@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
@@ -40,6 +41,8 @@ const PAYMENT_METHODS = [
 ];
 
 export default function Recharge() {
+  const navigate = useNavigate();
+
   const {
     user,
     loading: authLoading,
@@ -65,35 +68,51 @@ export default function Recharge() {
   const [error, setError] =
     useState("");
 
+  /*
+   * Payment flow:
+   *
+   * select
+   * payment
+   * success
+   */
+  const [paymentStep, setPaymentStep] =
+    useState("select");
+
+  /*
+   * Created payment returned by backend.
+   */
+  const [createdPayment, setCreatedPayment] =
+    useState(null);
+
+  /*
+   * Transaction ID entered by user.
+   */
+  const [transactionId, setTransactionId] =
+    useState("");
 
   /*
    * Redirect to login if user is not authenticated.
    */
-
   useEffect(() => {
     if (!authLoading && !user) {
-      window.location.hash = "#/login";
+      navigate("/login");
     }
-  }, [authLoading, user]);
-
+  }, [authLoading, user, navigate]);
 
   /*
    * Find selected package.
    */
-
   const selectedPackageData = useMemo(() => {
     return PACKAGES.find(
       (pkg) => pkg.id === selectedPackage
     );
   }, [selectedPackage]);
 
-
   /*
    * Calculate custom credits.
    *
-   * à§³1 = 2 credits
+   * ৳1 = 2 credits
    */
-
   const customCredits = useMemo(() => {
     const amount = Number(customAmount);
 
@@ -107,44 +126,43 @@ export default function Recharge() {
     return Math.floor(amount * 2);
   }, [customAmount]);
 
-
   /*
    * Select package.
    */
-
   function handlePackageSelect(pkg) {
+    if (paymentStep !== "select") {
+      return;
+    }
+
     setMode("package");
-
     setSelectedPackage(pkg.id);
-
     setCustomAmount("");
-
     setMessage("");
-
     setError("");
   }
-
 
   /*
    * Select custom amount.
    */
-
   function handleCustomMode() {
+    if (paymentStep !== "select") {
+      return;
+    }
+
     setMode("custom");
-
     setSelectedPackage(null);
-
     setMessage("");
-
     setError("");
   }
-
 
   /*
    * Custom amount input.
    */
-
   function handleCustomAmountChange(event) {
+    if (paymentStep !== "select") {
+      return;
+    }
+
     const value = event.target.value;
 
     /*
@@ -157,36 +175,40 @@ export default function Recharge() {
      *
      * Maximum 2 decimal places.
      */
-
     if (!/^\d*(\.\d{0,2})?$/.test(value)) {
       return;
     }
 
     setCustomAmount(value);
-
     setMessage("");
-
     setError("");
   }
 
+  /*
+   * Select payment method.
+   */
+  function handlePaymentMethodChange(methodId) {
+    if (paymentStep !== "select") {
+      return;
+    }
+
+    setPaymentMethod(methodId);
+    setMessage("");
+    setError("");
+  }
 
   /*
    * Create payment.
    */
-
   async function handleRecharge() {
     setMessage("");
-
     setError("");
 
-
     let requestBody;
-
 
     /*
      * PACKAGE PAYMENT
      */
-
     if (mode === "package") {
       if (!selectedPackageData) {
         setError(
@@ -205,15 +227,12 @@ export default function Recharge() {
       };
     }
 
-
     /*
      * CUSTOM PAYMENT
      */
-
     else {
       const amount =
         Number(customAmount);
-
 
       if (
         !Number.isFinite(amount) ||
@@ -226,20 +245,17 @@ export default function Recharge() {
         return;
       }
 
-
       if (amount < 10) {
         setError(
-          "Minimum recharge amount is à§³10."
+          "Minimum recharge amount is ৳10."
         );
 
         return;
       }
 
-
       /*
        * Maximum 2 decimal places.
        */
-
       if (
         Math.round(amount * 100) !==
         amount * 100
@@ -251,7 +267,6 @@ export default function Recharge() {
         return;
       }
 
-
       requestBody = {
         amount,
 
@@ -260,32 +275,25 @@ export default function Recharge() {
       };
     }
 
-
     try {
       setLoading(true);
-
 
       /*
        * Get access token.
        */
-
       const token =
         localStorage.getItem(
           "accessToken"
         );
 
-
       if (!token) {
-        window.location.hash = "#/login";
-
+        navigate("/login");
         return;
       }
-
 
       /*
        * Create payment on backend.
        */
-
       const response =
         await fetch(
           `${API_BASE_URL}/recharge/create`,
@@ -307,7 +315,6 @@ export default function Recharge() {
           }
         );
 
-
       let data = {};
 
       try {
@@ -317,11 +324,9 @@ export default function Recharge() {
         data = {};
       }
 
-
       /*
        * Handle backend error.
        */
-
       if (
         !response.ok ||
         !data.success
@@ -332,29 +337,31 @@ export default function Recharge() {
         );
       }
 
-
       /*
-       * IMPORTANT:
-       *
-       * Do NOT update credits here.
-       *
-       * Payment is only created.
-       *
-       * Credits must be added after
-       * real gateway verification.
+       * Save created payment.
        */
-
-      setMessage(
-        "Payment request created. Awaiting payment gateway."
+      setCreatedPayment(
+        data.payment
       );
 
+      /*
+       * Clear previous transaction ID.
+       */
+      setTransactionId("");
+
+      /*
+       * Move to payment instructions.
+       */
+      setPaymentStep("payment");
+
+      setMessage("");
+
+      setError("");
 
       console.log(
         "Payment created:",
         data.payment
       );
-
-
     } catch (err) {
       console.error(
         "RECHARGE ERROR:",
@@ -365,18 +372,204 @@ export default function Recharge() {
         err?.message ||
           "Could not create payment."
       );
-
-
     } finally {
       setLoading(false);
     }
   }
 
+  /*
+   * Transaction ID input.
+   */
+  function handleTransactionIdChange(event) {
+    const value =
+      event.target.value
+        .toUpperCase()
+        .replace(/\s+/g, "");
+
+    setTransactionId(value);
+    setMessage("");
+    setError("");
+  }
+
+  /*
+   * Verify payment.
+   */
+  async function handleVerifyPayment() {
+  setMessage("");
+  setError("");
+
+  /*
+   * Backend may return either:
+   * id or _id
+   */
+  const paymentId =
+    createdPayment?.id ||
+    createdPayment?._id;
+
+  if (!paymentId) {
+    setError(
+      "Payment information is missing."
+    );
+
+    console.error(
+      "VERIFY PAYMENT: Missing payment ID",
+      createdPayment
+    );
+
+    return;
+  }
+
+  const cleanTransactionId =
+    transactionId.trim().toUpperCase();
+
+  if (!cleanTransactionId) {
+    setError(
+      "Please enter your Transaction ID."
+    );
+
+    return;
+  }
+
+  if (
+    cleanTransactionId.length < 4
+  ) {
+    setError(
+      "Please enter a valid Transaction ID."
+    );
+
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const token =
+      localStorage.getItem(
+        "accessToken"
+      );
+
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    /*
+     * Verify payment.
+     */
+    const verifyUrl =
+      `${API_BASE_URL}/recharge/payment/${paymentId}/verify`;
+
+    console.log(
+      "VERIFY PAYMENT URL:",
+      verifyUrl
+    );
+
+    const response =
+      await fetch(
+        verifyUrl,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              `Bearer ${token}`,
+          },
+
+          body:
+            JSON.stringify({
+              transactionId:
+                cleanTransactionId,
+            }),
+        }
+      );
+
+    let data = {};
+
+    try {
+      data =
+        await response.json();
+    } catch {
+      data = {};
+    }
+
+    console.log(
+      "VERIFY PAYMENT RESPONSE:",
+      response.status,
+      data
+    );
+
+    if (
+      !response.ok ||
+      !data.success
+    ) {
+      throw new Error(
+        data.message ||
+          `Could not verify payment. Server returned ${response.status}.`
+      );
+    }
+
+    /*
+     * Payment completed.
+     */
+    setCreatedPayment(
+      data.payment
+    );
+
+    setPaymentStep("success");
+
+    setTransactionId("");
+
+    setMessage(
+      data.message ||
+        "Payment verified and credits added successfully."
+    );
+
+    setError("");
+
+    /*
+     * Refresh user balance.
+     */
+    setTimeout(() => {
+      window.location.reload();
+    }, 1200);
+
+  } catch (err) {
+    console.error(
+      "VERIFY PAYMENT ERROR:",
+      err
+    );
+
+    setError(
+      err?.message ||
+        "Could not verify payment."
+    );
+
+  } finally {
+    setLoading(false);
+  }
+}
+
+  /*
+   * Go back from payment screen.
+   */
+  function handleBackToSelection() {
+    if (loading) {
+      return;
+    }
+
+    setPaymentStep("select");
+    setCreatedPayment(null);
+    setTransactionId("");
+    setMessage("");
+    setError("");
+  }
 
   /*
    * Auth loading screen.
    */
-
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
@@ -387,21 +580,17 @@ export default function Recharge() {
     );
   }
 
-
   /*
    * Not authenticated.
    */
-
   if (!user) {
     return null;
   }
-
 
   return (
     <div className="min-h-screen bg-background text-foreground">
 
       <div className="relative mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
-
 
         {/* ========================================
             TOP BAR
@@ -413,27 +602,34 @@ export default function Recharge() {
 
           <button
             type="button"
-            onClick={() => {
-              window.location.hash = "#/";
-            }}
+            onClick={() => navigate(-1)}
+            aria-label="Back to Home"
             className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black"
           >
-            <span className="text-lg">
-              â†
-            </span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              className="h-4 w-4 shrink-0"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M17 10a.75.75 0 0 1-.75.75H5.612l4.158 4.158a.75.75 0 1 1-1.06 1.061l-5.5-5.5a.75.75 0 0 1 0-1.061l5.5-5.5a.75.75 0 0 1 1.06 1.06L5.611 9.25H16.25A.75.75 0 0 1 17 10Z"
+                clipRule="evenodd"
+              />
+            </svg>
 
             <span>
               Back to Home
             </span>
           </button>
 
-
           {/* Theme toggle */}
 
           <ThemeToggle />
 
         </div>
-
 
         {/* ========================================
             HEADER
@@ -445,7 +641,6 @@ export default function Recharge() {
             Recharge Credits
           </h1>
 
-
           <p className="mt-3 opacity-70">
             Current balance:{" "}
             <strong>
@@ -454,335 +649,544 @@ export default function Recharge() {
             credits
           </p>
 
-
           <div className="mx-auto mt-3 inline-flex rounded-full border px-4 py-2 text-sm">
-            à§³1 = 2 credits
+            ৳1 = 2 credits
           </div>
 
         </div>
 
-
         {/* ========================================
-            MODE SELECTOR
+            PAYMENT SELECTION
         ======================================== */}
 
-        <div className="mx-auto mt-8 flex max-w-md rounded-2xl border p-1">
+        {paymentStep === "select" && (
+          <>
+            {/* ========================================
+                MODE SELECTOR
+            ======================================== */}
 
-          <button
-            type="button"
-            onClick={() => {
-              setMode("package");
+            <div className="mx-auto mt-8 flex max-w-md rounded-2xl border p-1">
 
-              setMessage("");
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("package");
+                  setMessage("");
+                  setError("");
+                }}
+                className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  mode === "package"
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "opacity-60 hover:opacity-100"
+                }`}
+              >
+                Packages
+              </button>
 
-              setError("");
-            }}
-            className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${
-              mode === "package"
-                ? "bg-black text-white dark:bg-white dark:text-black"
-                : "opacity-60 hover:opacity-100"
-            }`}
-          >
-            Packages
-          </button>
-
-
-          <button
-            type="button"
-            onClick={
-              handleCustomMode
-            }
-            className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${
-              mode === "custom"
-                ? "bg-black text-white dark:bg-white dark:text-black"
-                : "opacity-60 hover:opacity-100"
-            }`}
-          >
-            Custom Amount
-          </button>
-
-        </div>
-
-
-        {/* ========================================
-            PACKAGE SECTION
-        ======================================== */}
-
-        {mode === "package" && (
-
-          <div className="mt-8 grid gap-5 md:grid-cols-3">
-
-            {PACKAGES.map((pkg) => {
-
-              const isSelected =
-                selectedPackage ===
-                pkg.id;
-
-
-              return (
-                <button
-                  key={pkg.id}
-                  type="button"
-                  onClick={() =>
-                    handlePackageSelect(
-                      pkg
-                    )
-                  }
-                  className={`relative rounded-2xl border p-6 text-left transition ${
-                    isSelected
-                      ? "border-blue-500 ring-2 ring-blue-500"
-                      : "hover:border-gray-400"
-                  }`}
-                >
-
-                  {/* Selected */}
-
-                  {isSelected && (
-                    <div className="absolute right-4 top-4 rounded-full px-2 py-1 text-xs font-semibold">
-                      âœ“
-                    </div>
-                  )}
-
-
-                  <h2 className="text-xl font-bold">
-                    {pkg.name}
-                  </h2>
-
-
-                  <p className="mt-5 text-3xl font-bold">
-                    à§³{pkg.price}
-                  </p>
-
-
-                  <p className="mt-2 text-lg font-semibold">
-                    {pkg.credits} credits
-                  </p>
-
-
-                  <p className="mt-2 text-sm opacity-60">
-                    à§³1 = 2 credits
-                  </p>
-
-
-                  <p className="mt-5 text-sm opacity-60">
-                    Select this package
-                  </p>
-
-                </button>
-              );
-
-            })}
-
-          </div>
-        )}
-
-
-        {/* ========================================
-            CUSTOM AMOUNT SECTION
-        ======================================== */}
-
-        {mode === "custom" && (
-
-          <div className="mx-auto mt-8 max-w-xl rounded-2xl border p-6">
-
-            <h2 className="text-xl font-bold">
-              Custom Recharge
-            </h2>
-
-
-            <p className="mt-2 text-sm opacity-60">
-              Choose your own recharge amount.
-            </p>
-
-
-            <label className="mt-6 block text-sm font-semibold">
-              Amount
-            </label>
-
-
-            <div className="mt-2 flex items-center rounded-xl border px-4">
-
-              <span className="mr-2 text-lg font-semibold">
-                à§³
-              </span>
-
-
-              <input
-                type="text"
-                inputMode="decimal"
-                value={customAmount}
-                onChange={
-                  handleCustomAmountChange
+              <button
+                type="button"
+                onClick={
+                  handleCustomMode
                 }
-                placeholder="10"
-                className="w-full border-0 bg-transparent py-4 text-lg !outline-none focus:!border-0 focus:!outline-none"
-              />
+                className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                  mode === "custom"
+                    ? "bg-black text-white dark:bg-white dark:text-black"
+                    : "opacity-60 hover:opacity-100"
+                }`}
+              >
+                Custom Amount
+              </button>
 
             </div>
 
+            {/* ========================================
+                PACKAGE SECTION
+            ======================================== */}
 
-            {/* Credit preview */}
+            {mode === "package" && (
 
-            <div className="mt-5 rounded-xl border p-5">
+              <div className="mt-8 grid gap-5 md:grid-cols-3">
 
-              <p className="text-sm opacity-60">
-                You will receive
-              </p>
+                {PACKAGES.map((pkg) => {
 
+                  const isSelected =
+                    selectedPackage ===
+                    pkg.id;
 
-              <p className="mt-1 text-3xl font-bold">
-                {customCredits}
-              </p>
+                  return (
+                    <button
+                      key={pkg.id}
+                      type="button"
+                      onClick={() =>
+                        handlePackageSelect(
+                          pkg
+                        )
+                      }
+                      className={`relative rounded-2xl border p-6 text-left transition ${
+                        isSelected
+                          ? "border-blue-500 ring-2 ring-blue-500"
+                          : "hover:border-gray-400"
+                      }`}
+                    >
 
+                      {isSelected && (
+                        <div className="absolute right-4 top-4 rounded-full px-2 py-1 text-xs font-semibold">
+                          ✓
+                        </div>
+                      )}
 
-              <p className="mt-1 text-sm opacity-60">
-                credits
-              </p>
+                      <h2 className="text-xl font-bold">
+                        {pkg.name}
+                      </h2>
 
-            </div>
+                      <p className="mt-5 text-3xl font-bold">
+                        ৳{pkg.price}
+                      </p>
 
+                      <p className="mt-2 text-lg font-semibold">
+                        {pkg.credits} credits
+                      </p>
 
-            <p className="mt-4 text-xs opacity-60">
-              Minimum amount: à§³10
-            </p>
+                      <p className="mt-2 text-sm opacity-60">
+                        ৳1 = 2 credits
+                      </p>
 
+                      <p className="mt-5 text-sm opacity-60">
+                        Select this package
+                      </p>
 
-            <p className="mt-1 text-xs opacity-60">
-              Credit rate: à§³1 = 2 credits
-            </p>
+                    </button>
+                  );
+                })}
 
-          </div>
-        )}
-
-
-        {/* ========================================
-            PAYMENT METHOD
-        ======================================== */}
-
-        <div className="mx-auto mt-8 max-w-xl">
-
-          <h2 className="text-lg font-bold">
-            Payment Method
-          </h2>
-
-
-          <div className="mt-3 grid grid-cols-2 gap-3">
-
-            {PAYMENT_METHODS.map(
-              (method) => {
-
-                const isSelected =
-                  paymentMethod ===
-                  method.id;
-
-
-                return (
-                  <button
-                    key={method.id}
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod(
-                        method.id
-                      );
-
-                      setMessage("");
-
-                      setError("");
-                    }}
-                    className={`rounded-xl border p-4 text-sm font-semibold transition ${
-                      isSelected
-                        ? "border-blue-500 ring-2 ring-blue-500"
-                        : "hover:border-gray-400"
-                    }`}
-                  >
-
-                    {method.name}
-
-                    {isSelected && (
-                      <span className="ml-2">
-                        âœ“
-                      </span>
-                    )}
-
-                  </button>
-                );
-
-              }
+              </div>
             )}
 
-          </div>
+            {/* ========================================
+                CUSTOM AMOUNT SECTION
+            ======================================== */}
 
-        </div>
+            {mode === "custom" && (
 
+              <div className="mx-auto mt-8 max-w-xl rounded-2xl border p-6">
 
-        {/* ========================================
-            ERROR MESSAGE
-        ======================================== */}
+                <h2 className="text-xl font-bold">
+                  Custom Recharge
+                </h2>
 
-        {error && (
+                <p className="mt-2 text-sm opacity-60">
+                  Choose your own recharge amount.
+                </p>
 
-          <div className="mx-auto mt-6 max-w-xl rounded-xl border border-red-500/40 px-4 py-3 text-sm text-red-600">
+                <label className="mt-6 block text-sm font-semibold">
+                  Amount
+                </label>
 
-            {error}
+                <div className="mt-2 flex items-center rounded-xl border px-4">
 
-          </div>
+                  <span className="mr-2 text-lg font-semibold">
+                    ৳
+                  </span>
 
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={customAmount}
+                    onChange={
+                      handleCustomAmountChange
+                    }
+                    placeholder="10"
+                    className="w-full border-0 bg-transparent py-4 text-lg !outline-none focus:!border-0 focus:!outline-none"
+                  />
+
+                </div>
+
+                <div className="mt-5 rounded-xl border p-5">
+
+                  <p className="text-sm opacity-60">
+                    You will receive
+                  </p>
+
+                  <p className="mt-1 text-3xl font-bold">
+                    {customCredits}
+                  </p>
+
+                  <p className="mt-1 text-sm opacity-60">
+                    credits
+                  </p>
+
+                </div>
+
+                <p className="mt-4 text-xs opacity-60">
+                  Minimum amount: ৳10
+                </p>
+
+                <p className="mt-1 text-xs opacity-60">
+                  Credit rate: ৳1 = 2 credits
+                </p>
+
+              </div>
+            )}
+
+            {/* ========================================
+                PAYMENT METHOD
+            ======================================== */}
+
+            <div className="mx-auto mt-8 max-w-xl">
+
+              <h2 className="text-lg font-bold">
+                Payment Method
+              </h2>
+
+              <div className="mt-3 grid grid-cols-2 gap-3">
+
+                {PAYMENT_METHODS.map(
+                  (method) => {
+
+                    const isSelected =
+                      paymentMethod ===
+                      method.id;
+
+                    return (
+                      <button
+                        key={method.id}
+                        type="button"
+                        onClick={() =>
+                          handlePaymentMethodChange(
+                            method.id
+                          )
+                        }
+                        className={`rounded-xl border p-4 text-sm font-semibold transition ${
+                          isSelected
+                            ? "border-blue-500 ring-2 ring-blue-500"
+                            : "hover:border-gray-400"
+                        }`}
+                      >
+
+                        {method.name}
+
+                        {isSelected && (
+                          <span className="ml-2">
+                            ✓
+                          </span>
+                        )}
+
+                      </button>
+                    );
+                  }
+                )}
+
+              </div>
+
+            </div>
+
+            {/* ========================================
+                ERROR MESSAGE
+            ======================================== */}
+
+            {error && (
+
+              <div className="mx-auto mt-6 max-w-xl rounded-xl border border-red-500/40 px-4 py-3 text-sm text-red-600">
+
+                {error}
+
+              </div>
+            )}
+
+            {/* ========================================
+                STATUS MESSAGE
+            ======================================== */}
+
+            {message && (
+
+              <div className="mx-auto mt-6 max-w-xl rounded-xl border border-green-500/40 px-4 py-3 text-sm text-green-600">
+
+                {message}
+
+              </div>
+            )}
+
+            {/* ========================================
+                PAYMENT BUTTON
+            ======================================== */}
+
+            <div className="mx-auto mt-8 max-w-xl">
+
+              <button
+                type="button"
+                onClick={
+                  handleRecharge
+                }
+                disabled={loading}
+                className="w-full rounded-xl bg-black px-6 py-4 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
+              >
+
+                {loading
+                  ? "Creating Payment..."
+                  : mode === "package" &&
+                    selectedPackageData
+                  ? `Pay ৳${selectedPackageData.price}`
+                  : mode === "custom" &&
+                    customAmount
+                  ? `Pay ৳${customAmount}`
+                  : "Continue to Payment"}
+
+              </button>
+
+            </div>
+
+            <p className="mx-auto mt-5 max-w-xl text-center text-xs opacity-50">
+              Credits are added only after payment
+              verification is completed by the server.
+            </p>
+          </>
         )}
 
-
         {/* ========================================
-            STATUS MESSAGE
+            PAYMENT INSTRUCTIONS
         ======================================== */}
 
-        {message && (
+        {paymentStep === "payment" && createdPayment && (
 
-          <div className="mx-auto mt-6 max-w-xl rounded-xl border border-green-500/40 px-4 py-3 text-sm text-green-600">
+          <div className="mx-auto mt-8 max-w-xl">
 
-            {message}
+            <div className="rounded-2xl border p-6">
+
+              <div className="flex items-center justify-between">
+
+                <div>
+                  <p className="text-sm opacity-60">
+                    Payment Method
+                  </p>
+
+                  <h2 className="mt-1 text-2xl font-bold">
+                    {createdPayment.provider === "bkash"
+                      ? "bKash"
+                      : "Nagad"}
+                  </h2>
+                </div>
+
+                <div className="rounded-full border px-3 py-1 text-xs font-semibold">
+                  Pending
+                </div>
+
+              </div>
+
+              {/* Amount */}
+
+              <div className="mt-6 rounded-xl border p-5">
+
+                <p className="text-sm opacity-60">
+                  Amount
+                </p>
+
+                <p className="mt-1 text-3xl font-bold">
+                  ৳{createdPayment.amount}
+                </p>
+
+                <p className="mt-1 text-sm opacity-60">
+                  You will receive{" "}
+                  {createdPayment.credits} credits
+                </p>
+
+              </div>
+
+              {/* Receiver */}
+
+              {createdPayment.receiverPhone && (
+
+                <div className="mt-5 rounded-xl border p-5">
+
+                  <p className="text-sm opacity-60">
+                    Send payment to this number
+                  </p>
+
+                  <p className="mt-2 text-xl font-bold tracking-wide">
+                    {createdPayment.receiverPhone}
+                  </p>
+
+                  <p className="mt-2 text-xs opacity-60">
+                    Open your{" "}
+                    {createdPayment.provider === "bkash"
+                      ? "bKash"
+                      : "Nagad"}{" "}
+                    app and complete the payment.
+                  </p>
+
+                </div>
+              )}
+
+              {/* Instructions */}
+
+              <div className="mt-5 rounded-xl border p-5">
+
+                <p className="font-semibold">
+                  Payment Steps
+                </p>
+
+                <ol className="mt-3 space-y-2 text-sm opacity-70">
+
+                  <li>
+                    1. Open{" "}
+                    {createdPayment.provider === "bkash"
+                      ? "bKash"
+                      : "Nagad"}.
+                  </li>
+
+                  <li>
+                    2. Send ৳{createdPayment.amount}{" "}
+                    to the receiver number above.
+                  </li>
+
+                  <li>
+                    3. Complete the payment.
+                  </li>
+
+                  <li>
+                    4. Copy the Transaction ID.
+                  </li>
+
+                  <li>
+                    5. Enter the Transaction ID below.
+                  </li>
+
+                </ol>
+
+              </div>
+
+              {/* Transaction ID */}
+
+              <div className="mt-6">
+
+                <label className="block text-sm font-semibold">
+                  Transaction ID
+                </label>
+
+                <input
+                  type="text"
+                  value={transactionId}
+                  onChange={
+                    handleTransactionIdChange
+                  }
+                  placeholder="Enter Transaction ID"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="mt-2 w-full rounded-xl border bg-transparent px-4 py-4 text-base uppercase !outline-none focus:!border-blue-500"
+                />
+
+              </div>
+
+              {/* Error */}
+
+              {error && (
+
+                <div className="mt-5 rounded-xl border border-red-500/40 px-4 py-3 text-sm text-red-600">
+                  {error}
+                </div>
+
+              )}
+
+              {/* Verify */}
+
+              <button
+                type="button"
+                onClick={
+                  handleVerifyPayment
+                }
+                disabled={
+                  loading ||
+                  !transactionId.trim()
+                }
+                className="mt-6 w-full rounded-xl bg-black px-6 py-4 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
+              >
+
+                {loading
+                  ? "Verifying Payment..."
+                  : "Verify Payment"}
+
+              </button>
+
+              {/* Back */}
+
+              <button
+                type="button"
+                onClick={
+                  handleBackToSelection
+                }
+                disabled={loading}
+                className="mt-3 w-full rounded-xl border px-6 py-4 text-sm font-semibold transition hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Back
+              </button>
+
+            </div>
+
+            <p className="mt-5 text-center text-xs opacity-50">
+              Do not close this page until your
+              Transaction ID has been submitted.
+            </p>
 
           </div>
-
         )}
 
-
         {/* ========================================
-            PAYMENT BUTTON
+            PAYMENT SUCCESS
         ======================================== */}
 
-        <div className="mx-auto mt-8 max-w-xl">
+        {paymentStep === "success" && (
 
-          <button
-            type="button"
-            onClick={
-              handleRecharge
-            }
-            disabled={loading}
-            className="w-full rounded-xl bg-black px-6 py-4 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
-          >
+          <div className="mx-auto mt-10 max-w-xl">
 
-            {loading
-              ? "Creating Payment..."
-              : mode === "package" &&
-                selectedPackageData
-              ? `Pay à§³${selectedPackageData.price}`
-              : mode === "custom" &&
-                customAmount
-              ? `Pay à§³${customAmount}`
-              : "Continue to Payment"}
+            <div className="rounded-2xl border p-8 text-center">
 
-          </button>
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-green-500/40 text-3xl text-green-600">
+                ✓
+              </div>
 
-        </div>
+              <h2 className="mt-5 text-2xl font-bold">
+                Payment Successful
+              </h2>
 
+              <p className="mt-3 text-sm opacity-70">
+                Your payment has been verified
+                and your credits have been added.
+              </p>
 
-        {/* ========================================
-            SECURITY NOTE
-        ======================================== */}
+              {createdPayment && (
 
-        <p className="mx-auto mt-5 max-w-xl text-center text-xs opacity-50">
-          Credits are added only after payment
-          verification is completed by the server.
-        </p>
+                <div className="mt-6 rounded-xl border p-5">
+
+                  <p className="text-sm opacity-60">
+                    Credits Added
+                  </p>
+
+                  <p className="mt-1 text-3xl font-bold">
+                    +{createdPayment.credits}
+                  </p>
+
+                  <p className="mt-1 text-sm opacity-60">
+                    credits
+                  </p>
+
+                </div>
+              )}
+
+              {message && (
+
+                <div className="mt-5 rounded-xl border border-green-500/40 px-4 py-3 text-sm text-green-600">
+                  {message}
+                </div>
+
+              )}
+
+              <p className="mt-5 text-xs opacity-50">
+                Updating your account balance...
+              </p>
+
+            </div>
+
+          </div>
+        )}
 
       </div>
 

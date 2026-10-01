@@ -10,6 +10,10 @@ Sparkles,
 
 import { useState } from "react";
 import { Link } from "react-router-dom";
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api";
+
 
 export default function Contact() {
 const [submitted, setSubmitted] = useState(false);
@@ -34,7 +38,7 @@ setError("");
 
 try {
   const response = await fetch(
-    "http://localhost:5000/api/contact",
+    `${API_BASE_URL}/contact`,
     {
       method: "POST",
       headers: {

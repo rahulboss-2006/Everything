@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://localhost:5000";
+﻿const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 /* ================================
    RESPONSE
@@ -142,7 +142,7 @@ async function authenticatedFetch(
 
 
 /* ================================
-   IMAGE → IMAGE
+   IMAGE â†’ IMAGE
 ================================ */
 
 export async function convertImage(
@@ -187,7 +187,7 @@ export async function convertImage(
 
 
 /* ================================
-   IMAGE → PDF
+   IMAGE â†’ PDF
 ================================ */
 
 export async function convertImageToPdf(
@@ -226,7 +226,7 @@ export async function convertImageToPdf(
 
 
 /* ================================
-   PDF → IMAGE
+   PDF â†’ IMAGE
 ================================ */
 
 export async function convertPdfToImage(

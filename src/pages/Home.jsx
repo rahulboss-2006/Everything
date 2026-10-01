@@ -1,4 +1,5 @@
-﻿import {
+import { useNavigate } from "react-router-dom";
+import {
   useEffect,
   useMemo,
   useState,
@@ -254,7 +255,7 @@ const Home = () => {
     setConversionStatus("");
     setIsConverting(false);
 
-    window.location.hash = "#/recharge";
+    window.location.href = "/Everything/recharge";
     return;
   }
 

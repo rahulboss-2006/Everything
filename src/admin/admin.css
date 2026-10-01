@@ -12,7 +12,8 @@ html.dark{--admin-bg:#070b14;--admin-card:#0f172a;--admin-text:#f8fafc;--admin-m
   border-radius: 12px;
   padding: 12px;
   background: var(--surface, #fff);
-  color: inherit;
+  color: #111827 !important;
+  caret-color: #111827;
   outline: none;
   font: inherit;
 }

@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 
 import {
   ArrowLeft,
@@ -75,7 +75,7 @@ export default function Auth() {
   ========================================= */
 
   function goHome() {
-    window.location.hash = "#/";
+    navigate("/");
   }
 
 
@@ -261,7 +261,7 @@ export default function Auth() {
          GO HOME
       ================================ */
 
-      window.location.hash = "#/";
+      navigate("/");
     } catch (err) {
       console.error(
         "AUTH ERROR:",
@@ -776,7 +776,3 @@ export default function Auth() {
     </div>
   );
 }
-
-
-
-
