@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 
 import ThemeToggle from "./ThemeToggle";
 import { useAuth } from "../context/AuthContext";
+import logo from "../assets/logo.png";
 
 function Navbar() {
   const {
@@ -33,7 +34,7 @@ function Navbar() {
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-950">
             <div className="text-2xl font-black">
-              <img src="/src/assets/favicon.svg" alt="Everything" className="h-5 w-5" />  
+              <img src={logo} alt="Everything" className="h-5 w-5" />  
             </div>  
           </div>
 
