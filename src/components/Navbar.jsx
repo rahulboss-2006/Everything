@@ -32,7 +32,9 @@ function Navbar() {
           className="flex items-center gap-2 text-xl font-bold"
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-950">
-            <Sparkles size={18} />
+            <div className="text-2xl font-black">
+              <img src="/src/assets/favicon.svg" alt="Everything" className="h-5 w-5" />  
+            </div>  
           </div>
 
           Everything
