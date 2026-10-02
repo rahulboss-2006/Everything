@@ -3,15 +3,11 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- =====================================================
-         FAVICON
-    ====================================================== -->
-
     <link
       id="favicon-light"
       rel="icon"
       type="image/png"
-      href="/Everything/assets/logo-light.png"
+      href="/src/assets/logo-light.png"
       media="(prefers-color-scheme: light)"
     />
 
@@ -19,13 +15,9 @@
       id="favicon-dark"
       rel="icon"
       type="image/png"
-      href="/Everything/assets/logo-dark.png"
+      href="/src/assets/logo-dark.png"
       media="(prefers-color-scheme: dark)"
     />
-
-    <!-- =====================================================
-         FONTS
-    ====================================================== -->
 
     <link
       rel="stylesheet"
@@ -36,10 +28,6 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
     />
-
-    <!-- =====================================================
-         THEME + FAVICON HANDLER
-    ====================================================== -->
 
     <script>
       (() => {
@@ -56,18 +44,18 @@
           const darkIcon =
             document.getElementById("favicon-dark");
 
-          if (!lightIcon || !darkIcon) {
-            return;
-          }
+          if (!lightIcon || !darkIcon) return;
+
+          const body = document.body;
 
           const theme =
             root.dataset.theme ||
-            document.body?.dataset.theme;
+            body?.dataset.theme;
 
           const isDark = theme
             ? theme === "dark"
             : root.classList.contains("dark") ||
-              document.body?.classList.contains("dark") ||
+              body?.classList.contains("dark") ||
               (
                 !root.classList.contains("light") &&
                 systemDark.matches
@@ -82,15 +70,9 @@
             : "not all";
         };
 
-
-        /* ================================================
-           ROOT OBSERVER
-
-           html already exists here, so this is safe.
-        ================================================= */
-
-        updateFavicon();
-
+        /*
+         * HTML element already exists here.
+         */
         const rootObserver =
           new MutationObserver(updateFavicon);
 
@@ -102,24 +84,16 @@
           ],
         });
 
-
-        /* ================================================
-           BODY OBSERVER
-
-           IMPORTANT:
-           body does NOT exist yet while <head> is parsing.
-
-           So wait until DOMContentLoaded.
-        ================================================= */
-
-        const observeBody = () => {
+        /*
+         * Body doesn't exist yet while <head>
+         * is being parsed.
+         *
+         * So observe it only after DOM is ready.
+         */
+        const setupBodyObserver = () => {
           const body = document.body;
 
-          if (!body) {
-            return;
-          }
-
-          updateFavicon();
+          if (!body) return;
 
           const bodyObserver =
             new MutationObserver(updateFavicon);
@@ -131,34 +105,29 @@
               "data-theme"
             ],
           });
+
+          updateFavicon();
         };
 
-
-        if (document.body) {
-          observeBody();
-        } else {
+        if (document.readyState === "loading") {
           document.addEventListener(
             "DOMContentLoaded",
-            observeBody,
+            setupBodyObserver,
             { once: true }
           );
+        } else {
+          setupBodyObserver();
         }
 
-
-        /* ================================================
-           SYSTEM THEME CHANGE
-        ================================================= */
-
+        /*
+         * System theme change
+         */
         systemDark.addEventListener(
           "change",
           updateFavicon
         );
       })();
     </script>
-
-    <!-- =====================================================
-         VIEWPORT
-    ====================================================== -->
 
     <meta
       name="viewport"
@@ -171,9 +140,10 @@
   <body>
     <div id="root"></div>
 
+    <!-- IMPORTANT: Keep this as /src/main.jsx -->
     <script
       type="module"
-      src="/Everything/src/main.jsx"
+      src="/src/main.jsx"
     ></script>
   </body>
 </html>
