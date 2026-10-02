@@ -4,6 +4,7 @@
   Loader2,
   Link2,
   Maximize2,
+  GripHorizontal,
 } from "lucide-react";
 
 export default function ResizeDock({
@@ -41,7 +42,19 @@ export default function ResizeDock({
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-[0_20px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl">
 
-        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        {/* DRAG GRIP
+            Wrapped by <DraggableDock> in ImageEditor.jsx.
+            Grab this bar (or any empty part of the dock) to move it.
+            Double-click to put it back. */}
+
+        <div
+          title="Drag to move  •  Double-click to reset position"
+          className="flex select-none items-center justify-center pt-1.5 text-slate-500 transition hover:text-slate-300"
+        >
+          <GripHorizontal size={18} />
+        </div>
+
+        <div className="flex items-center justify-between border-b border-white/10 px-4 pb-3 pt-1">
 
           <div className="flex items-center gap-2">
 

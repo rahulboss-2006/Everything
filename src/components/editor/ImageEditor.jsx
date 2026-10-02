@@ -484,25 +484,28 @@ function ImageEditor({ file, onComplete, onClose }) {
           />
         )}
 
-        <ResizeDock
-          resizeMode={resizeMode}
-          resizeWidth={resize.resizeWidth}
-          resizeHeight={resize.resizeHeight}
-          resizeUnit={resize.resizeUnit}
-          resizeResolution={resize.resizeResolution}
-          resizeResample={resize.resizeResample}
-          resizeLockRatio={resize.resizeLockRatio}
-          applying={applying}
-          getDisplayValue={resize.getDisplayValue}
-          handleResizeWidthChange={resize.handleResizeWidthChange}
-          handleResizeUnitChange={resize.handleResizeUnitChange}
-          handleResolutionChange={resize.handleResolutionChange}
-          setResizeLockRatio={resize.setResizeLockRatio}
-          setResizeResample={resize.setResizeResample}
-          resetResizeDimensions={resize.resetResizeDimensions}
-          cancelResize={resize.cancelResize}
-          applyResize={resize.applyResize}
-        />
+        <DraggableDock>
+          <ResizeDock
+            resizeMode={resizeMode}
+            resizeWidth={resize.resizeWidth}
+            resizeHeight={resize.resizeHeight}
+            resizeUnit={resize.resizeUnit}
+            resizeResolution={resize.resizeResolution}
+            resizeResample={resize.resizeResample}
+            resizeLockRatio={resize.resizeLockRatio}
+            applying={applying}
+            getDisplayValue={resize.getDisplayValue}
+            handleResizeWidthChange={resize.handleResizeWidthChange}
+            handleResizeHeightChange={resize.handleResizeHeightChange}
+            handleResizeUnitChange={resize.handleResizeUnitChange}
+            handleResolutionChange={resize.handleResolutionChange}
+            setResizeLockRatio={resize.setResizeLockRatio}
+            setResizeResample={resize.setResizeResample}
+            resetResizeDimensions={resize.resetResizeDimensions}
+            cancelResize={resize.cancelResize}
+            applyResize={resize.applyResize}
+          />
+        </DraggableDock>
 
         <DraggableDock>
           <CropDock
