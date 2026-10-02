@@ -230,13 +230,13 @@ html.light .footer-text::before {
     linear-gradient(
       135deg,
       rgba(2, 6, 23, 0.82),
-      rgba(15, 23, 42, 0.62),
-      rgba(2, 6, 23, 0.82)
+      rgba(80, 81, 82, 0.808),
+      rgba(48, 48, 49, 0.82)
     );
 
   backdrop-filter: blur(60px) saturate(150%);
   -webkit-backdrop-filter: blur(60px) saturate(150%);
-  filter: blur(60px) saturate(150%);
+  
 }
 
 
