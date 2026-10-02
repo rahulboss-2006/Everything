@@ -4,6 +4,13 @@ import {
   getEffectPreset,
 } from "../utils/editorTools/effectHelpers";
 
+/*
+  Effects stack on top of each other (brightness 1.18 applied 13 times is
+  about 8x brighter, contrast 1.35 stacked is pure black/white). Past
+  this many effects the image turns solid white/black, so we stop here.
+*/
+export const MAX_EFFECTS = 10;
+
 export default function useEffectLayers({
   editorControlsDisabled,
   canvasRef,
@@ -77,6 +84,13 @@ export default function useEffectLayers({
 
     if (existingIndex !== -1) {
       syncEffectLayers(current.filter((_, index) => index !== existingIndex));
+      return;
+    }
+
+    if (current.length >= MAX_EFFECTS) {
+      alert(
+        `You can stack up to ${MAX_EFFECTS} effects. Remove one, or press Apply to lock these in and keep editing.`
+      );
       return;
     }
 
