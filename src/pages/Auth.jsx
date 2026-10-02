@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 
 import {
   ArrowLeft,
@@ -145,11 +145,11 @@ export default function Auth() {
 
       if (mode === "register") {
         const result =
-          await registerUser(
-            email.trim(),
-            password,
-            phone.trim()
-          );
+          await registerUser({
+          email: email.trim(),
+          password,
+          phone: phone.trim(),
+        });
 
         if (!result?.success) {
           throw new Error(
@@ -173,10 +173,10 @@ export default function Auth() {
       ================================ */
 
       const result =
-        await loginUser(
-          email.trim(),
-          password
-        );
+        await loginUser({
+        email: email.trim(),
+        password,
+      });
 
       if (!result?.success) {
         throw new Error(
@@ -776,3 +776,4 @@ export default function Auth() {
     </div>
   );
 }
+
