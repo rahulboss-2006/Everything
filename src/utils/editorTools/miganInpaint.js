@@ -459,12 +459,8 @@ export async function runLocalAIObjectRemoval(
 }
 
 const canUseWasmThreads =
-  typeof window !== "undefined" &&
-  window.crossOriginIsolated === true;
+  window.crossOriginIsolated === true &&
+  typeof SharedArrayBuffer !== "undefined";
 
-ort.env.wasm.numThreads = canUseWasmThreads
-  ? Math.min(4, navigator.hardwareConcurrency || 2)
-  : 1;
-    ort.env.wasm.simd = true;
-
-
+ort.env.wasm.numThreads = canUseWasmThreads ? 4 : 1;
+ort.env.wasm.simd = true;
