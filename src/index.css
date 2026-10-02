@@ -229,9 +229,9 @@ html.light .footer-text::before {
   background:
     linear-gradient(
       135deg,
-      rgba(1, 4, 19, 0.658),
-      rgba(80, 81, 82, 0.966),
-      rgba(16, 16, 17, 0.82)
+      rgba(1, 4, 19, 0.87),
+      rgba(7, 7, 7, 0.966),
+      rgba(16, 16, 17, 0.884)
     );
 
   backdrop-filter: blur(60px) saturate(150%);
