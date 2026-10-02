@@ -217,7 +217,7 @@ const Home = () => {
       }
 
       setConversionStatus(
-        "Ã¢Å“â€œ Conversion complete"
+        "Conversion complete"
       );
 
       // -----------------------------
