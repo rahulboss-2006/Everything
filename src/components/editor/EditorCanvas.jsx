@@ -401,301 +401,276 @@ export default function EditorCanvas({
 
               {/* AI OBJECT REMOVE LOADER */}
 
-              {aiObjectMode && objectApplying && (
-                <div
-                  className="
+            
+{aiObjectMode && objectApplying && (
+  <div
+    className="
       absolute
       inset-0
       z-50
+      isolate
       overflow-hidden
       pointer-events-none
-      isolate
 
-      bg-gradient-to-br
-      from-slate-950/85
-      via-slate-900/70
-      to-slate-950/85
+      flex
+      items-center
+      justify-center
 
-      backdrop-blur-[28px]
-      backdrop-saturate-[125%]
+      bg-slate-950/70
+
+      backdrop-blur-[20px]
     "
-                >
-                  {/* =====================================================
-        DIAGONAL AI SCAN
+  >
+    {/* =====================================================
+        BACKGROUND GLOW 1
     ===================================================== */}
 
-                  <div
-                    className="
+    <div
+      className="
         absolute
-        -inset-[80%]
+        left-1/2
+        top-1/2
 
-        pointer-events-none
+        h-[420px]
+        w-[420px]
 
-        bg-[repeating-linear-gradient(
-          135deg,
-          transparent_0px,
-          transparent_42px,
-          rgba(255,30,80,0)_43px,
-          rgba(255,30,80,.16)_45px,
-          rgba(255,30,80,0)_48px,
-          transparent_92px,
-          rgba(0,180,255,0)_94px,
-          rgba(0,180,255,.14)_97px,
-          rgba(0,180,255,0)_100px
-        )]
+        -translate-x-1/2
+        -translate-y-1/2
 
-        mix-blend-screen
+        rounded-full
 
-        animate-[aiDiagonalScan_2.2s_linear_infinite]
+        bg-cyan-500/10
+
+        shadow-[0_0_120px_60px_rgba(0,200,255,.12)]
       "
-                  />
+    />
 
-                  {/* =====================================================
-        WHITE LIGHT SWEEP
+    {/* =====================================================
+        BACKGROUND GLOW 2
     ===================================================== */}
 
-                  <div
-                    className="
+    <div
+      className="
         absolute
+        left-1/2
+        top-1/2
 
-        left-[-45%]
-        top-[-40%]
+        h-[280px]
+        w-[280px]
 
-        h-[180%]
-        w-[24%]
+        -translate-x-1/2
+        -translate-y-1/2
 
-        rotate-[38deg]
+        rounded-full
 
-        pointer-events-none
+        bg-violet-500/10
 
-        bg-[linear-gradient(
-          90deg,
-          transparent_0%,
-          rgba(255,255,255,.02)_35%,
-          rgba(255,255,255,.15)_43%,
-          rgba(255,255,255,.85)_49%,
-          rgba(255,255,255,1)_50%,
-          rgba(255,255,255,.65)_51%,
-          rgba(255,255,255,.12)_58%,
-          transparent_75%
-        )]
-
-        blur-[7px]
-
-        shadow-[0_0_25px_rgba(255,255,255,.45)]
-
-        animate-[aiLightSweep_2.4s_cubic-bezier(.45,0,.25,1)_infinite]
+        shadow-[0_0_100px_50px_rgba(139,92,246,.12)]
       "
-                  />
+    />
 
-                  {/* =====================================================
-        HORIZONTAL SCAN
+    {/* =====================================================
+        CENTER CARD
     ===================================================== */}
 
-                  <div
-                    className="
-        absolute
-        left-0
-        top-[-5%]
-
-        z-10
-
-        h-[2px]
-        w-full
-
-        pointer-events-none
-
-        bg-[linear-gradient(
-          90deg,
-          transparent,
-          rgba(0,200,255,.2),
-          rgba(255,255,255,.95),
-          rgba(255,30,80,.35),
-          transparent
-        )]
-
-        shadow-[0_0_10px_rgba(0,200,255,.8),0_0_25px_rgba(255,30,80,.5)]
-
-        animate-[aiHorizontalScan_2.1s_ease-in-out_infinite]
-      "
-                  />
-
-                  {/* =====================================================
-        CENTER CONTENT
-    ===================================================== */}
-
-                  <div
-                    className="
-        absolute
-        inset-0
-        z-[100]
+    <div
+      className="
+        relative
+        z-50
 
         flex
+        w-[280px]
+
+        flex-col
         items-center
-        justify-center
 
-        pointer-events-none
+        rounded-2xl
+
+        border
+        border-white/10
+
+        bg-slate-950/40
+
+        px-6
+        py-6
+
+        shadow-[0_20px_60px_rgba(0,0,0,.55),0_0_40px_rgba(0,200,255,.08)]
+
+        backdrop-blur-[18px]
       "
-                  >
-                    {/* ===================================================
-          PROGRESS CARD
-      =================================================== */}
+    >
+      {/* =================================================
+          SPINNER
+      ================================================= */}
 
-                    <div
-                      className="
-          min-w-[250px]
+      <div
+        className="
+          mb-4
 
-          rounded-[18px]
+          relative
 
-          border
-          border-white/10
-
-          bg-slate-950/30
-
-          px-6
-          py-5
-
-          text-center
-
-          shadow-[0_20px_60px_rgba(0,0,0,.5),0_0_35px_rgba(0,180,255,.12)]
-
-          backdrop-blur-[18px]
+          h-10
+          w-10
         "
-                    >
-                      {/* =================================================
-            TITLE
-        ================================================= */}
-
-                      <div
-                        className="
-            mb-2
-
-            flex
-            items-center
-            justify-center
-
-            gap-2
-
-            text-sm
-            font-semibold
-            text-white
-          "
-                      >
-                        {/* Spinner */}
-                        <span
-                          className="
-              h-[15px]
-              w-[15px]
-              shrink-0
-
-              rounded-full
-
-              border-2
-              border-white/20
-
-              border-t-cyan-400
-              border-r-rose-400
-
-              animate-spin
-            "
-                        />
-
-                        <span>
-                          AI Object Removing...
-                        </span>
-                      </div>
-
-                      {/* =================================================
-            PERCENTAGE
-        ================================================= */}
-
-                      <div
-                        className="
-            mb-3
-
-            text-[32px]
-            font-extrabold
-            leading-none
-            text-white
-
-            [text-shadow:0_0_15px_rgba(0,200,255,.45)]
-          "
-                      >
-                        {Math.round(aiProgress)}%
-                      </div>
-
-                      {/* =================================================
-            PROGRESS TRACK
-        ================================================= */}
-
-                      <div
-                        className="
-            relative
-
-            h-[6px]
-            w-[210px]
-
-            overflow-hidden
+      >
+        <div
+          className="
+            absolute
+            inset-0
 
             rounded-full
 
-            bg-white/10
-
-            shadow-[inset_0_0_5px_rgba(255,255,255,.1)]
+            border-2
+            border-white/10
           "
-                      >
-                        {/* ===============================================
-              PROGRESS FILL
-          =============================================== */}
+        />
 
-                        <div
-                          className="
+        <div
+          className="
+            absolute
+            inset-0
+
+            rounded-full
+
+            border-2
+            border-transparent
+
+            border-t-cyan-400
+            border-r-rose-400
+
+            animate-spin
+          "
+        />
+
+        <div
+          className="
+            absolute
+            left-1/2
+            top-1/2
+
+            h-2
+            w-2
+
+            -translate-x-1/2
+            -translate-y-1/2
+
+            rounded-full
+
+            bg-white
+
+            shadow-[0_0_8px_white,0_0_18px_rgba(0,200,255,.9)]
+          "
+        />
+      </div>
+
+      {/* =================================================
+          TITLE
+      ================================================= */}
+
+      <div
+        className="
+          mb-2
+
+          text-center
+
+          text-sm
+          font-semibold
+
+          text-white
+        "
+      >
+        AI Object Removing...
+      </div>
+
+      {/* =================================================
+          PERCENTAGE
+      ================================================= */}
+
+      <div
+        className="
+          mb-4
+
+          text-4xl
+          font-black
+
+          leading-none
+
+          text-white
+
+          [text-shadow:0_0_18px_rgba(0,200,255,.45)]
+        "
+      >
+        {Math.round(aiProgress)}%
+      </div>
+
+      {/* =================================================
+          PROGRESS TRACK
+      ================================================= */}
+
+      <div
+        className="
+          relative
+
+          h-2
+          w-full
+
+          overflow-visible
+
+          rounded-full
+
+          bg-white/10
+
+          shadow-[inset_0_0_5px_rgba(255,255,255,.1)]
+        "
+      >
+        {/* ===============================================
+            PROGRESS FILL
+        =============================================== */}
+
+        <div
+          className="
+            absolute
+            left-0
+            top-0
+
+            h-full
+
+            rounded-full
+
+            bg-gradient-to-r
+            from-cyan-400
+            via-violet-500
+            to-rose-500
+
+            shadow-[0_0_6px_rgba(34,211,238,.9),0_0_14px_rgba(139,92,246,.7),0_0_24px_rgba(244,63,94,.45)]
+
+            transition-all
+            duration-150
+            ease-linear
+          "
+          style={{
+            width: `${Math.min(
+              100,
+              Math.max(0, aiProgress)
+            )}%`,
+          }}
+        >
+          {/* =============================================
+              WHITE GLOW AT PROGRESS END
+
+              NO CSS
+              NO ::after
+              NO filter
+          ============================================= */}
+
+          <div
+            className="
               absolute
-              left-0
-              top-0
-
-              h-full
-
-              rounded-full
-
-              bg-gradient-to-r
-              from-cyan-400
-              via-violet-500
-              to-rose-500
-
-              shadow-[0_0_12px_rgba(0,180,255,.65),0_0_20px_rgba(255,30,80,.35)]
-
-              transition-[width]
-              duration-150
-              ease-linear
-            "
-                          style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(0, aiProgress)
-                            )}%`,
-                          }}
-                        />
-
-                        {/* ===============================================
-              REAL BLUR SHINE
-              
-              IMPORTANT:
-              This is a REAL DOM ELEMENT.
-              No ::after pseudo-element.
-          =============================================== */}
-
-                        <span
-                          className="
-              absolute
-
-              left-[-70px]
+              right-[-7px]
               top-1/2
 
-              z-20
-
-              h-[28px]
-              w-[65px]
+              h-5
+              w-5
 
               -translate-y-1/2
 
@@ -705,72 +680,59 @@ export default function EditorCanvas({
 
               opacity-90
 
-              blur-[10px]
-
-              shadow-[0_0_20px_rgba(255,255,255,.95),0_0_35px_rgba(0,200,255,.65)]
-
-              animate-[aiProgressShine_1.1s_linear_infinite]
-
-              pointer-events-none
+              shadow-[0_0_5px_white,0_0_10px_white,0_0_20px_rgba(0,200,255,.95),0_0_35px_rgba(0,200,255,.65)]
             "
-                        />
+          />
 
-                        {/* ===============================================
-              BRIGHT CORE
-          =============================================== */}
+          {/* =============================================
+              CYAN OUTER GLOW
+          ============================================= */}
 
-                        <span
-                          className="
+          <div
+            className="
               absolute
-
-              left-[-55px]
+              right-[-13px]
               top-1/2
 
-              z-30
-
-              h-[10px]
-              w-[45px]
+              h-7
+              w-7
 
               -translate-y-1/2
 
               rounded-full
 
-              bg-white
+              bg-cyan-400/20
 
-              opacity-95
-
-              blur-[3px]
-
-              shadow-[0_0_10px_rgba(255,255,255,1)]
-
-              animate-[aiProgressShine_1.1s_linear_infinite]
-
-              pointer-events-none
+              shadow-[0_0_15px_8px_rgba(34,211,238,.25)]
             "
-                        />
-                      </div>
+          />
+        </div>
+      </div>
 
-                      {/* =================================================
-            PROGRESS LABEL
-        ================================================= */}
+      {/* =================================================
+          LABEL
+      ================================================= */}
 
-                      <div
-                        className="
-            mt-2
+      <div
+        className="
+          mt-3
 
-            text-[10px]
+          text-[10px]
 
-            tracking-[0.2px]
+          font-medium
 
-            text-white/60
-          "
-                      >
-                        {aiProgressLabel}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+          tracking-wide
+
+          text-white/50
+        "
+      >
+        {aiProgressLabel}
+      </div>
+    </div>
+  </div>
+)}
+
+
 
 
               {/* CROP OVERLAY */}
