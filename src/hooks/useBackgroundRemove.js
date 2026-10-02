@@ -1,7 +1,10 @@
 import { useRef, useState, useEffect } from "react";
 import { removeBackground } from "@imgly/background-removal";
 import { loadImage } from "../utils/imageEditor";
-import { getBaseName, makePngFile } from "../utils/editorTools/canvasHelpers";
+import {
+  getBaseName,
+  makePngFile,
+} from "../utils/editorTools/canvasHelpers";
 
 export default function useBackgroundRemove({
   workingFile,
@@ -17,35 +20,40 @@ export default function useBackgroundRemove({
   layers,
 }) {
   /*
-   * Real progress reported by the AI engine.
+   * REAL progress reported by @imgly.
    *
-   * This value is NOT rendered directly.
-   * The UI smoothly follows it through requestAnimationFrame.
+   * This is the source of truth.
    */
   const backgroundRealProgressRef = useRef(0);
 
   /*
-   * Current visual progress shown in the UI.
+   * Progress currently displayed by the UI.
    */
   const backgroundDisplayedProgressRef = useRef(0);
 
   /*
-   * Animation frame used to smoothly move displayed progress
-   * toward the real AI progress.
+   * requestAnimationFrame handle.
    */
   const backgroundProgressFrameRef = useRef(null);
 
-  const [backgroundProgress, setBackgroundProgress] = useState(0);
-  const [backgroundError, setBackgroundError] = useState("");
+  /*
+   * Prevent progress from reaching 100 until
+   * the complete background-removal operation finishes.
+   */
+  const backgroundProcessingFinishedRef = useRef(false);
+
+  const [backgroundProgress, setBackgroundProgress] =
+    useState(0);
+
+  const [backgroundError, setBackgroundError] =
+    useState("");
 
   /*
-   * Smoothly animate UI progress toward the actual AI progress.
+   * Smoothly follow REAL progress.
    *
-   * Important:
-   * - Real progress can jump quickly.
-   * - UI follows it smoothly.
-   * - It can never go above 99% while processing.
-   * - 100% is only set after removeBackground() actually finishes.
+   * IMPORTANT:
+   * The displayed progress can NEVER go above
+   * the real progress reported by the AI engine.
    */
   const animateBackgroundProgress = () => {
     if (backgroundProgressFrameRef.current) {
@@ -53,51 +61,71 @@ export default function useBackgroundRemove({
     }
 
     const animate = () => {
-      const target = Math.min(
-        99,
-        Math.max(0, backgroundRealProgressRef.current)
-      );
+      const realProgress =
+        backgroundRealProgressRef.current;
 
-      const current = backgroundDisplayedProgressRef.current;
+      const current =
+        backgroundDisplayedProgressRef.current;
+
+      /*
+       * During actual processing:
+       *
+       * 0 -> 99 maximum.
+       *
+       * We never invent progress beyond what
+       * the AI engine has reported.
+       */
+      const target =
+        backgroundProcessingFinishedRef.current
+          ? 100
+          : Math.min(99, realProgress);
 
       const difference = target - current;
 
       /*
-       * If almost reached the target, snap to target.
+       * Already reached target.
        */
-      if (Math.abs(difference) < 0.05) {
-        backgroundDisplayedProgressRef.current = target;
+      if (Math.abs(difference) <= 0.01) {
+        backgroundDisplayedProgressRef.current =
+          target;
 
-        setBackgroundProgress((previous) => {
-          if (Math.abs(previous - target) < 0.05) {
-            return previous;
-          }
-
-          return target;
-        });
+        setBackgroundProgress(target);
 
         backgroundProgressFrameRef.current = null;
+
         return;
       }
 
       /*
-       * Smooth interpolation.
+       * Follow the real progress smoothly.
        *
-       * Larger difference = faster movement.
-       * Smaller difference = slower movement.
+       * IMPORTANT:
+       * Never overshoot the target.
        */
-      const next =
-        current + difference * 0.12;
+      const step =
+        Math.max(
+          0.15,
+          Math.abs(difference) * 0.16
+        );
 
-      backgroundDisplayedProgressRef.current = next;
+      let next;
 
-      setBackgroundProgress((previous) => {
-        if (Math.abs(previous - next) < 0.05) {
-          return previous;
-        }
+      if (difference > 0) {
+        next = Math.min(
+          current + step,
+          target
+        );
+      } else {
+        next = Math.max(
+          current - step,
+          target
+        );
+      }
 
-        return next;
-      });
+      backgroundDisplayedProgressRef.current =
+        next;
+
+      setBackgroundProgress(next);
 
       backgroundProgressFrameRef.current =
         requestAnimationFrame(animate);
@@ -108,7 +136,7 @@ export default function useBackgroundRemove({
   };
 
   /*
-   * Cleanup animation frame if component unmounts.
+   * Cleanup.
    */
   useEffect(() => {
     return () => {
@@ -123,17 +151,27 @@ export default function useBackgroundRemove({
   }, []);
 
   async function handleBackgroundRemove() {
-    if (!workingFile || removingBackground) return;
+    if (!workingFile || removingBackground) {
+      return;
+    }
 
     try {
       setRemovingBackground(true);
 
-      setBackgroundProgress(0);
       setBackgroundError("");
 
+      setBackgroundProgress(0);
+
       backgroundRealProgressRef.current = 0;
+
       backgroundDisplayedProgressRef.current = 0;
 
+      backgroundProcessingFinishedRef.current =
+        false;
+
+      /*
+       * Cancel old animation.
+       */
       if (backgroundProgressFrameRef.current) {
         cancelAnimationFrame(
           backgroundProgressFrameRef.current
@@ -143,74 +181,100 @@ export default function useBackgroundRemove({
       }
 
       /*
-       * Start progress animation immediately.
+       * Start UI animation.
        */
       animateBackgroundProgress();
 
-      setImageOffset({ x: 0, y: 0 });
+      setImageOffset({
+        x: 0,
+        y: 0,
+      });
+
       resetImageDrag();
 
       /*
        * Read original file.
        */
-      const buffer = await workingFile.arrayBuffer();
+      const buffer =
+        await workingFile.arrayBuffer();
 
       const inputFile = new File(
         [buffer],
         workingFile.name || "image.png",
         {
-          type: workingFile.type || "image/png",
+          type:
+            workingFile.type ||
+            "image/png",
           lastModified: Date.now(),
         }
       );
 
       /*
+       * ==========================================
        * ACTUAL AI BACKGROUND REMOVAL
+       * ==========================================
        */
-      const result = await removeBackground(inputFile, {
-        model: "isnet",
+      const result =
+        await removeBackground(inputFile, {
+          model: "isnet",
 
-        output: {
-          format: "image/png",
-          quality: 1,
-        },
-
-        /*
-         * This is the REAL progress from @imgly.
-         */
-        progress: (key, current, total) => {
-          if (!total || total <= 0) return;
-
-          const rawPercent =
-            (current / total) * 100;
+          output: {
+            format: "image/png",
+            quality: 1,
+          },
 
           /*
-           * Never allow the processing UI to reach 100%
-           * from the progress callback.
-           *
-           * 100% means the actual operation has finished.
+           * REAL progress from @imgly.
            */
-          const safePercent = Math.min(
-            99,
-            Math.max(0, rawPercent)
-          );
+          progress: (
+            key,
+            current,
+            total
+          ) => {
+            if (
+              !total ||
+              total <= 0
+            ) {
+              return;
+            }
 
-          /*
-           * Never move backwards.
-           */
-          backgroundRealProgressRef.current =
-            Math.max(
-              backgroundRealProgressRef.current,
-              safePercent
-            );
+            const rawPercent =
+              (current / total) * 100;
 
-          /*
-           * Keep the animation running.
-           */
-          animateBackgroundProgress();
-        },
-      });
+            /*
+             * Keep actual progress between
+             * 0 and 99 during processing.
+             */
+            const safePercent =
+              Math.min(
+                99,
+                Math.max(
+                  0,
+                  rawPercent
+                )
+              );
 
+            /*
+             * Never move backwards.
+             */
+            if (
+              safePercent >
+              backgroundRealProgressRef.current
+            ) {
+              backgroundRealProgressRef.current =
+                safePercent;
+            }
+
+            /*
+             * UI follows actual progress.
+             */
+            animateBackgroundProgress();
+          },
+        });
+
+      /*
+       * removeBackground() has finished.
+       */
       if (!result) {
         throw new Error(
           "Background removal returned an empty result."
@@ -218,31 +282,31 @@ export default function useBackgroundRemove({
       }
 
       /*
-       * Force the visual progress close to completion
-       * while the result is being converted/loaded.
+       * IMPORTANT:
        *
-       * It still cannot reach 100% yet.
+       * Do NOT artificially set progress to 99 here.
+       *
+       * The UI remains at the last REAL progress
+       * while PNG conversion/loading happens.
        */
-      backgroundRealProgressRef.current = Math.max(
-        backgroundRealProgressRef.current,
-        99
-      );
 
       animateBackgroundProgress();
 
       /*
        * Convert result to PNG.
        */
-      const newFile = makePngFile(
-        result,
-        getBaseName(workingFile),
-        "no-background"
-      );
+      const newFile =
+        makePngFile(
+          result,
+          getBaseName(workingFile),
+          "no-background"
+        );
 
       /*
        * Load generated image.
        */
-      const newImage = await loadImage(newFile);
+      const newImage =
+        await loadImage(newFile);
 
       if (!newImage) {
         throw new Error(
@@ -265,11 +329,13 @@ export default function useBackgroundRemove({
        * Apply result.
        */
       setWorkingFile(newFile);
+
       setImage(newImage);
 
       setActiveTool(null);
 
       objectBaseCanvasRef.current = null;
+
       objectDrawingRef.current = false;
 
       layers.addAppliedAction(
@@ -277,57 +343,52 @@ export default function useBackgroundRemove({
       );
 
       /*
-       * ACTUAL OPERATION IS NOW FINISHED.
+       * ==========================================
+       * ACTUAL OPERATION COMPLETELY FINISHED
+       * ==========================================
        *
-       * Only here do we allow 100%.
+       * ONLY NOW allow 100%.
        */
       backgroundRealProgressRef.current = 100;
 
-      /*
-       * Stop previous animation.
-       */
-      if (backgroundProgressFrameRef.current) {
-        cancelAnimationFrame(
-          backgroundProgressFrameRef.current
-        );
-
-        backgroundProgressFrameRef.current = null;
-      }
+      backgroundProcessingFinishedRef.current =
+        true;
 
       /*
-       * Smoothly finish 99 -> 100.
+       * Continue animation from the actual
+       * current value to 100%.
        */
-      const finishAnimation = () => {
-        const current =
-          backgroundDisplayedProgressRef.current;
+      animateBackgroundProgress();
 
-        const difference = 100 - current;
+      /*
+       * Wait until visual progress actually
+       * reaches 100 before ending the loader.
+       */
+      await new Promise((resolve) => {
+        const waitForCompletion = () => {
+          if (
+            backgroundDisplayedProgressRef.current >=
+            99.99
+          ) {
+            backgroundDisplayedProgressRef.current =
+              100;
 
-        if (difference <= 0.05) {
-          backgroundDisplayedProgressRef.current = 100;
-          setBackgroundProgress(100);
+            setBackgroundProgress(100);
 
-          backgroundProgressFrameRef.current = null;
-          return;
-        }
+            resolve();
 
-        const next =
-          current + difference * 0.2;
+            return;
+          }
 
-        backgroundDisplayedProgressRef.current = next;
-
-        setBackgroundProgress(next);
-
-        backgroundProgressFrameRef.current =
           requestAnimationFrame(
-            finishAnimation
+            waitForCompletion
           );
-      };
+        };
 
-      backgroundProgressFrameRef.current =
         requestAnimationFrame(
-          finishAnimation
+          waitForCompletion
         );
+      });
     } catch (error) {
       console.error(
         "Background removal failed:",
@@ -340,10 +401,8 @@ export default function useBackgroundRemove({
       );
     } finally {
       /*
-       * Do NOT immediately reset progress here.
-       *
-       * The loader should be allowed to visually
-       * reach 100% first.
+       * Only hide loader after the actual
+       * operation + final progress animation.
        */
       setRemovingBackground(false);
     }
