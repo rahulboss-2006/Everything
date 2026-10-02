@@ -156,8 +156,7 @@ export default function EditorCanvas({
                         ? handleObjectPointerUp
                         : handleImagePointerUp
                   }
-                  className={`block max-h-[60vh] max-w-full rounded-2xl ${
-                    objectMode
+                  className={`block max-h-[60vh] max-w-full rounded-2xl ${objectMode
                       ? "cursor-crosshair"
                       : cropMode
                         ? isCtrlDragging
@@ -166,7 +165,7 @@ export default function EditorCanvas({
                             ? "cursor-grab"
                             : "cursor-default"
                         : "cursor-grab active:cursor-grabbing"
-                  }`}
+                    }`}
                   style={{
                     touchAction: "none",
 
@@ -174,24 +173,24 @@ export default function EditorCanvas({
 
                     ...(resizeStageSize.width && resizeStageSize.height
                       ? {
-                          width: `${resizeStageSize.width}px`,
-                          height: `${resizeStageSize.height}px`,
-                          maxWidth: "none",
-                          maxHeight: "none",
-                        }
+                        width: `${resizeStageSize.width}px`,
+                        height: `${resizeStageSize.height}px`,
+                        maxWidth: "none",
+                        maxHeight: "none",
+                      }
                       : {}),
 
                     ...(resizeMode
                       ? {
-                          position: "absolute",
-                          inset: 0,
-                          width: "100%",
-                          height: "100%",
-                          maxWidth: "none",
-                          maxHeight: "none",
-                          opacity: 0,
-                          pointerEvents: "none",
-                        }
+                        position: "absolute",
+                        inset: 0,
+                        width: "100%",
+                        height: "100%",
+                        maxWidth: "none",
+                        maxHeight: "none",
+                        opacity: 0,
+                        pointerEvents: "none",
+                      }
                       : {}),
                   }}
                 />
@@ -235,9 +234,9 @@ export default function EditorCanvas({
                        */
                       lockAspectRatio={
                         resizeLockRatio &&
-                        !["top", "right", "bottom", "left"].includes(
-                          resizeActiveDirection
-                        )
+                          !["top", "right", "bottom", "left"].includes(
+                            resizeActiveDirection
+                          )
                           ? resizeRndRatioRef.current
                           : false
                       }
@@ -366,105 +365,104 @@ export default function EditorCanvas({
                 {removingBackground && (
                   <div className="ai-background-loader">
 
-    {/* Animated background layers */}
-    <div className="ai-diagonal-scan" />
-    <div className="ai-light-sweep" />
-    <div className="ai-glow-layer" />
-    <div className="ai-horizontal-scan" />
+                    {/* Animated background layers */}
+                    <div className="ai-diagonal-scan" />
+                    <div className="ai-light-sweep" />
+                    <div className="ai-glow-layer" />
+                    <div className="ai-horizontal-scan" />
 
-    {/* Progress UI */}
-    <div className="ai-progress-content">
-      <div className="ai-progress-card">
+                    {/* Progress UI */}
+                    <div className="ai-progress-content">
+                      <div className="ai-progress-card">
 
-        <div className="ai-progress-title">
-          <span className="ai-progress-spinner" />
-          <span>Removing Background...</span>
-        </div>
+                        <div className="ai-progress-title">
+                          <span className="ai-progress-spinner" />
+                          <span>Removing Background...</span>
+                        </div>
 
-        <div className="ai-progress-percent">
-          {Math.round(aiProgress)}%
-        </div>
+                        <div className="ai-progress-percent">
+                          {Math.round(backgroundProgress)}%
+                        </div>
 
-        <div className="ai-progress-track">
-          <div
-            className="ai-progress-fill"
-            style={{
-              width: `${Math.min(
-                100,
-                Math.max(0, aiProgress)
-              )}%`,
-            }}
-          />
-        </div>
+                        <div className="ai-progress-track">
+                          <div
+                            className="ai-progress-fill"
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                Math.max(0, backgroundProgress)
+                              )}%`,
+                            }}
+                          />
+                        </div>
 
-        <div className="ai-progress-text">
-          {aiProgressLabel}
-        </div>
+                        <div className="ai-progress-text">
+                          {aiProgressLabel}
+                        </div>
 
-      </div>
-    </div>
-  </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 
               {/* AI OBJECT REMOVE LOADER */}
 
-          
-{aiObjectMode && objectApplying && (
-  <div className="ai-background-loader">
 
-    {/* Animated background layers */}
-    <div className="ai-diagonal-scan" />
-    <div className="ai-light-sweep" />
-    <div className="ai-glow-layer" />
-    <div className="ai-horizontal-scan" />
+              {aiObjectMode && objectApplying && (
+                <div className="ai-background-loader">
 
-    {/* Progress UI */}
-    <div className="ai-progress-content">
-      <div className="ai-progress-card">
+                  {/* Animated background layers */}
+                  <div className="ai-diagonal-scan" />
+                  <div className="ai-light-sweep" />
+                  <div className="ai-glow-layer" />
+                  <div className="ai-horizontal-scan" />
 
-        <div className="ai-progress-title">
-          <span className="ai-progress-spinner" />
-          <span>AI Object Removing...</span>
-        </div>
+                  {/* Progress UI */}
+                  <div className="ai-progress-content">
+                    <div className="ai-progress-card">
 
-        <div className="ai-progress-percent">
-          {Math.round(aiProgress)}%
-        </div>
+                      <div className="ai-progress-title">
+                        <span className="ai-progress-spinner" />
+                        <span>AI Object Removing...</span>
+                      </div>
 
-        <div className="ai-progress-track">
-          <div
-            className="ai-progress-fill"
-            style={{
-              width: `${Math.min(
-                100,
-                Math.max(0, aiProgress)
-              )}%`,
-            }}
-          />
-        </div>
+                      <div className="ai-progress-percent">
+                        {Math.round(aiProgress)}%
+                      </div>
 
-        <div className="ai-progress-text">
-          {aiProgressLabel}
-        </div>
+                      <div className="ai-progress-track">
+                        <div
+                          className="ai-progress-fill"
+                          style={{
+                            width: `${Math.min(
+                              100,
+                              Math.max(0, aiProgress)
+                            )}%`,
+                          }}
+                        />
+                      </div>
 
-      </div>
-    </div>
-  </div>
-)}
+                      <div className="ai-progress-text">
+                        {aiProgressLabel}
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              )}
 
 
-              {/* CROP OVERLAY */}
+              { }
 
               {cropMode && image && (
                 <div
-                  className={`absolute inset-0 z-20 overflow-visible ${
-                    isCtrlDragging
+                  className={`absolute inset-0 z-20 overflow-visible ${isCtrlDragging
                       ? "cursor-grabbing"
                       : isCtrlPressed
                         ? "cursor-grab"
                         : "cursor-default"
-                  }`}
+                    }`}
                   onPointerDown={handleCropPointerDown}
                   onPointerMove={handleCropPointerMove}
                   onPointerUp={handleCropPointerUp}
