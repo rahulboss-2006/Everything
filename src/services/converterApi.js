@@ -47,7 +47,7 @@ async function parseResponse(response) {
 async function refreshAccessToken() {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/api/auth/refresh`,
+      `${API_BASE_URL}/auth/refresh`,
       {
         method: "POST",
 
@@ -164,7 +164,7 @@ export async function convertImage(
 
   const response =
     await authenticatedFetch(
-      `${API_BASE_URL}/api/converter/image`,
+      `${API_BASE_URL}/converter/image`,
       {
         method: "POST",
 
@@ -203,7 +203,7 @@ export async function convertImageToPdf(
 
   const response =
     await authenticatedFetch(
-      `${API_BASE_URL}/api/pdf/image-to-pdf`,
+      `${API_BASE_URL}/pdf/image-to-pdf`,
       {
         method: "POST",
 
@@ -248,7 +248,7 @@ export async function convertPdfToImage(
 
   const response =
     await authenticatedFetch(
-      `${API_BASE_URL}/api/pdf/pdf-to-image`,
+      `${API_BASE_URL}/pdf/pdf-to-image`,
       {
         method: "POST",
 
@@ -268,3 +268,4 @@ export async function convertPdfToImage(
       `${API_BASE_URL}${data.downloadUrl}`,
   };
 }
+
