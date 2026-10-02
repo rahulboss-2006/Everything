@@ -4,7 +4,22 @@
 ========================================================= */
 
 import * as ort from "onnxruntime-web";
+
 import { clamp } from "./canvasHelpers";
+
+const canUseWasmThreads =
+  window.crossOriginIsolated === true &&
+  typeof window.SharedArrayBuffer !== "undefined";
+
+ort.env.wasm.numThreads = canUseWasmThreads
+  ? Math.min(4, navigator.hardwareConcurrency || 2)
+  : 1;
+
+ort.env.wasm.simd = true;
+
+console.log("crossOriginIsolated:", window.crossOriginIsolated);
+console.log("SharedArrayBuffer:", typeof window.SharedArrayBuffer);
+console.log("ORT threads:", ort.env.wasm.numThreads);
 
 const MI_GAN_MODEL_URL =
   "https://huggingface.co/edgetools/migan/resolve/main/migan_pipeline_v2.onnx";
@@ -24,13 +39,9 @@ export async function getMiGanSession(onProgress) {
       as `_OrtGetInputName is not a function`). Let ONNX Runtime Web resolve
       its own bundled WASM files.
     */
-const canUseWasmThreads =
-  typeof window !== "undefined" &&
-  window.crossOriginIsolated === true;
-
-ort.env.wasm.numThreads = canUseWasmThreads
-  ? Math.min(4, navigator.hardwareConcurrency || 2)
-  : 1;
+    ort.env.wasm.numThreads = canUseWasmThreads
+      ? Math.min(4, navigator.hardwareConcurrency || 2)
+      : 1;
     ort.env.wasm.simd = true;
     ort.env.wasm.wasmPaths = undefined;
 
