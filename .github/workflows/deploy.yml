@@ -37,8 +37,9 @@ jobs:
         run: npm run build
 
       - name: Create GitHub Pages SPA fallback
-        run: cp dist/index.html dist/404.html
-
+        run: |
+          cp dist/index.html dist/404.html
+          python -c "from pathlib import Path; p=Path('dist/404.html'); s=p.read_text(); s=s.replace('</head>', '<script>window.history.replaceState(null, null, window.location.pathname + window.location.search);</script></head>'); p.write_text(s)"
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 
@@ -59,4 +60,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
 
