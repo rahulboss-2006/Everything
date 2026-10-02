@@ -2,48 +2,178 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link id="favicon-light" rel="icon" type="image/png" href="/src/assets/logo-light.png" media="(prefers-color-scheme: light)" />
-    <link id="favicon-dark" rel="icon" type="image/png" href="/src/assets/logo-dark.png" media="(prefers-color-scheme: dark)" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" />
+
+    <!-- =====================================================
+         FAVICON
+    ====================================================== -->
+
+    <link
+      id="favicon-light"
+      rel="icon"
+      type="image/png"
+      href="/Everything/assets/logo-light.png"
+      media="(prefers-color-scheme: light)"
+    />
+
+    <link
+      id="favicon-dark"
+      rel="icon"
+      type="image/png"
+      href="/Everything/assets/logo-dark.png"
+      media="(prefers-color-scheme: dark)"
+    />
+
+    <!-- =====================================================
+         FONTS
+    ====================================================== -->
+
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+    />
+
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    />
+
+    <!-- =====================================================
+         THEME + FAVICON HANDLER
+    ====================================================== -->
+
     <script>
       (() => {
         const root = document.documentElement;
-        const lightIcon = document.getElementById('favicon-light');
-        const darkIcon = document.getElementById('favicon-dark');
-        const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+        const systemDark = window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        );
 
         const updateFavicon = () => {
-          const theme = root.dataset.theme || document.body?.dataset.theme;
+          const lightIcon =
+            document.getElementById("favicon-light");
+
+          const darkIcon =
+            document.getElementById("favicon-dark");
+
+          if (!lightIcon || !darkIcon) {
+            return;
+          }
+
+          const theme =
+            root.dataset.theme ||
+            document.body?.dataset.theme;
+
           const isDark = theme
-            ? theme === 'dark'
-            : root.classList.contains('dark') ||
-              document.body?.classList.contains('dark') ||
-              (!root.classList.contains('light') && systemDark.matches);
-          lightIcon.media = isDark ? 'not all' : 'all';
-          darkIcon.media = isDark ? 'all' : 'not all';
+            ? theme === "dark"
+            : root.classList.contains("dark") ||
+              document.body?.classList.contains("dark") ||
+              (
+                !root.classList.contains("light") &&
+                systemDark.matches
+              );
+
+          lightIcon.media = isDark
+            ? "not all"
+            : "all";
+
+          darkIcon.media = isDark
+            ? "all"
+            : "not all";
         };
 
+
+        /* ================================================
+           ROOT OBSERVER
+
+           html already exists here, so this is safe.
+        ================================================= */
+
         updateFavicon();
-        new MutationObserver(updateFavicon).observe(root, {
+
+        const rootObserver =
+          new MutationObserver(updateFavicon);
+
+        rootObserver.observe(root, {
           attributes: true,
-          attributeFilter: ['class', 'data-theme'],
+          attributeFilter: [
+            "class",
+            "data-theme"
+          ],
         });
-        new MutationObserver(updateFavicon).observe(document.body, {
-          attributes: true,
-          attributeFilter: ['class', 'data-theme'],
-        });
-        systemDark.addEventListener('change', updateFavicon);
+
+
+        /* ================================================
+           BODY OBSERVER
+
+           IMPORTANT:
+           body does NOT exist yet while <head> is parsing.
+
+           So wait until DOMContentLoaded.
+        ================================================= */
+
+        const observeBody = () => {
+          const body = document.body;
+
+          if (!body) {
+            return;
+          }
+
+          updateFavicon();
+
+          const bodyObserver =
+            new MutationObserver(updateFavicon);
+
+          bodyObserver.observe(body, {
+            attributes: true,
+            attributeFilter: [
+              "class",
+              "data-theme"
+            ],
+          });
+        };
+
+
+        if (document.body) {
+          observeBody();
+        } else {
+          document.addEventListener(
+            "DOMContentLoaded",
+            observeBody,
+            { once: true }
+          );
+        }
+
+
+        /* ================================================
+           SYSTEM THEME CHANGE
+        ================================================= */
+
+        systemDark.addEventListener(
+          "change",
+          updateFavicon
+        );
       })();
     </script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- =====================================================
+         VIEWPORT
+    ====================================================== -->
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+
     <title>Everything</title>
   </head>
+
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+
+    <script
+      type="module"
+      src="/Everything/src/main.jsx"
+    ></script>
   </body>
 </html>
-
-
-
