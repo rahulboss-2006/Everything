@@ -2,7 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/src/assets/favicon.svg" />
+    <link id="favicon-light" rel="icon" type="image/png" href="/src/assets/logo-light.png" media="(prefers-color-scheme: light)" />
+    <link id="favicon-dark" rel="icon" type="image/png" href="/src/assets/logo-dark.png" media="(prefers-color-scheme: dark)" />
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const lightIcon = document.getElementById('favicon-light');
+        const darkIcon = document.getElementById('favicon-dark');
+        const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+        const updateFavicon = () => {
+          const theme = root.dataset.theme || document.body?.dataset.theme;
+          const isDark = theme
+            ? theme === 'dark'
+            : root.classList.contains('dark') ||
+              document.body?.classList.contains('dark') ||
+              (!root.classList.contains('light') && systemDark.matches);
+          lightIcon.media = isDark ? 'not all' : 'all';
+          darkIcon.media = isDark ? 'all' : 'not all';
+        };
+
+        updateFavicon();
+        new MutationObserver(updateFavicon).observe(root, {
+          attributes: true,
+          attributeFilter: ['class', 'data-theme'],
+        });
+        new MutationObserver(updateFavicon).observe(document.body, {
+          attributes: true,
+          attributeFilter: ['class', 'data-theme'],
+        });
+        systemDark.addEventListener('change', updateFavicon);
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Everything</title>
   </head>

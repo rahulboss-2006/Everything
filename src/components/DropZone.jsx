@@ -258,7 +258,7 @@ export default function DropZone({
       className={`rounded-3xl border-2 border-dashed p-4 transition sm:p-6 ${
         dragging
           ? "border-slate-950 bg-slate-100 dark:border-white dark:bg-slate-900"
-          : "border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900"
+          : "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-900"
       }`}
     >
 

@@ -6,18 +6,14 @@ import {
 
 import useTheme from "../hooks/useTheme";
 
-
-/* =========================================
-   THEME TOGGLE
-========================================= */
-
 export default function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const {
+    theme,
+    setTheme,
+  } = useTheme();
 
   return (
-    <div className="hidden items-center gap-1 rounded-xl border border-slate-200 p-1 sm:flex dark:border-slate-800">
-
-      {/* SYSTEM */}
+    <div className="hidden items-center gap-1 rounded-xl border border-slate-200 p-1 dark:border-slate-800 sm:flex">
 
       <ThemeButton
         active={theme === "system"}
@@ -26,18 +22,12 @@ export default function ThemeToggle() {
         title="System"
       />
 
-
-      {/* LIGHT */}
-
       <ThemeButton
         active={theme === "light"}
         onClick={() => setTheme("light")}
         icon={<Sun size={15} />}
         title="Light"
       />
-
-
-      {/* DARK */}
 
       <ThemeButton
         active={theme === "dark"}
@@ -49,11 +39,6 @@ export default function ThemeToggle() {
     </div>
   );
 }
-
-
-/* =========================================
-   THEME BUTTON
-========================================= */
 
 function ThemeButton({
   active,

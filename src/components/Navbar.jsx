@@ -5,11 +5,56 @@ import {
   User,
 } from "lucide-react";
 
-import { Link } from "react-router-dom";
+import {
+  Link,
+} from "react-router-dom";
+
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import ThemeToggle from "./ThemeToggle";
 import { useAuth } from "../context/AuthContext";
-import logo from "../assets/logo.png";
+
+import logoLight from "../assets/logo-light.png";
+import logoDark from "../assets/logo-dark.png";
+
+
+function getCurrentTheme() {
+  const root = document.documentElement;
+
+  const theme =
+    root.dataset.theme ||
+    document.body?.dataset.theme;
+
+  if (theme === "dark") {
+    return "dark";
+  }
+
+  if (theme === "light") {
+    return "light";
+  }
+
+  if (
+    root.classList.contains("dark") ||
+    document.body?.classList.contains("dark")
+  ) {
+    return "dark";
+  }
+
+  if (
+    root.classList.contains("light") ||
+    document.body?.classList.contains("light")
+  ) {
+    return "light";
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
 
 function Navbar() {
   const {
@@ -18,61 +63,146 @@ function Navbar() {
     logout,
   } = useAuth();
 
+  const [currentTheme, setCurrentTheme] = useState(
+    getCurrentTheme()
+  );
+
+
+  /* =========================================
+     WATCH THEME CHANGES
+  ========================================= */
+
+  useEffect(() => {
+    const root = document.documentElement;
+
+    const updateTheme = () => {
+      setCurrentTheme(getCurrentTheme());
+    };
+
+    updateTheme();
+
+    const observer = new MutationObserver(updateTheme);
+
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: [
+        "class",
+        "data-theme",
+      ],
+    });
+
+    if (document.body) {
+      observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: [
+          "class",
+          "data-theme",
+        ],
+      });
+    }
+
+    const systemTheme = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    );
+
+    systemTheme.addEventListener(
+      "change",
+      updateTheme
+    );
+
+    return () => {
+      observer.disconnect();
+
+      systemTheme.removeEventListener(
+        "change",
+        updateTheme
+      );
+    };
+  }, []);
+
+
+  /* =========================================
+     LOGOUT
+  ========================================= */
+
   async function handleLogout() {
     await logout();
   }
 
+
+  /* =========================================
+     CURRENT LOGO
+  ========================================= */
+
+  const currentLogo =
+    currentTheme === "dark"
+      ? logoDark
+      : logoLight;
+
+
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-950/80">
+
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
 
-        {/* LOGO */}
+
+        {/* =========================================
+            LOGO
+        ========================================= */}
 
         <Link
           to="/"
           className="flex items-center gap-2 text-xl font-bold"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-950">
-            <div className="text-2xl font-black">
-              <img src={logo} alt="Everything" className="h-5 w-5" />  
-            </div>  
+
+          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-slate-100 shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900 dark:ring-slate-700/60">
+
+            <img
+              key={currentTheme}
+              src={currentLogo}
+              alt="Everything"
+              className="h-full w-full object-contain p-1.5"
+            />
+
           </div>
 
-          Everything
+          <span>
+            Everything
+          </span>
+
         </Link>
 
 
-        {/* NAVIGATION */}
+        {/* =========================================
+            NAVIGATION
+        ========================================= */}
 
         <nav className="hidden items-center gap-8 md:flex">
 
           <Link
             to="/"
-            className="text-sm font-medium text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
+            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
           >
             Home
           </Link>
 
-
           <Link
             to="/about"
-            className="text-sm font-medium text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
+            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
           >
             About
           </Link>
 
-
           <Link
             to="/features"
-            className="text-sm font-medium text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
+            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
           >
             Features
           </Link>
 
-
           <Link
             to="/contact"
-            className="text-sm font-medium text-slate-600 hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
+            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
           >
             Contact
           </Link>
@@ -80,7 +210,9 @@ function Navbar() {
         </nav>
 
 
-        {/* RIGHT SIDE */}
+        {/* =========================================
+            RIGHT SIDE
+        ========================================= */}
 
         <div className="flex items-center gap-3">
 
@@ -94,9 +226,11 @@ function Navbar() {
               to="/login"
               className="hidden items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 md:flex dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
+
               <LogIn size={16} />
 
               Login
+
             </Link>
           )}
 
@@ -105,6 +239,7 @@ function Navbar() {
 
           {!loading && user && (
             <div className="flex items-center gap-2">
+
 
               {/* CREDITS */}
 
@@ -164,6 +299,7 @@ function Navbar() {
         </div>
 
       </div>
+
     </header>
   );
 }
