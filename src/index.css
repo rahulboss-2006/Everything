@@ -629,6 +629,7 @@ html.light .footer-text::before {
       rgba(255, 255, 255, 0.8),
       transparent
     );
+  filter: blur(8px);  
 
   animation: aiProgressShine 1.1s linear infinite;
 }
