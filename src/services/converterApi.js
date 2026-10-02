@@ -1,4 +1,5 @@
 ﻿const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
 
 /* ================================
    RESPONSE
@@ -181,7 +182,7 @@ export async function convertImage(
     ...data,
 
     downloadUrl:
-      `${new URL(data.downloadUrl, API_BASE_URL).toString()}`,
+      `${SERVER_BASE_URL}${data.downloadUrl}`,
   };
 }
 
@@ -220,7 +221,7 @@ export async function convertImageToPdf(
     ...data,
 
     downloadUrl:
-      `${new URL(data.downloadUrl, API_BASE_URL).toString()}`,
+      `${SERVER_BASE_URL}${data.downloadUrl}`,
   };
 }
 
@@ -265,8 +266,9 @@ export async function convertPdfToImage(
     ...data,
 
     downloadUrl:
-      `${new URL(data.downloadUrl, API_BASE_URL).toString()}`,
+      `${SERVER_BASE_URL}${data.downloadUrl}`,
   };
 }
+
 
 
