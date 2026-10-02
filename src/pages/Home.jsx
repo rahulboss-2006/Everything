@@ -1,4 +1,4 @@
-﻿import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   useEffect,
   useMemo,
@@ -31,6 +31,7 @@ import {
 } from "../services/converterApi";
 
 import { useAuth } from "../context/AuthContext";
+import { downloadFile } from "../utils/downloadFile";
 
 const Home = () => {
   // -----------------------------
@@ -205,7 +206,7 @@ const Home = () => {
       // -----------------------------
       // Download
       // -----------------------------
-      window.location.assign(result.downloadUrl);
+      await downloadFile(result.downloadUrl, result?.fileName);
 
       if (
         result?.creditsRemaining !== undefined

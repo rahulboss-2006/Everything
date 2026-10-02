@@ -1,4 +1,4 @@
-﻿import {
+import {
   useEffect,
   useMemo,
   useState,
@@ -54,6 +54,7 @@ import AdminPanel from "./admin/AdminPanel";
 import {
   useAuth,
 } from "./context/AuthContext";
+import { downloadFile } from "./utils/downloadFile";
 
 
 /* =========================================
@@ -535,7 +536,7 @@ function UploadBox() {
         }
 
 
-        window.location.assign(downloadUrl);
+        await downloadFile(downloadUrl, result?.fileName);
 
 
 

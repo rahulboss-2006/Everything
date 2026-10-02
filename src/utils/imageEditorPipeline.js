@@ -380,6 +380,51 @@ function getEffectFilter(
 
 
 /* =========================================================
+   REUSED SCRATCH CANVAS
+   Allocating a new full-size canvas on every slider tick is slow
+   and floods the garbage collector. One canvas is reused.
+========================================================= */
+
+let scratchCanvas = null;
+
+function getScratchCanvas(width, height) {
+  if (!scratchCanvas) {
+    scratchCanvas = document.createElement("canvas");
+  }
+
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+
+  if (scratchCanvas.width !== w) scratchCanvas.width = w;
+  if (scratchCanvas.height !== h) scratchCanvas.height = h;
+
+  return scratchCanvas;
+}
+
+
+/* =========================================================
+   COMBINED EFFECT FILTER
+   All selected effects are merged into ONE CSS filter list and
+   applied in a single draw (was: one new canvas per effect).
+========================================================= */
+
+function getCombinedEffectFilter(selectedEffects) {
+  if (!Array.isArray(selectedEffects)) return "none";
+
+  const parts = [];
+
+  for (const effectId of selectedEffects) {
+    if (!effectId || effectId === "Preview") continue;
+
+    const filter = getEffectFilter(getEffectPreset(effectId));
+
+    if (filter && filter !== "none") parts.push(filter);
+  }
+
+  return parts.length ? parts.join(" ") : "none";
+}
+
+/* =========================================================
    SAFE OFF-SCREEN CANVAS
 ========================================================= */
 
@@ -587,11 +632,7 @@ function drawBaseImage({
       : sourceHeight;
 
 
-  const canvas =
-    createCanvas(
-      outputWidth,
-      outputHeight
-    );
+  const canvas = getScratchCanvas(outputWidth, outputHeight);
 
 
   const ctx =
@@ -793,80 +834,6 @@ function applyEffect(
    APPLY EFFECTS SEQUENTIALLY
 ========================================================= */
 
-function applyEffects(
-  sourceCanvas,
-  selectedEffects
-) {
-
-  if (
-    !sourceCanvas ||
-    !Array.isArray(
-      selectedEffects
-    ) ||
-    selectedEffects.length === 0
-  ) {
-
-    return sourceCanvas;
-  }
-
-
-  let currentCanvas =
-    sourceCanvas;
-
-
-  for (
-    const effectId
-    of selectedEffects
-  ) {
-
-    if (!effectId) {
-      continue;
-    }
-
-
-    /*
-     * Preview is a UI state,
-     * not an actual effect.
-     */
-
-    if (
-      effectId === "Preview"
-    ) {
-      continue;
-    }
-
-
-    const effect =
-      getEffectPreset(
-        effectId
-      );
-
-
-    if (!effect) {
-      continue;
-    }
-
-
-    try {
-
-      currentCanvas =
-        applyEffect(
-          currentCanvas,
-          effect
-        );
-
-    } catch (error) {
-
-      console.warn(
-        `Effect "${effectId}" failed. Keeping previous result.`,
-        error
-      );
-    }
-  }
-
-
-  return currentCanvas;
-}
 
 
 /* =========================================================
@@ -877,10 +844,7 @@ function applyEffects(
    element. Only its drawing buffer is updated.
 ========================================================= */
 
-function copyCanvas(
-  sourceCanvas,
-  outputCanvas
-) {
+function copyCanvas(sourceCanvas, outputCanvas, filter = "none") {
 
   if (
     !sourceCanvas ||
@@ -949,8 +913,7 @@ function copyCanvas(
   );
 
 
-  ctx.filter =
-    "none";
+  ctx.filter = filter || "none";
 
 
   ctx.drawImage(
@@ -1040,11 +1003,7 @@ export function renderImageEdits({
      Effects
   ------------------------------------------------------- */
 
-  const finalCanvas =
-    applyEffects(
-      baseCanvas,
-      selectedEffects
-    );
+  const effectFilter = getCombinedEffectFilter(selectedEffects);
 
 
   /* -------------------------------------------------------
@@ -1052,10 +1011,7 @@ export function renderImageEdits({
      Copy final result to visible canvas
   ------------------------------------------------------- */
 
-  copyCanvas(
-    finalCanvas,
-    outputCanvas
-  );
+  copyCanvas(baseCanvas, outputCanvas, effectFilter);
 }
 
 
