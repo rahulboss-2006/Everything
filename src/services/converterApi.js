@@ -181,7 +181,7 @@ export async function convertImage(
     ...data,
 
     downloadUrl:
-      `${API_BASE_URL}${data.downloadUrl}`,
+      `${new URL(data.downloadUrl, API_BASE_URL).toString()}`,
   };
 }
 
@@ -220,7 +220,7 @@ export async function convertImageToPdf(
     ...data,
 
     downloadUrl:
-      `${API_BASE_URL}${data.downloadUrl}`,
+      `${new URL(data.downloadUrl, API_BASE_URL).toString()}`,
   };
 }
 
@@ -265,7 +265,8 @@ export async function convertPdfToImage(
     ...data,
 
     downloadUrl:
-      `${API_BASE_URL}${data.downloadUrl}`,
+      `${new URL(data.downloadUrl, API_BASE_URL).toString()}`,
   };
 }
+
 
