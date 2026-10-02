@@ -365,70 +365,94 @@ export default function EditorCanvas({
 
                 {removingBackground && (
                   <div className="ai-background-loader">
-                    <div className="ai-thin-scan" />
 
-                    <div className="ai-progress-content">
-                      <div className="ai-progress-card">
-                        <div className="ai-progress-title">
-                          <span className="ai-progress-spinner" />
-                          <span>Removing Background...</span>
-                        </div>
+    {/* Animated background layers */}
+    <div className="ai-diagonal-scan" />
+    <div className="ai-light-sweep" />
+    <div className="ai-glow-layer" />
+    <div className="ai-horizontal-scan" />
 
-                        <div className="ai-progress-percent">
-                          {Math.round(backgroundProgress)}%
-                        </div>
+    {/* Progress UI */}
+    <div className="ai-progress-content">
+      <div className="ai-progress-card">
 
-                        <div className="ai-progress-track">
-                          <div
-                            className="ai-progress-fill"
-                            style={{
-                              width: `${Math.min(
-                                100,
-                                Math.max(0, backgroundProgress)
-                              )}%`,
-                            }}
-                          />
-                        </div>
+        <div className="ai-progress-title">
+          <span className="ai-progress-spinner" />
+          <span>Removing Background...</span>
+        </div>
 
-                        <div className="ai-progress-text">
-                          AI is removing the background
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+        <div className="ai-progress-percent">
+          {Math.round(aiProgress)}%
+        </div>
+
+        <div className="ai-progress-track">
+          <div
+            className="ai-progress-fill"
+            style={{
+              width: `${Math.min(
+                100,
+                Math.max(0, aiProgress)
+              )}%`,
+            }}
+          />
+        </div>
+
+        <div className="ai-progress-text">
+          {aiProgressLabel}
+        </div>
+
+      </div>
+    </div>
+  </div>
                 )}
               </div>
 
               {/* AI OBJECT REMOVE LOADER */}
 
-              {aiObjectMode && objectApplying && (
-                <div className="ai-background-loader">
-                  <div className="ai-thin-scan" />
-                  <div className="ai-progress-content">
-                    <div className="ai-progress-card">
-                      <div className="ai-progress-title">
-                        <span className="ai-progress-spinner" />
-                        <span>AI Object Removing...</span>
-                      </div>
-                      <div className="ai-progress-percent">
-                        {Math.round(aiProgress)}%
-                      </div>
-                      <div className="ai-progress-track">
-                        <div
-                          className="ai-progress-fill"
-                          style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(0, aiProgress)
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                      <div className="ai-progress-text">{aiProgressLabel}</div>
-                    </div>
-                  </div>
-                </div>
-              )}
+          
+{aiObjectMode && objectApplying && (
+  <div className="ai-background-loader">
+
+    {/* Animated background layers */}
+    <div className="ai-diagonal-scan" />
+    <div className="ai-light-sweep" />
+    <div className="ai-glow-layer" />
+    <div className="ai-horizontal-scan" />
+
+    {/* Progress UI */}
+    <div className="ai-progress-content">
+      <div className="ai-progress-card">
+
+        <div className="ai-progress-title">
+          <span className="ai-progress-spinner" />
+          <span>AI Object Removing...</span>
+        </div>
+
+        <div className="ai-progress-percent">
+          {Math.round(aiProgress)}%
+        </div>
+
+        <div className="ai-progress-track">
+          <div
+            className="ai-progress-fill"
+            style={{
+              width: `${Math.min(
+                100,
+                Math.max(0, aiProgress)
+              )}%`,
+            }}
+          />
+        </div>
+
+        <div className="ai-progress-text">
+          {aiProgressLabel}
+        </div>
+
+      </div>
+    </div>
+  </div>
+)}
+
 
               {/* CROP OVERLAY */}
 

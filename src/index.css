@@ -210,9 +210,8 @@ html.light .footer-text::before {
   z-index: -1;
 }
 
-
 /* =========================================================
-   PREMIUM AI BACKGROUND LOADER
+   AI LOADER
 ========================================================= */
 
 .ai-background-loader {
@@ -227,258 +226,297 @@ html.light .footer-text::before {
 
   isolation: isolate;
 
-  /*
-    IMPORTANT:
-    Do NOT use filter: blur() on the whole loader.
-    It blurs the card, progress bar and animations too.
-  */
-
   background:
-    linear-gradient(135deg,
+    linear-gradient(
+      135deg,
       rgba(2, 6, 23, 0.82),
       rgba(15, 23, 42, 0.62),
-      rgba(2, 6, 23, 0.82));
+      rgba(2, 6, 23, 0.82)
+    );
 
-  /*
-    Only the BACKGROUND behind the loader is blurred.
-  */
-  backdrop-filter: blur(28px) saturate(125%);
-  -webkit-backdrop-filter: blur(28px) saturate(125%);
+  backdrop-filter: blur(24px) saturate(130%);
+  -webkit-backdrop-filter: blur(24px) saturate(130%);
 }
 
 
 /* =========================================================
-   RED / BLUE DIAGONAL AI SCAN
+   DIAGONAL SCAN
 ========================================================= */
 
-.ai-background-loader::before {
-  content: "";
-
+.ai-diagonal-scan {
   position: absolute;
-  inset: -80%;
+
+  inset: -100%;
+
+  z-index: 1;
 
   pointer-events: none;
 
   background:
-    repeating-linear-gradient(135deg,
+    repeating-linear-gradient(
+      135deg,
 
       transparent 0px,
       transparent 42px,
 
       rgba(255, 30, 80, 0) 43px,
-      rgba(255, 30, 80, 0.16) 45px,
-      rgba(255, 30, 80, 0) 48px,
+      rgba(255, 30, 80, 0.20) 47px,
+      rgba(255, 30, 80, 0) 51px,
 
-      transparent 92px,
+      transparent 90px,
 
-      rgba(0, 180, 255, 0) 94px,
-      rgba(0, 180, 255, 0.14) 97px,
-      rgba(0, 180, 255, 0) 100px);
+      rgba(0, 180, 255, 0) 92px,
+      rgba(0, 180, 255, 0.20) 97px,
+      rgba(0, 180, 255, 0) 102px
+    );
 
-  mix-blend-mode: screen;
+  opacity: 1;
 
-  transform:
-    translate3d(-25%, -25%, 0);
+  transform: translate3d(-20%, -20%, 0);
 
   animation:
-    aiDiagonalScan 2.2s linear infinite;
+    aiDiagonalScan
+    2s
+    linear
+    infinite;
+
+  will-change: transform;
 }
 
 
 /* =========================================================
-   MOVING WHITE LIGHT SWEEP
+   WHITE LIGHT SWEEP
 ========================================================= */
 
-.ai-background-loader::after {
-  content: "";
-
+.ai-light-sweep {
   position: absolute;
 
-  width: 24%;
-  height: 180%;
+  top: -50%;
 
-  left: -45%;
-  top: -40%;
+  left: -40%;
+
+  width: 22%;
+  height: 200%;
+
+  z-index: 2;
 
   pointer-events: none;
 
-  transform: rotate(38deg);
+  transform: rotate(35deg);
 
   background:
-    linear-gradient(90deg,
+    linear-gradient(
+      90deg,
 
       transparent 0%,
 
-      rgba(255, 255, 255, 0.02) 35%,
+      rgba(255, 255, 255, 0.03) 30%,
 
-      rgba(255, 255, 255, 0.15) 43%,
+      rgba(255, 255, 255, 0.20) 43%,
 
-      rgba(255, 255, 255, 0.85) 49%,
+      rgba(255, 255, 255, 0.95) 49%,
 
       rgba(255, 255, 255, 1) 50%,
 
-      rgba(255, 255, 255, 0.65) 51%,
+      rgba(255, 255, 255, 0.65) 52%,
 
-      rgba(255, 255, 255, 0.12) 58%,
+      rgba(255, 255, 255, 0.10) 62%,
 
-      transparent 75%);
+      transparent 75%
+    );
 
-  /*
-    Blur only the sweep itself.
-    NOT the entire loader.
-  */
-  filter: blur(7px);
-  -webkit-filter: blur(7px);
+  filter: blur(6px);
+  -webkit-filter: blur(6px);
 
   opacity: 0;
 
   box-shadow:
-    0 0 25px rgba(255, 255, 255, 0.45);
+    0 0 30px rgba(255, 255, 255, 0.5);
 
   animation:
-    aiLightSweep 2.4s cubic-bezier(.45, 0, .25, 1) infinite;
+    aiLightSweep
+    2.3s
+    ease-in-out
+    infinite;
+
+  will-change: left, opacity;
 }
 
 
 /* =========================================================
-   EXTRA GLOW
+   GLOW LAYER
 ========================================================= */
 
-.ai-glow {
+.ai-glow-layer {
   position: absolute;
 
-  inset: -20%;
+  inset: -30%;
+
+  z-index: 0;
 
   pointer-events: none;
 
   background:
-    radial-gradient(circle at 20% 20%,
-      rgba(255, 30, 80, 0.20),
-      transparent 32%),
+    radial-gradient(
+      circle at 20% 30%,
+      rgba(255, 30, 80, 0.25),
+      transparent 30%
+    ),
 
-    radial-gradient(circle at 80% 80%,
-      rgba(0, 170, 255, 0.20),
-      transparent 32%);
+    radial-gradient(
+      circle at 80% 70%,
+      rgba(0, 180, 255, 0.25),
+      transparent 30%
+    );
 
   filter: blur(35px);
   -webkit-filter: blur(35px);
 
-  mix-blend-mode: screen;
+  opacity: 0.5;
 
   animation:
-    aiGlowMove 3s ease-in-out infinite alternate;
+    aiGlowMove
+    3s
+    ease-in-out
+    infinite
+    alternate;
+
+  will-change: transform, opacity;
 }
 
 
 /* =========================================================
-   SCAN LINE
+   HORIZONTAL SCAN
 ========================================================= */
 
-.ai-scan-line {
+.ai-horizontal-scan {
   position: absolute;
 
   left: 0;
 
+  top: -10%;
+
   width: 100%;
   height: 2px;
+
+  z-index: 3;
 
   pointer-events: none;
 
   background:
-    linear-gradient(90deg,
+    linear-gradient(
+      90deg,
+
       transparent,
+
       rgba(0, 200, 255, 0.2),
-      rgba(255, 255, 255, 0.95),
+
+      rgba(255, 255, 255, 1),
+
       rgba(255, 30, 80, 0.35),
-      transparent);
+
+      transparent
+    );
 
   box-shadow:
-    0 0 10px rgba(0, 200, 255, 0.8),
+    0 0 10px rgba(0, 200, 255, 0.9),
     0 0 25px rgba(255, 30, 80, 0.5);
 
   animation:
-    aiHorizontalScan 2.1s ease-in-out infinite;
+    aiHorizontalScan
+    1.8s
+    ease-in-out
+    infinite;
+
+  will-change: top, opacity;
 }
 
 
 /* =========================================================
-   AI BACKGROUND KEYFRAMES
+   KEYFRAMES
 ========================================================= */
 
 @keyframes aiDiagonalScan {
+
   0% {
     transform:
-      translate3d(-25%, -25%, 0);
+      translate3d(-20%, -20%, 0);
   }
 
   100% {
     transform:
-      translate3d(25%, 25%, 0);
+      translate3d(20%, 20%, 0);
   }
 }
 
 
 @keyframes aiLightSweep {
+
   0% {
     left: -45%;
     opacity: 0;
   }
 
-  12% {
-    opacity: 0.35;
+  15% {
+    opacity: 0.4;
   }
 
-  35% {
-    opacity: 0.8;
+  40% {
+    opacity: 0.9;
   }
 
   50% {
     opacity: 1;
   }
 
-  75% {
+  70% {
     opacity: 0.55;
   }
 
   100% {
-    left: 125%;
+    left: 130%;
     opacity: 0;
   }
 }
 
 
 @keyframes aiGlowMove {
+
   0% {
     transform:
-      translate3d(-5%, -5%, 0) scale(0.9);
+      translate3d(-8%, -5%, 0)
+      scale(0.9);
 
-    opacity: 0.45;
+    opacity: 0.35;
   }
 
   50% {
     transform:
-      translate3d(5%, 4%, 0) scale(1.05);
+      translate3d(8%, 5%, 0)
+      scale(1.08);
 
-    opacity: 0.9;
+    opacity: 0.85;
   }
 
   100% {
     transform:
-      translate3d(-2%, 8%, 0) scale(1);
+      translate3d(-3%, 8%, 0)
+      scale(1);
 
-    opacity: 0.55;
+    opacity: 0.45;
   }
 }
 
 
 @keyframes aiHorizontalScan {
+
   0% {
-    top: -5%;
+    top: -10%;
     opacity: 0;
   }
 
   15% {
-    opacity: 0.8;
+    opacity: 1;
   }
 
   50% {
@@ -487,18 +525,18 @@ html.light .footer-text::before {
   }
 
   85% {
-    opacity: 0.7;
+    opacity: 0.8;
   }
 
   100% {
-    top: 105%;
+    top: 110%;
     opacity: 0;
   }
 }
 
 
 /* =========================================================
-   AI PROGRESS CONTENT
+   PROGRESS CONTENT
 ========================================================= */
 
 .ai-progress-content {
@@ -506,7 +544,7 @@ html.light .footer-text::before {
 
   inset: 0;
 
-  z-index: 100;
+  z-index: 20;
 
   display: flex;
 
@@ -516,10 +554,6 @@ html.light .footer-text::before {
   pointer-events: none;
 }
 
-
-/* =========================================================
-   AI PROGRESS CARD
-========================================================= */
 
 .ai-progress-card {
   position: relative;
@@ -531,20 +565,17 @@ html.light .footer-text::before {
   text-align: center;
 
   background:
-    rgba(2, 6, 23, 0.30);
+    rgba(2, 6, 23, 0.35);
 
   border:
-    1px solid rgba(255, 255, 255, 0.08);
+    1px solid rgba(255, 255, 255, 0.10);
 
   border-radius: 18px;
 
   box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.45),
-    0 0 35px rgba(0, 180, 255, 0.08);
+    0 0 30px rgba(0, 180, 255, 0.10);
 
-  /*
-    Card itself gets glass effect.
-  */
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
@@ -564,7 +595,7 @@ html.light .footer-text::before {
 
   margin-bottom: 8px;
 
-  color: #ffffff;
+  color: white;
 
   font-size: 14px;
 
@@ -573,13 +604,54 @@ html.light .footer-text::before {
 
 
 /* =========================================================
-   PERCENTAGE
+   SPINNER
+========================================================= */
+
+.ai-progress-spinner {
+  display: inline-block;
+
+  width: 15px;
+  height: 15px;
+
+  flex-shrink: 0;
+
+  border:
+    2px solid rgba(255, 255, 255, 0.20);
+
+  border-top-color:
+    #00b3ff;
+
+  border-right-color:
+    #ff1e4f;
+
+  border-radius: 50%;
+
+  animation:
+    aiProgressSpin
+    0.7s
+    linear
+    infinite;
+
+  will-change: transform;
+}
+
+
+@keyframes aiProgressSpin {
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* =========================================================
+   PERCENT
 ========================================================= */
 
 .ai-progress-percent {
   margin-bottom: 10px;
 
-  color: #ffffff;
+  color: white;
 
   font-size: 32px;
 
@@ -588,40 +660,34 @@ html.light .footer-text::before {
   font-weight: 800;
 
   text-shadow:
-    0 0 15px rgba(0, 200, 255, 0.45);
+    0 0 15px rgba(0, 200, 255, 0.5);
 }
 
 
 /* =========================================================
-   PROGRESS TRACK
+   TRACK
 ========================================================= */
 
 .ai-progress-track {
   position: relative;
 
   width: 210px;
-
   height: 6px;
 
-  /*
-    IMPORTANT:
-    visible allows the glow at the end
-    of the bar to render outside.
-  */
   overflow: visible;
 
   border-radius: 999px;
 
   background:
-    rgba(255, 255, 255, 0.10);
+    rgba(255, 255, 255, 0.12);
 
   box-shadow:
-    inset 0 0 5px rgba(255, 255, 255, 0.08);
+    inset 0 0 5px rgba(255, 255, 255, 0.10);
 }
 
 
 /* =========================================================
-   PROGRESS FILL
+   PROGRESS
 ========================================================= */
 
 .ai-progress-fill {
@@ -629,102 +695,32 @@ html.light .footer-text::before {
 
   height: 100%;
 
-  min-width: 0;
-
-  overflow: visible;
-
   border-radius: 999px;
 
-  /*
-    Stronger gradient so it remains visible
-    even when blur is subtle.
-  */
   background:
-    linear-gradient(90deg,
-      rgba(34, 211, 238, 0.90),
-      rgba(139, 92, 246, 0.90),
-      rgba(244, 63, 94, 0.90));
+    linear-gradient(
+      90deg,
+      #22d3ee,
+      #8b5cf6,
+      #f43f5e
+    );
 
   box-shadow:
-    0 0 7px rgba(34, 211, 238, 0.75),
-    0 0 15px rgba(139, 92, 246, 0.45),
-    0 0 22px rgba(244, 63, 94, 0.25);
+    0 0 8px rgba(34, 211, 238, 0.9),
+    0 0 18px rgba(139, 92, 246, 0.55),
+    0 0 28px rgba(244, 63, 94, 0.35);
 
   transition:
     width 150ms linear;
 
-  /*
-    Keep this element isolated.
-  */
+  overflow: visible;
+
   isolation: isolate;
 }
 
 
 /* =========================================================
-   PROGRESS END GLOW
-
-   IMPORTANT:
-   This is the ONLY blur on the progress bar.
-
-   It is attached to the progress fill,
-   not the whole loader.
-========================================================= */
-
-.ai-progress-fill::after {
-  content: "";
-
-  position: absolute;
-
-  right: -13px;
-  top: 50%;
-
-  width: 26px;
-  height: 26px;
-
-  transform:
-    translateY(-50%);
-
-  border-radius: 999px;
-
-  background:
-    radial-gradient(circle,
-
-      rgba(255, 255, 255, 1) 0%,
-
-      rgba(255, 255, 255, 0.95) 12%,
-
-      rgba(34, 211, 238, 0.80) 28%,
-
-      rgba(34, 211, 238, 0.35) 48%,
-
-      rgba(34, 211, 238, 0.08) 70%,
-
-      transparent 100%);
-
-  /*
-    Soft glow.
-  */
-  filter: blur(4px);
-  -webkit-filter: blur(4px);
-
-  box-shadow:
-    0 0 8px rgba(255, 255, 255, 0.95),
-    0 0 18px rgba(34, 211, 238, 0.75),
-    0 0 30px rgba(34, 211, 238, 0.35);
-
-  opacity: 0.95;
-
-  z-index: 5;
-
-  pointer-events: none;
-}
-
-
-/* =========================================================
-   PROGRESS MOVING SHINE
-
-   IMPORTANT:
-   This remains separate from the glow endpoint.
+   MOVING PROGRESS SHINE
 ========================================================= */
 
 .ai-progress-fill::before {
@@ -732,86 +728,110 @@ html.light .footer-text::before {
 
   position: absolute;
 
-  top: -7px;
+  top: -8px;
 
-  left: -75px;
+  left: -70px;
 
-  width: 65px;
-  height: calc(100% + 14px);
+  width: 55px;
+
+  height: calc(100% + 16px);
 
   border-radius: 999px;
 
   background:
-    linear-gradient(90deg,
-
-      transparent 0%,
-
-      rgba(255, 255, 255, 0.08) 20%,
-
-      rgba(255, 255, 255, 0.45) 40%,
-
-      rgba(255, 255, 255, 0.95) 50%,
-
-      rgba(255, 255, 255, 0.45) 60%,
-
-      rgba(255, 255, 255, 0.08) 80%,
-
-      transparent 100%);
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.35),
+      white,
+      rgba(255, 255, 255, 0.35),
+      transparent
+    );
 
   filter: blur(4px);
   -webkit-filter: blur(4px);
 
-  box-shadow:
-    0 0 10px rgba(255, 255, 255, 0.45),
-    0 0 20px rgba(0, 180, 255, 0.25);
-
-  opacity: 0.9;
-
-  z-index: 4;
+  animation:
+    aiProgressShine
+    1s
+    linear
+    infinite;
 
   pointer-events: none;
 
-  transform:
-    translate3d(0, 0, 0);
+  z-index: 2;
 
-  animation:
-    aiProgressShine 1.15s linear infinite;
+  will-change: left;
 }
 
 
 /* =========================================================
-   PROGRESS SHINE KEYFRAME
+   PROGRESS END GLOW
 ========================================================= */
 
-@keyframes aiProgressShine {
-  0% {
-    left: -75px;
+.ai-progress-fill::after {
+  content: "";
 
+  position: absolute;
+
+  right: -10px;
+
+  top: 50%;
+
+  width: 20px;
+  height: 20px;
+
+  transform:
+    translateY(-50%);
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      white 0%,
+      rgba(34, 211, 238, 0.9) 25%,
+      rgba(34, 211, 238, 0.35) 50%,
+      transparent 75%
+    );
+
+  filter: blur(3px);
+  -webkit-filter: blur(3px);
+
+  box-shadow:
+    0 0 10px rgba(255, 255, 255, 0.9),
+    0 0 20px rgba(34, 211, 238, 0.8);
+
+  z-index: 3;
+
+  pointer-events: none;
+}
+
+
+@keyframes aiProgressShine {
+
+  0% {
+    left: -70px;
     opacity: 0;
   }
 
-  10% {
-    opacity: 0.9;
+  15% {
+    opacity: 1;
   }
 
   50% {
     opacity: 1;
   }
 
-  85% {
-    opacity: 0.8;
-  }
-
   100% {
-    left: calc(100% + 75px);
-
+    left: calc(100% + 70px);
     opacity: 0;
   }
 }
 
 
 /* =========================================================
-   PROGRESS TEXT
+   TEXT
 ========================================================= */
 
 .ai-progress-text {
@@ -823,129 +843,6 @@ html.light .footer-text::before {
   font-size: 10px;
 
   letter-spacing: 0.2px;
-}
-
-
-/* =========================================================
-   SPINNER
-========================================================= */
-
-.ai-progress-spinner {
-  width: 15px;
-  height: 15px;
-
-  flex-shrink: 0;
-
-  border:
-    2px solid rgba(255, 255, 255, 0.18);
-
-  border-top-color:
-    rgba(0, 179, 255, 0.9);
-
-  border-right-color:
-    rgba(255, 30, 79, 0.75);
-
-  border-radius: 50%;
-
-  animation:
-    aiProgressSpin 0.8s linear infinite;
-}
-
-
-/*========================================= 
-    KEYFRAMES
-=========================================*/
-@keyframes aiDiagonalScan {
-  0% {
-    transform: translate3d(-25%, -25%, 0) rotate(0deg);
-  }
-
-  100% {
-    transform: translate3d(25%, 25%, 0) rotate(0deg);
-  }
-}
-
-@keyframes aiLightSweep {
-  0% {
-    left: -45%;
-    opacity: 0;
-  }
-
-  12% {
-    opacity: .35;
-  }
-
-  35% {
-    opacity: .8;
-  }
-
-  50% {
-    opacity: 1;
-  }
-
-  75% {
-    opacity: .55;
-  }
-
-  100% {
-    left: 125%;
-    opacity: 0;
-  }
-}
-
-@keyframes aiGlowMove {
-  0% {
-    transform: translate3d(-5%, -5%, 0) scale(.9);
-    opacity: .45;
-  }
-
-  50% {
-    transform: translate3d(5%, 4%, 0) scale(1.05);
-    opacity: .9;
-  }
-
-  100% {
-    transform: translate3d(-2%, 8%, 0) scale(1);
-    opacity: .55;
-  }
-}
-
-@keyframes aiHorizontalScan {
-  0% {
-    top: -5%;
-    opacity: 0;
-  }
-
-  15% {
-    opacity: .8;
-  }
-
-  50% {
-    top: 50%;
-    opacity: 1;
-  }
-
-  85% {
-    opacity: .7;
-  }
-
-  100% {
-    top: 105%;
-    opacity: 0;
-  }
-}
-
-/* ========================================================= 
-     PROGRESS SHINE 
-  ========================================================= */
-@keyframes aiProgressShine {
-  0% {
-    left: -80px;
-  }
-
-  100% {
-    left: 100%;
-  }
 }
 
 
