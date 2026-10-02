@@ -428,7 +428,7 @@ export default function EditorCanvas({
                       </div>
 
                       <div className="ai-progress-percent">
-                        {Math.round(aiProgress)}%
+                        {Math.round(backgroundProgress)}%
                       </div>
 
                       <div className="ai-progress-track">
@@ -437,7 +437,7 @@ export default function EditorCanvas({
                           style={{
                             width: `${Math.min(
                               100,
-                              Math.max(0, aiProgress)
+                              Math.max(0, backgroundProgress)
                             )}%`,
                           }}
                         />
