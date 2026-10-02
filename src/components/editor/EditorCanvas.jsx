@@ -401,29 +401,35 @@ export default function EditorCanvas({
 
               {/* AI OBJECT REMOVE LOADER */}
 
-
               {aiObjectMode && objectApplying && (
                 <div
                   className="
-      absolute inset-0 z-50
+      absolute
+      inset-0
+      z-50
       overflow-hidden
       pointer-events-none
       isolate
 
       bg-gradient-to-br
-      from-slate-950/80
-      via-slate-900/60
-      to-slate-950/80
+      from-slate-950/85
+      via-slate-900/70
+      to-slate-950/85
 
       backdrop-blur-[28px]
       backdrop-saturate-[125%]
     "
                 >
+                  {/* =====================================================
+        DIAGONAL AI SCAN
+    ===================================================== */}
 
-                  {/* Diagonal AI Scan */}
                   <div
                     className="
-        absolute -inset-[80%]
+        absolute
+        -inset-[80%]
+
+        pointer-events-none
 
         bg-[repeating-linear-gradient(
           135deg,
@@ -438,13 +444,16 @@ export default function EditorCanvas({
           rgba(0,180,255,0)_100px
         )]
 
-        animate-[aiDiagonalScan_2.2s_linear_infinite]
-
         mix-blend-screen
+
+        animate-[aiDiagonalScan_2.2s_linear_infinite]
       "
                   />
 
-                  {/* White Light Sweep */}
+                  {/* =====================================================
+        WHITE LIGHT SWEEP
+    ===================================================== */}
+
                   <div
                     className="
         absolute
@@ -456,6 +465,8 @@ export default function EditorCanvas({
         w-[24%]
 
         rotate-[38deg]
+
+        pointer-events-none
 
         bg-[linear-gradient(
           90deg,
@@ -477,16 +488,22 @@ export default function EditorCanvas({
       "
                   />
 
-                  {/* Thin Scan */}
+                  {/* =====================================================
+        HORIZONTAL SCAN
+    ===================================================== */}
+
                   <div
                     className="
         absolute
         left-0
+        top-[-5%]
 
-        z-[5]
+        z-10
 
         h-[2px]
         w-full
+
+        pointer-events-none
 
         bg-[linear-gradient(
           90deg,
@@ -503,18 +520,27 @@ export default function EditorCanvas({
       "
                   />
 
-                  {/* Progress Content */}
+                  {/* =====================================================
+        CENTER CONTENT
+    ===================================================== */}
+
                   <div
                     className="
-        absolute inset-0 z-[100]
+        absolute
+        inset-0
+        z-[100]
 
         flex
         items-center
         justify-center
+
+        pointer-events-none
       "
                   >
+                    {/* ===================================================
+          PROGRESS CARD
+      =================================================== */}
 
-                    {/* Progress Card */}
                     <div
                       className="
           min-w-[250px]
@@ -522,22 +548,24 @@ export default function EditorCanvas({
           rounded-[18px]
 
           border
-          border-white/5
+          border-white/10
 
-          bg-slate-950/10
+          bg-slate-950/30
 
           px-6
           py-5
 
           text-center
 
-          shadow-[0_20px_60px_rgba(0,0,0,.45),0_0_35px_rgba(0,180,255,.08)]
+          shadow-[0_20px_60px_rgba(0,0,0,.5),0_0_35px_rgba(0,180,255,.12)]
 
           backdrop-blur-[18px]
         "
                     >
+                      {/* =================================================
+            TITLE
+        ================================================= */}
 
-                      {/* Title */}
                       <div
                         className="
             mb-2
@@ -553,7 +581,7 @@ export default function EditorCanvas({
             text-white
           "
                       >
-
+                        {/* Spinner */}
                         <span
                           className="
               h-[15px]
@@ -565,8 +593,8 @@ export default function EditorCanvas({
               border-2
               border-white/20
 
-              border-t-[rgba(0,179,255,.77)]
-              border-r-[rgba(255,30,79,.57)]
+              border-t-cyan-400
+              border-r-rose-400
 
               animate-spin
             "
@@ -575,28 +603,31 @@ export default function EditorCanvas({
                         <span>
                           AI Object Removing...
                         </span>
-
                       </div>
 
+                      {/* =================================================
+            PERCENTAGE
+        ================================================= */}
 
-                      {/* Percentage */}
                       <div
                         className="
-            mb-2.5
+            mb-3
 
             text-[32px]
             font-extrabold
             leading-none
             text-white
 
-            [text-shadow:0_0_15px_rgba(0,200,255,.35)]
+            [text-shadow:0_0_15px_rgba(0,200,255,.45)]
           "
                       >
                         {Math.round(aiProgress)}%
                       </div>
 
+                      {/* =================================================
+            PROGRESS TRACK
+        ================================================= */}
 
-                      {/* Progress Track */}
                       <div
                         className="
             relative
@@ -604,68 +635,39 @@ export default function EditorCanvas({
             h-[6px]
             w-[210px]
 
-            overflow-visible
+            overflow-hidden
 
             rounded-full
 
             bg-white/10
+
+            shadow-[inset_0_0_5px_rgba(255,255,255,.1)]
           "
                       >
+                        {/* ===============================================
+              PROGRESS FILL
+          =============================================== */}
 
-                        {/* Progress Fill */}
                         <div
                           className="
-              relative
+              absolute
+              left-0
+              top-0
 
               h-full
 
-              overflow-visible
-
               rounded-full
 
-              isolate
-
               bg-gradient-to-r
-              from-[rgba(0,179,255,.65)]
-              via-[rgba(124,58,237,.65)]
-              to-[rgba(255,30,79,.65)]
+              from-cyan-400
+              via-violet-500
+              to-rose-500
 
-              shadow-[0_0_12px_rgba(0,180,255,.55),0_0_20px_rgba(255,30,80,.25)]
+              shadow-[0_0_12px_rgba(0,180,255,.65),0_0_20px_rgba(255,30,80,.35)]
 
               transition-[width]
               duration-150
               ease-linear
-
-              after:absolute
-              after:left-[-80px]
-              after:top-[-8px]
-
-              after:h-[calc(100%+16px)]
-              after:w-[80px]
-
-              after:z-[2]
-
-              after:pointer-events-none
-
-              after:bg-[linear-gradient(
-                90deg,
-                transparent_0%,
-                rgba(255,255,255,.05)_20%,
-                rgba(255,255,255,.45)_40%,
-                rgba(255,255,255,1)_50%,
-                rgba(255,255,255,.45)_60%,
-                rgba(255,255,255,.05)_80%,
-                transparent_100%
-              )]
-
-              after:blur-[8px]
-
-              after:shadow-[0_0_12px_rgba(255,255,255,.55),0_0_24px_rgba(0,180,255,.25)]
-
-              after:translate-x-0
-              after:translate-y-0
-
-              after:animate-[aiProgressShine_1.1s_linear_infinite]
             "
                           style={{
                             width: `${Math.min(
@@ -675,24 +677,96 @@ export default function EditorCanvas({
                           }}
                         />
 
+                        {/* ===============================================
+              REAL BLUR SHINE
+              
+              IMPORTANT:
+              This is a REAL DOM ELEMENT.
+              No ::after pseudo-element.
+          =============================================== */}
+
+                        <span
+                          className="
+              absolute
+
+              left-[-70px]
+              top-1/2
+
+              z-20
+
+              h-[28px]
+              w-[65px]
+
+              -translate-y-1/2
+
+              rounded-full
+
+              bg-white
+
+              opacity-90
+
+              blur-[10px]
+
+              shadow-[0_0_20px_rgba(255,255,255,.95),0_0_35px_rgba(0,200,255,.65)]
+
+              animate-[aiProgressShine_1.1s_linear_infinite]
+
+              pointer-events-none
+            "
+                        />
+
+                        {/* ===============================================
+              BRIGHT CORE
+          =============================================== */}
+
+                        <span
+                          className="
+              absolute
+
+              left-[-55px]
+              top-1/2
+
+              z-30
+
+              h-[10px]
+              w-[45px]
+
+              -translate-y-1/2
+
+              rounded-full
+
+              bg-white
+
+              opacity-95
+
+              blur-[3px]
+
+              shadow-[0_0_10px_rgba(255,255,255,1)]
+
+              animate-[aiProgressShine_1.1s_linear_infinite]
+
+              pointer-events-none
+            "
+                        />
                       </div>
 
+                      {/* =================================================
+            PROGRESS LABEL
+        ================================================= */}
 
-                      {/* Progress Text */}
                       <div
                         className="
-            mt-[9px]
+            mt-2
 
             text-[10px]
 
             tracking-[0.2px]
 
-            text-white/50
+            text-white/60
           "
                       >
                         {aiProgressLabel}
                       </div>
-
                     </div>
                   </div>
                 </div>
