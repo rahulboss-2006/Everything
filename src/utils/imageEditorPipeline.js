@@ -408,20 +408,80 @@ function getScratchCanvas(width, height) {
    applied in a single draw (was: one new canvas per effect).
 ========================================================= */
 
-function getCombinedEffectFilter(selectedEffects) {
-  if (!Array.isArray(selectedEffects)) return "none";
+const FILTERS_PER_PASS = 3;
 
-  const parts = [];
+let pingCanvases = [null, null];
+
+function getPingCanvas(index, width, height) {
+  if (!pingCanvases[index]) {
+    pingCanvases[index] = document.createElement("canvas");
+  }
+
+  const canvas = pingCanvases[index];
+
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+
+  return canvas;
+}
+
+function getEffectFilterList(selectedEffects) {
+  if (!Array.isArray(selectedEffects)) return [];
+
+  const list = [];
 
   for (const effectId of selectedEffects) {
     if (!effectId || effectId === "Preview") continue;
 
     const filter = getEffectFilter(getEffectPreset(effectId));
 
-    if (filter && filter !== "none") parts.push(filter);
+    if (filter && filter !== "none") list.push(filter);
   }
 
-  return parts.length ? parts.join(" ") : "none";
+  return list;
+}
+
+/*
+  Applies effects in small batches (FILTERS_PER_PASS filters per draw)
+  using two reused canvases. One huge filter chain with 10+ effects can
+  exceed what the browser/GPU handles and make the draw fail; small
+  batches stay fast and reliable. Returns { source, lastFilter }:
+  the caller draws `source` with `lastFilter` into the visible canvas.
+*/
+function runEffectPasses(baseCanvas, selectedEffects) {
+  const filters = getEffectFilterList(selectedEffects);
+
+  if (filters.length === 0) {
+    return { source: baseCanvas, lastFilter: "none" };
+  }
+
+  const chunks = [];
+
+  for (let i = 0; i < filters.length; i += FILTERS_PER_PASS) {
+    chunks.push(filters.slice(i, i + FILTERS_PER_PASS).join(" "));
+  }
+
+  let source = baseCanvas;
+
+  for (let i = 0; i < chunks.length - 1; i++) {
+    const dest = getPingCanvas(i % 2, baseCanvas.width, baseCanvas.height);
+    const ctx = dest.getContext("2d", { alpha: true });
+
+    prepareContext(ctx);
+    ctx.filter = "none";
+    ctx.clearRect(0, 0, dest.width, dest.height);
+    ctx.filter = chunks[i];
+
+    try {
+      ctx.drawImage(source, 0, 0, dest.width, dest.height);
+    } finally {
+      ctx.filter = "none";
+    }
+
+    source = dest;
+  }
+
+  return { source, lastFilter: chunks[chunks.length - 1] };
 }
 
 /* =========================================================
@@ -1003,7 +1063,8 @@ export function renderImageEdits({
      Effects
   ------------------------------------------------------- */
 
-  const effectFilter = getCombinedEffectFilter(selectedEffects);
+  const { source: effectSource, lastFilter } =
+    runEffectPasses(baseCanvas, selectedEffects);
 
 
   /* -------------------------------------------------------
@@ -1011,7 +1072,7 @@ export function renderImageEdits({
      Copy final result to visible canvas
   ------------------------------------------------------- */
 
-  copyCanvas(baseCanvas, outputCanvas, effectFilter);
+  copyCanvas(effectSource, outputCanvas, lastFilter);
 }
 
 
