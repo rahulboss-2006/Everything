@@ -145,7 +145,7 @@ const ObjectRemoveDock = ({
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
     >
-      <div className="rounded-2xl border border-white/10 bg-slate-950/90 px-3 pb-3 pt-1.5 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 px-3 pb-3 pt-1.5 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
 
         {/* DRAG GRIP
             Grab this bar (or any empty part of the dock) to move it.
@@ -158,19 +158,19 @@ const ObjectRemoveDock = ({
           <GripHorizontal size={18} />
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="shrink-0">
-            <div className="text-xs font-semibold text-white">
-              {aiObjectMode ? "AI Object Remove" : "Object Eraser"}
-            </div>
-
-            <div className="text-[10px] text-slate-400">
-              {aiObjectMode
-                ? "Brush over the object — AI will reconstruct the matching background"
-                : "Brush over the object"}
-            </div>
+        <div className="min-w-0">
+          <div className="truncate text-xs font-semibold text-white">
+            {aiObjectMode ? "AI Object Remove" : "Object Eraser"}
           </div>
 
+          <div className="break-words text-[10px] leading-snug text-slate-400">
+            {aiObjectMode
+              ? "Brush over the object — AI will reconstruct the matching background"
+              : "Brush over the object"}
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center gap-3">
           <input
             type="range"
             min="10"
@@ -183,7 +183,7 @@ const ObjectRemoveDock = ({
             className="min-w-0 flex-1"
           />
 
-          <span className="min-w-[36px] text-center text-xs font-semibold text-white">
+          <span className="min-w-[36px] shrink-0 text-center text-xs font-semibold text-white">
             {objectBrushSize}
           </span>
         </div>
