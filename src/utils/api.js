@@ -1,402 +1,240 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+﻿const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+const ACCESS_TOKEN_KEY = "accessToken";
+const REFRESH_TOKEN_KEY = "refreshToken";
 
-/* =========================================
-   AUTH REFRESH STATE
-========================================= */
+const REQUEST_TIMEOUT = 15000;
+
+export const getAccessToken = () =>
+  localStorage.getItem(ACCESS_TOKEN_KEY);
+
+export const getRefreshToken = () =>
+  localStorage.getItem(REFRESH_TOKEN_KEY);
+
+export const setAccessToken = (accessToken) => {
+  if (accessToken) {
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+  } else {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+  }
+};
+
+export const setRefreshToken = (refreshToken) => {
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
+};
+
+export const setTokens = (accessToken, refreshToken = null) => {
+  if (accessToken) {
+    setAccessToken(accessToken);
+  }
+
+  if (refreshToken) {
+    setRefreshToken(refreshToken);
+  }
+};
+
+export const clearTokens = () => {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
+const createTimeoutSignal = (timeout = REQUEST_TIMEOUT) => {
+  const controller = new AbortController();
+
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeout);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => clearTimeout(timer),
+  };
+};
+
+const isAuthEndpoint = (endpoint) => {
+  const cleanEndpoint = endpoint.split("?")[0];
+
+  return (
+    cleanEndpoint === "/auth/refresh" ||
+    cleanEndpoint === "/auth/login" ||
+    cleanEndpoint === "/auth/logout"
+  );
+};
+
+const rawApiRequest = async (
+  endpoint,
+  options = {},
+  { skipAuth = false } = {}
+) => {
+  const url = `${API_BASE_URL}${endpoint}`;
+
+  const headers = new Headers(options.headers || {});
+
+  if (!headers.has("Content-Type") && options.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const token = getAccessToken();
+
+  if (!skipAuth && token && !isAuthEndpoint(endpoint)) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const timeout = createTimeoutSignal();
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+      signal: timeout.signal,
+    });
+
+    return response;
+  } finally {
+    timeout.cleanup();
+  }
+};
 
 let refreshPromise = null;
 
-
-/* =========================================
-   TOKEN HELPERS
-========================================= */
-
-export function setAccessToken(token) {
-  if (!token) return;
-
-  localStorage.setItem(
-    "accessToken",
-    token
-  );
-}
-
-
-export function getAccessToken() {
-  return localStorage.getItem(
-    "accessToken"
-  );
-}
-
-
-export function clearAccessToken() {
-  localStorage.removeItem(
-    "accessToken"
-  );
-}
-
-
-export function setRefreshToken(token) {
-  if (!token) return;
-
-  localStorage.setItem(
-    "refreshToken",
-    token
-  );
-}
-
-
-export function getRefreshToken() {
-  return localStorage.getItem(
-    "refreshToken"
-  );
-}
-
-
-export function clearRefreshToken() {
-  localStorage.removeItem(
-    "refreshToken"
-  );
-}
-
-
-export function clearAuthTokens() {
-  clearAccessToken();
-  clearRefreshToken();
-}
-
-
-/* =========================================
-   CREATE API ERROR
-========================================= */
-
-async function readResponseData(response) {
-  try {
-    return await response.json();
-  } catch {
-    return {};
-  }
-}
-
-
-function createApiError(
-  response,
-  data
-) {
-  const error = new Error(
-    data?.message ||
-      "Something went wrong."
-  );
-
-  error.status =
-    response.status;
-
-  error.data = data;
-
-  return error;
-}
-
-
-/* =========================================
-   RAW REQUEST
-========================================= */
-
-async function rawApiRequest(
-  endpoint,
-  options = {},
-  accessToken = null
-) {
-  const headers = {
-    ...(options.headers || {}),
-  };
-
-
-  /*
-    Refresh request must NOT receive
-    the old access token.
-  */
-
-  const isRefreshRequest =
-    endpoint === "/auth/refresh";
-
-
-  if (
-    accessToken &&
-    !isRefreshRequest
-  ) {
-    headers.Authorization =
-      `Bearer ${accessToken}`;
-  }
-
-
-  const response =
-    await fetch(
-      `${API_BASE_URL}${endpoint}`,
-      {
-        ...options,
-
-        headers,
-
-        /*
-          Keep credentials enabled.
-          This is useful for future
-          HttpOnly-cookie authentication
-          and already matches backend CORS.
-        */
-
-        credentials: "include",
-      }
-    );
-
-
-  const data =
-    await readResponseData(
-      response
-    );
-
-
-  if (!response.ok) {
-    throw createApiError(
-      response,
-      data
-    );
-  }
-
-
-  return data;
-}
-
-
-/* =========================================
-   REFRESH ACCESS TOKEN
-========================================= */
-
-async function refreshAccessTokenInternal() {
-  const refreshToken =
-    getRefreshToken();
-
+const refreshAccessTokenInternal = async () => {
+  const refreshToken = getRefreshToken();
 
   if (!refreshToken) {
-    const error =
-      new Error(
-        "No refresh token available."
-      );
+    clearTokens();
+    return null;
+  }
 
-    error.status = 401;
+  const response = await rawApiRequest(
+    "/auth/refresh",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        refreshToken,
+      }),
+    },
+    {
+      skipAuth: true,
+    }
+  );
+
+  if (!response.ok) {
+    clearTokens();
+    return null;
+  }
+
+  const data = await response.json();
+
+  const newAccessToken = data?.accessToken;
+  const newRefreshToken = data?.refreshToken;
+
+  if (!newAccessToken) {
+    clearTokens();
+    return null;
+  }
+
+  setTokens(newAccessToken, newRefreshToken);
+
+  return newAccessToken;
+};
+
+export const refreshAccessTokenOnce = async () => {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = refreshAccessTokenInternal().finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+};
+
+export const apiRequest = async (
+  endpoint,
+  options = {},
+  retry = true
+) => {
+  let response;
+
+  try {
+    response = await rawApiRequest(endpoint, options);
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
+    }
 
     throw error;
   }
 
-
-  const data =
-    await rawApiRequest(
-      "/auth/refresh",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          refreshToken,
-        }),
-      },
-
-      null
-    );
-
-
-  /*
-    Save newly issued access token.
-  */
-
-  if (data?.accessToken) {
-    setAccessToken(
-      data.accessToken
-    );
+  if (response.status !== 401 || !retry || isAuthEndpoint(endpoint)) {
+    return response;
   }
 
+  const refreshToken = getRefreshToken();
 
-  /*
-    Backend currently rotates
-    the refresh token.
-
-    Therefore always replace
-    the old token when a new one
-    is returned.
-  */
-
-  if (data?.refreshToken) {
-    setRefreshToken(
-      data.refreshToken
-    );
+  if (!refreshToken) {
+    clearTokens();
+    return response;
   }
 
+  const newAccessToken = await refreshAccessTokenOnce();
 
-  return data;
-}
-
-
-/* =========================================
-   SINGLE REFRESH LOCK
-========================================= */
-
-async function refreshAccessTokenOnce() {
-
-  /*
-    If another request is already
-    refreshing the token, wait for it.
-
-    This prevents:
-
-      Request A -> 401
-      Request B -> 401
-      Request C -> 401
-
-    from creating three simultaneous
-    refresh-token rotations.
-  */
-
-  if (!refreshPromise) {
-
-    refreshPromise =
-      refreshAccessTokenInternal()
-        .finally(() => {
-          refreshPromise = null;
-        });
+  if (!newAccessToken) {
+    return response;
   }
-
-
-  return refreshPromise;
-}
-
-
-/* =========================================
-   API REQUEST
-========================================= */
-
-export async function apiRequest(
-  endpoint,
-  options = {}
-) {
-  const accessToken =
-    getAccessToken();
-
-
-  /*
-    Refresh endpoint itself must never
-    recursively trigger another refresh.
-  */
-
-  const isRefreshRequest =
-    endpoint === "/auth/refresh";
-
 
   try {
-
-    /*
-      First attempt.
-    */
-
-    return await rawApiRequest(
-      endpoint,
-      options,
-      accessToken
-    );
-
+    return await rawApiRequest(endpoint, options);
   } catch (error) {
-
-    /*
-      Only access-token expiration
-      should trigger automatic refresh.
-
-      Never refresh the refresh endpoint
-      itself.
-    */
-
-    if (
-      error?.status !== 401 ||
-      isRefreshRequest
-    ) {
-      throw error;
+    if (error?.name === "AbortError") {
+      throw new Error("Request timed out. Please try again.");
     }
 
-
-    /*
-      If there is no refresh token,
-      this is a genuine logged-out state.
-    */
-
-    if (!getRefreshToken()) {
-      clearAuthTokens();
-
-      throw error;
-    }
-
-
-    try {
-
-      /*
-        Wait for the single shared
-        refresh operation.
-      */
-
-      await refreshAccessTokenOnce();
-
-    } catch (refreshError) {
-
-      /*
-        Backend rejected the refresh
-        token. The session is no longer
-        recoverable.
-      */
-
-      if (
-        refreshError?.status === 401 ||
-        refreshError?.status === 403
-      ) {
-        clearAuthTokens();
-      }
-
-      throw refreshError;
-    }
-
-
-    /*
-      Get the NEW access token.
-    */
-
-    const newAccessToken =
-      getAccessToken();
-
-
-    if (!newAccessToken) {
-      clearAuthTokens();
-
-      const refreshError =
-        new Error(
-          "Unable to obtain a new access token."
-        );
-
-      refreshError.status = 401;
-
-      throw refreshError;
-    }
-
-
-    /*
-      Retry the original request
-      exactly once.
-    */
-
-    return rawApiRequest(
-      endpoint,
-      options,
-      newAccessToken
-    );
+    throw error;
   }
-}
+};
+
+export const apiJson = async (
+  endpoint,
+  options = {},
+  retry = true
+) => {
+  const response = await apiRequest(endpoint, options, retry);
+
+  let data = null;
+
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      data = await response.json();
+    } catch {
+      data = null;
+    }
+  }
+
+  if (!response.ok) {
+    const error = new Error(
+      data?.message ||
+        data?.error ||
+        `Request failed with status ${response.status}`
+    );
+
+    error.status = response.status;
+    error.data = data;
+
+    throw error;
+  }
+
+  return data;
+};
+
+export default apiRequest;
+

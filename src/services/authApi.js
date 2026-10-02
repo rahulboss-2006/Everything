@@ -1,350 +1,128 @@
-import {
-  apiRequest,
-  setAccessToken,
+﻿import {
+  apiJson,
   getRefreshToken,
-  setRefreshToken,
-  clearAuthTokens,
+  setTokens,
+  clearTokens,
+  refreshAccessTokenOnce,
 } from "../utils/api";
 
-
-/* =========================================
-   REGISTER
-========================================= */
-
-export async function registerUser(
-  email,
-  password,
-  phone
-) {
-  return apiRequest(
-    "/auth/register",
-    {
-      method: "POST",
-
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
-
-      body: JSON.stringify({
-        email,
-        password,
-        phone,
-      }),
-    }
-  );
-}
-
-
-/* =========================================
-   VERIFY EMAIL
-========================================= */
-
-export async function verifyEmail(
-  email,
-  otp
-) {
-  return apiRequest(
-    "/auth/verify-email",
-    {
-      method: "POST",
-
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
-
-      body: JSON.stringify({
-        email,
-        otp,
-      }),
-    }
-  );
-}
-
-
-/* =========================================
-   LOGIN
-========================================= */
-
-export async function loginUser(
-  email,
-  password
-) {
-  const data =
-    await apiRequest(
-      "/auth/login",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      }
-    );
-
-  /*
-    Save access token
-  */
+export const loginUser = async (credentials) => {
+  const data = await apiJson("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(credentials),
+  });
 
   if (data?.accessToken) {
-    setAccessToken(
-      data.accessToken
-    );
-  }
-
-  /*
-    Save refresh token
-  */
-
-  if (data?.refreshToken) {
-    setRefreshToken(
-      data.refreshToken
-    );
+    setTokens(data.accessToken, data.refreshToken);
   }
 
   return data;
-}
+};
 
+export const registerUser = async (userData) => {
+  const data = await apiJson("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(userData),
+  });
 
-/* =========================================
-   CURRENT USER
-========================================= */
-
-export async function getCurrentUser() {
-  return apiRequest(
-    "/auth/me",
-    {
-      method: "GET",
-    }
-  );
-}
-
-
-/* =========================================
-   REFRESH ACCESS TOKEN
-========================================= */
-
-export async function refreshAccessToken() {
-  const refreshToken =
-    getRefreshToken();
-
-  /*
-    No refresh token
-  */
-
-  if (!refreshToken) {
-    const error =
-      new Error(
-        "No refresh token available."
-      );
-
-    error.status = 401;
-
-    throw error;
+  if (data?.accessToken) {
+    setTokens(data.accessToken, data.refreshToken);
   }
 
-  try {
-    /*
-      IMPORTANT:
+  return data;
+};
 
-      apiRequest() will NOT attach
-      the old access token because
-      this is /auth/refresh.
+export const getCurrentUser = async () => {
+  return apiJson("/auth/me", {
+    method: "GET",
+  });
+};
 
-      Only refreshToken is sent.
-    */
+export const verifyEmail = async (verificationData) => {
+  return apiJson("/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify(verificationData),
+  });
+};
 
-    const data =
-      await apiRequest(
-        "/auth/refresh",
-        {
-          method: "POST",
+export const forgotPassword = async (email) => {
+  return apiJson("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+    }),
+  });
+};
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+export const verifyResetOTP = async (email, otp) => {
+  return apiJson("/auth/verify-reset-otp", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      otp,
+    }),
+  });
+};
 
-          body: JSON.stringify({
-            refreshToken,
-          }),
-        }
-      );
-
-    /*
-      New access token
-    */
-
-    if (data?.accessToken) {
-      setAccessToken(
-        data.accessToken
-      );
-    }
-
-    /*
-      Refresh-token rotation
-
-      Backend may return a new
-      refresh token.
-    */
-
-    if (data?.refreshToken) {
-      setRefreshToken(
-        data.refreshToken
-      );
-    }
-
-    return data;
-
-  } catch (error) {
-
-    /*
-      If backend says refresh token
-      is invalid/revoked/expired,
-      these tokens cannot be used
-      anymore.
-
-      Clear them so the application
-      does not enter an infinite
-      authentication loop.
-    */
-
-    if (
-      error?.status === 401 ||
-      error?.status === 403
-    ) {
-      clearAuthTokens();
-    }
-
-    throw error;
-  }
-}
-
-
-/* =========================================
-   LOGOUT
-========================================= */
-
-export async function logoutUser() {
-  try {
-    const refreshToken =
-      getRefreshToken();
-
-    /*
-      If there is no refresh token,
-      there is nothing to send.
-    */
-
-    if (refreshToken) {
-      await apiRequest(
-        "/auth/logout",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-
-          body: JSON.stringify({
-            refreshToken,
-          }),
-        }
-      );
-    }
-
-  } finally {
-    /*
-      Always clear local tokens.
-    */
-
-    clearAuthTokens();
-  }
-}
-
-/* =========================================
-   FORGOT PASSWORD
-========================================= */
-
-export async function forgotPassword(
-  email
-) {
-  return apiRequest(
-    "/auth/forgot-password",
-    {
-      method: "POST",
-
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
-
-      body: JSON.stringify({
-        email,
-      }),
-    }
-  );
-}
-
-
-/* =========================================
-   VERIFY RESET OTP
-========================================= */
-
-export async function verifyResetOTP(
-  email,
-  otp
-) {
-  return apiRequest(
-    "/auth/verify-reset-otp",
-    {
-      method: "POST",
-
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
-
-      body: JSON.stringify({
-        email,
-        otp,
-      }),
-    }
-  );
-}
-
-
-/* =========================================
-   RESET PASSWORD
-========================================= */
-
-export async function resetPassword(
+export const resetPassword = async (
   email,
   otp,
   newPassword
-) {
-  return apiRequest(
-    "/auth/reset-password",
-    {
-      method: "POST",
+) => {
+  return apiJson("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({
+      email,
+      otp,
+      newPassword,
+    }),
+  });
+};
 
-      headers: {
-        "Content-Type":
-          "application/json",
-      },
+export const refreshAccessToken = async () => {
+  const refreshToken = getRefreshToken();
 
-      body: JSON.stringify({
-        email,
-        otp,
-        newPassword,
-      }),
+  if (!refreshToken) {
+    clearTokens();
+    return null;
+  }
+
+  return refreshAccessTokenOnce();
+};
+
+export const logoutUser = async () => {
+  const refreshToken = getRefreshToken();
+
+  try {
+    if (refreshToken) {
+      await apiJson(
+        "/auth/logout",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            refreshToken,
+          }),
+        },
+        false
+      );
     }
-  );
-}
+  } catch {
+    // Logout should still complete locally.
+  } finally {
+    clearTokens();
+  }
+
+  return true;
+};
+
+export default {
+  loginUser,
+  registerUser,
+  getCurrentUser,
+  verifyEmail,
+  forgotPassword,
+  verifyResetOTP,
+  resetPassword,
+  refreshAccessToken,
+  logoutUser,
+};

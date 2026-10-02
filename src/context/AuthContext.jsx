@@ -1,7 +1,9 @@
-import {
+﻿import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -11,280 +13,270 @@ import {
   refreshAccessToken,
 } from "../services/authApi";
 
-const AuthContext =
-  createContext(null);
+const AuthContext = createContext(null);
 
+const ACCESS_TOKEN_KEY = "accessToken";
+const REFRESH_TOKEN_KEY = "refreshToken";
 
-/* =========================================
-   AUTH PROVIDER
-========================================= */
+const PROACTIVE_REFRESH_MS = 12 * 60 * 1000;
 
-export function AuthProvider({
-  children,
-}) {
-  const [user, setUser] =
-    useState(null);
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const [loading, setLoading] =
-    useState(true);
+  const mountedRef = useRef(false);
+  const refreshTimerRef = useRef(null);
+  const bootstrapPromiseRef = useRef(null);
 
-
-  /* =========================================
-     LOAD USER
-  ========================================= */
-
-  async function loadUser() {
-    try {
-      /*
-        First try current access token.
-      */
-
-      const data =
-        await getCurrentUser();
-
-      if (
-        data?.success &&
-        data?.user
-      ) {
-        setUser(data.user);
-        return data.user;
-      }
-
-      setUser(null);
-
-      return null;
-
-    } catch (error) {
-
-      /*
-        Only 401 should trigger
-        refresh attempt.
-
-        Other errors should not
-        be treated as expired token.
-      */
-
-      if (error?.status !== 401) {
-        console.error(
-          "Load user failed:",
-          error
-        );
-
-        setUser(null);
-
-        return null;
-      }
-
-
-      /* =====================================
-         TRY REFRESH
-      ===================================== */
-
-      try {
-        await refreshAccessToken();
-
-        /*
-          New access token has now
-          been saved.
-
-          Request /auth/me again.
-        */
-
-        const data =
-          await getCurrentUser();
-
-        if (
-          data?.success &&
-          data?.user
-        ) {
-          setUser(data.user);
-
-          return data.user;
-        }
-
-        setUser(null);
-
-        return null;
-
-      } catch (refreshError) {
-
-        /*
-          Refresh token itself is
-          invalid/expired/revoked.
-
-          refreshAccessToken()
-          already clears the tokens
-          when backend returns 401/403.
-        */
-
-        console.error(
-          "Authentication refresh failed:",
-          refreshError
-        );
-
-        setUser(null);
-
-        return null;
-      }
+  const clearRefreshTimer = useCallback(() => {
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
     }
-  }
+  }, []);
 
+  const scheduleRefresh = useCallback(() => {
+    clearRefreshTimer();
 
-  /* =========================================
-     INITIAL AUTH
-  ========================================= */
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
 
-  useEffect(() => {
-    let mounted = true;
+    if (!accessToken) {
+      return;
+    }
 
-    async function initializeAuth() {
-      const accessToken =
-        localStorage.getItem(
-          "accessToken"
-        );
+    try {
+      const parts = accessToken.split(".");
 
-      const refreshToken =
-        localStorage.getItem(
-          "refreshToken"
-        );
-
-      /*
-        No token = logged out user.
-
-        Do not call /auth/me.
-      */
-
-      if (
-        !accessToken &&
-        !refreshToken
-      ) {
-        if (mounted) {
-          setLoading(false);
-        }
-
+      if (parts.length !== 3) {
         return;
       }
 
-      try {
-        await loadUser();
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    }
+      const base64 = parts[1]
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
 
-    initializeAuth();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-
-  /* =========================================
-     LOGIN
-  ========================================= */
-
-  async function login(userData) {
-    /*
-      loginUser() already saves:
-
-      accessToken
-      refreshToken
-    */
-
-    if (userData?.user) {
-      setUser(userData.user);
-    } else {
-      setUser(userData);
-    }
-  }
-
-
-  /* =========================================
-     LOGOUT
-  ========================================= */
-
-  async function logout() {
-    try {
-      await logoutUser();
-
-    } catch (error) {
-
-      console.error(
-        "Logout error:",
-        error
+      const payload = JSON.parse(
+        decodeURIComponent(
+          atob(base64)
+            .split("")
+            .map(
+              (char) =>
+                "%" +
+                ("00" + char.charCodeAt(0).toString(16)).slice(-2)
+            )
+            .join("")
+        )
       );
 
-    } finally {
+      const expiresAt = Number(payload?.exp || 0) * 1000;
 
-      /*
-        Always remove user from
-        React state.
-      */
+      if (!expiresAt) {
+        return;
+      }
 
-      setUser(null);
+      const timeUntilExpiry = expiresAt - Date.now();
+
+      const delay = Math.max(
+        5000,
+        Math.min(
+          PROACTIVE_REFRESH_MS,
+          timeUntilExpiry - 60_000
+        )
+      );
+
+      refreshTimerRef.current = window.setTimeout(async () => {
+        try {
+          const newAccessToken = await refreshAccessToken();
+
+          if (!newAccessToken) {
+            if (mountedRef.current) {
+              setUser(null);
+              clearRefreshTimer();
+            }
+            return;
+          }
+
+          if (mountedRef.current) {
+            scheduleRefresh();
+          }
+        } catch {
+          if (mountedRef.current) {
+            setUser(null);
+            clearRefreshTimer();
+          }
+        }
+      }, delay);
+    } catch {
+      // Invalid JWT payload.
+      // Normal API authentication flow will handle it.
     }
-  }
+  }, [clearRefreshTimer]);
 
+  const loadUser = useCallback(async () => {
+    if (bootstrapPromiseRef.current) {
+      return bootstrapPromiseRef.current;
+    }
 
-  /* =========================================
-     UPDATE CREDITS
-  ========================================= */
+    bootstrapPromiseRef.current = (async () => {
+      try {
+        const data = await getCurrentUser();
 
-  function updateCredits(
-    credits
-  ) {
-    setUser(
-      (currentUser) => {
-        if (!currentUser) {
+        /*
+         * Support the normal backend response:
+         * {
+         *   success: true,
+         *   user: {...}
+         * }
+         *
+         * Also tolerate:
+         * {
+         *   data: {
+         *     user: {...}
+         *   }
+         * }
+         */
+        const currentUser =
+          data?.user ||
+          data?.data?.user ||
+          null;
+
+        if (currentUser) {
+          if (mountedRef.current) {
+            setUser(currentUser);
+            scheduleRefresh();
+          }
+
           return currentUser;
         }
 
-        return {
-          ...currentUser,
-          credits,
-        };
+        if (mountedRef.current) {
+          setUser(null);
+          clearRefreshTimer();
+        }
+
+        return null;
+      } catch (error) {
+        if (mountedRef.current) {
+          setUser(null);
+          clearRefreshTimer();
+        }
+
+        return null;
+      } finally {
+        bootstrapPromiseRef.current = null;
       }
-    );
-  }
+    })();
 
+    return bootstrapPromiseRef.current;
+  }, [clearRefreshTimer, scheduleRefresh]);
 
-  /* =========================================
-     CONTEXT VALUE
-  ========================================= */
+  useEffect(() => {
+    mountedRef.current = true;
+
+    let cancelled = false;
+
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+
+    if (!accessToken && !refreshToken) {
+      setUser(null);
+      setLoading(false);
+
+      return () => {
+        cancelled = true;
+        mountedRef.current = false;
+        clearRefreshTimer();
+      };
+    }
+
+    (async () => {
+      try {
+        await loadUser();
+      } finally {
+        if (!cancelled && mountedRef.current) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      mountedRef.current = false;
+      clearRefreshTimer();
+    };
+  }, [clearRefreshTimer, loadUser]);
+
+  /*
+   * Called after successful login from the Login page.
+   */
+  const login = useCallback(
+    (userData) => {
+      const loggedInUser =
+        userData?.user ||
+        userData?.data?.user ||
+        userData ||
+        null;
+
+      if (loggedInUser) {
+        setUser(loggedInUser);
+        scheduleRefresh();
+      }
+
+      return loggedInUser;
+    },
+    [scheduleRefresh]
+  );
+
+  const logout = useCallback(async () => {
+    clearRefreshTimer();
+
+    try {
+      await logoutUser();
+    } catch {
+      // Local logout must always complete.
+    } finally {
+      if (mountedRef.current) {
+        setUser(null);
+        setLoading(false);
+      }
+    }
+  }, [clearRefreshTimer]);
+
+  const updateCredits = useCallback((credits) => {
+    setUser((currentUser) => {
+      if (!currentUser) {
+        return currentUser;
+      }
+
+      return {
+        ...currentUser,
+        credits,
+      };
+    });
+  }, []);
+
+  const refreshUser = useCallback(() => {
+    return loadUser();
+  }, [loadUser]);
 
   const value = {
     user,
     loading,
-
     login,
     logout,
-
     updateCredits,
-
-    refreshUser: loadUser,
+    refreshUser,
   };
 
-
   return (
-    <AuthContext.Provider
-      value={value}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-
-/* =========================================
-   USE AUTH
-========================================= */
-
 export function useAuth() {
-  const context =
-    useContext(AuthContext);
+  const context = useContext(AuthContext);
 
   if (!context) {
     throw new Error(
