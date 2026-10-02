@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+﻿import { useNavigate } from "react-router-dom";
 import {
   useEffect,
   useMemo,
@@ -154,7 +154,7 @@ const Home = () => {
 
       let result;
 
-      // Image â†’ PDF
+      // Image Ã¢â€ â€™ PDF
       if (
         extension !== "pdf" &&
         selectedFormat === "pdf"
@@ -166,7 +166,7 @@ const Home = () => {
         result = await convertImageToPdf(file);
       }
 
-      // Image â†’ Image
+      // Image Ã¢â€ â€™ Image
       else if (extension !== "pdf") {
         setConversionStatus(
           `Converting to ${selectedFormat.toUpperCase()}...`
@@ -178,7 +178,7 @@ const Home = () => {
         );
       }
 
-      // PDF â†’ Image
+      // PDF Ã¢â€ â€™ Image
       else {
         setConversionStatus(
           `Converting PDF to ${selectedFormat.toUpperCase()}...`
@@ -202,26 +202,10 @@ const Home = () => {
       setConversionStatus(
         "Preparing download..."
       );
-
       // -----------------------------
       // Download
       // -----------------------------
-      const link = document.createElement("a");
-
-      link.href = result.downloadUrl;
-
-      if (result.fileName) {
-        link.download = result.fileName;
-      }
-
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-
-      document.body.appendChild(link);
-
-      link.click();
-
-      link.remove();
+      window.location.assign(result.downloadUrl);
 
       if (
         result?.creditsRemaining !== undefined
@@ -232,7 +216,7 @@ const Home = () => {
       }
 
       setConversionStatus(
-        "âœ“ Conversion complete"
+        "Ã¢Å“â€œ Conversion complete"
       );
 
       // -----------------------------
@@ -440,3 +424,4 @@ const Home = () => {
 };
 
 export default Home;
+

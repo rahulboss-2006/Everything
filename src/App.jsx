@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useState,
@@ -441,7 +441,7 @@ function UploadBox() {
 
 
         /* =================================
-           IMAGE â†’ PDF
+           IMAGE Ã¢â€ â€™ PDF
         ================================= */
 
         if (
@@ -460,7 +460,7 @@ function UploadBox() {
 
 
         /* =================================
-           IMAGE â†’ IMAGE
+           IMAGE Ã¢â€ â€™ IMAGE
         ================================= */
 
         else if (
@@ -481,7 +481,7 @@ function UploadBox() {
 
 
         /* =================================
-           PDF â†’ IMAGE
+           PDF Ã¢â€ â€™ IMAGE
         ================================= */
 
         else {
@@ -535,33 +535,9 @@ function UploadBox() {
         }
 
 
-        const link =
-          document.createElement("a");
+        window.location.assign(downloadUrl);
 
 
-        link.href =
-          downloadUrl;
-
-
-        if (result?.fileName) {
-          link.download =
-            result.fileName;
-        }
-
-
-        link.target =
-          "_blank";
-
-
-        link.rel =
-          "noopener noreferrer";
-
-
-        document.body.appendChild(link);
-
-        link.click();
-
-        link.remove();
 
 
         /* =================================
@@ -569,7 +545,7 @@ function UploadBox() {
         ================================= */
 
         setConversionStatus(
-          "âœ“ Conversion complete"
+          "Ã¢Å“â€œ Conversion complete"
         );
 
 
@@ -776,3 +752,5 @@ function FeatureCard({
 
 
 export default App;
+
+
