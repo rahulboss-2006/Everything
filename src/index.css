@@ -234,12 +234,10 @@ html.light .footer-text::before {
   */
 
   background:
-    linear-gradient(
-      135deg,
+    linear-gradient(135deg,
       rgba(2, 6, 23, 0.82),
       rgba(15, 23, 42, 0.62),
-      rgba(2, 6, 23, 0.82)
-    );
+      rgba(2, 6, 23, 0.82));
 
   /*
     Only the BACKGROUND behind the loader is blurred.
@@ -262,8 +260,7 @@ html.light .footer-text::before {
   pointer-events: none;
 
   background:
-    repeating-linear-gradient(
-      135deg,
+    repeating-linear-gradient(135deg,
 
       transparent 0px,
       transparent 42px,
@@ -276,8 +273,7 @@ html.light .footer-text::before {
 
       rgba(0, 180, 255, 0) 94px,
       rgba(0, 180, 255, 0.14) 97px,
-      rgba(0, 180, 255, 0) 100px
-    );
+      rgba(0, 180, 255, 0) 100px);
 
   mix-blend-mode: screen;
 
@@ -309,8 +305,7 @@ html.light .footer-text::before {
   transform: rotate(38deg);
 
   background:
-    linear-gradient(
-      90deg,
+    linear-gradient(90deg,
 
       transparent 0%,
 
@@ -326,8 +321,7 @@ html.light .footer-text::before {
 
       rgba(255, 255, 255, 0.12) 58%,
 
-      transparent 75%
-    );
+      transparent 75%);
 
   /*
     Blur only the sweep itself.
@@ -342,10 +336,7 @@ html.light .footer-text::before {
     0 0 25px rgba(255, 255, 255, 0.45);
 
   animation:
-    aiLightSweep
-    2.4s
-    cubic-bezier(.45, 0, .25, 1)
-    infinite;
+    aiLightSweep 2.4s cubic-bezier(.45, 0, .25, 1) infinite;
 }
 
 
@@ -361,17 +352,13 @@ html.light .footer-text::before {
   pointer-events: none;
 
   background:
-    radial-gradient(
-      circle at 20% 20%,
+    radial-gradient(circle at 20% 20%,
       rgba(255, 30, 80, 0.20),
-      transparent 32%
-    ),
+      transparent 32%),
 
-    radial-gradient(
-      circle at 80% 80%,
+    radial-gradient(circle at 80% 80%,
       rgba(0, 170, 255, 0.20),
-      transparent 32%
-    );
+      transparent 32%);
 
   filter: blur(35px);
   -webkit-filter: blur(35px);
@@ -379,11 +366,7 @@ html.light .footer-text::before {
   mix-blend-mode: screen;
 
   animation:
-    aiGlowMove
-    3s
-    ease-in-out
-    infinite
-    alternate;
+    aiGlowMove 3s ease-in-out infinite alternate;
 }
 
 
@@ -402,24 +385,19 @@ html.light .footer-text::before {
   pointer-events: none;
 
   background:
-    linear-gradient(
-      90deg,
+    linear-gradient(90deg,
       transparent,
       rgba(0, 200, 255, 0.2),
       rgba(255, 255, 255, 0.95),
       rgba(255, 30, 80, 0.35),
-      transparent
-    );
+      transparent);
 
   box-shadow:
     0 0 10px rgba(0, 200, 255, 0.8),
     0 0 25px rgba(255, 30, 80, 0.5);
 
   animation:
-    aiHorizontalScan
-    2.1s
-    ease-in-out
-    infinite;
+    aiHorizontalScan 2.1s ease-in-out infinite;
 }
 
 
@@ -472,24 +450,21 @@ html.light .footer-text::before {
 @keyframes aiGlowMove {
   0% {
     transform:
-      translate3d(-5%, -5%, 0)
-      scale(0.9);
+      translate3d(-5%, -5%, 0) scale(0.9);
 
     opacity: 0.45;
   }
 
   50% {
     transform:
-      translate3d(5%, 4%, 0)
-      scale(1.05);
+      translate3d(5%, 4%, 0) scale(1.05);
 
     opacity: 0.9;
   }
 
   100% {
     transform:
-      translate3d(-2%, 8%, 0)
-      scale(1);
+      translate3d(-2%, 8%, 0) scale(1);
 
     opacity: 0.55;
   }
@@ -665,12 +640,10 @@ html.light .footer-text::before {
     even when blur is subtle.
   */
   background:
-    linear-gradient(
-      90deg,
+    linear-gradient(90deg,
       rgba(34, 211, 238, 0.90),
       rgba(139, 92, 246, 0.90),
-      rgba(244, 63, 94, 0.90)
-    );
+      rgba(244, 63, 94, 0.90));
 
   box-shadow:
     0 0 7px rgba(34, 211, 238, 0.75),
@@ -714,8 +687,7 @@ html.light .footer-text::before {
   border-radius: 999px;
 
   background:
-    radial-gradient(
-      circle,
+    radial-gradient(circle,
 
       rgba(255, 255, 255, 1) 0%,
 
@@ -727,8 +699,7 @@ html.light .footer-text::before {
 
       rgba(34, 211, 238, 0.08) 70%,
 
-      transparent 100%
-    );
+      transparent 100%);
 
   /*
     Soft glow.
@@ -771,8 +742,7 @@ html.light .footer-text::before {
   border-radius: 999px;
 
   background:
-    linear-gradient(
-      90deg,
+    linear-gradient(90deg,
 
       transparent 0%,
 
@@ -786,8 +756,7 @@ html.light .footer-text::before {
 
       rgba(255, 255, 255, 0.08) 80%,
 
-      transparent 100%
-    );
+      transparent 100%);
 
   filter: blur(4px);
   -webkit-filter: blur(4px);
@@ -806,10 +775,7 @@ html.light .footer-text::before {
     translate3d(0, 0, 0);
 
   animation:
-    aiProgressShine
-    1.15s
-    linear
-    infinite;
+    aiProgressShine 1.15s linear infinite;
 }
 
 
@@ -882,17 +848,103 @@ html.light .footer-text::before {
   border-radius: 50%;
 
   animation:
-    aiProgressSpin
-    0.8s
-    linear
-    infinite;
+    aiProgressSpin 0.8s linear infinite;
 }
 
 
-@keyframes aiProgressSpin {
-  to {
-    transform:
-      rotate(360deg);
+/*========================================= 
+    KEYFRAMES
+=========================================*/
+@keyframes aiDiagonalScan {
+  0% {
+    transform: translate3d(-25%, -25%, 0) rotate(0deg);
+  }
+
+  100% {
+    transform: translate3d(25%, 25%, 0) rotate(0deg);
+  }
+}
+
+@keyframes aiLightSweep {
+  0% {
+    left: -45%;
+    opacity: 0;
+  }
+
+  12% {
+    opacity: .35;
+  }
+
+  35% {
+    opacity: .8;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  75% {
+    opacity: .55;
+  }
+
+  100% {
+    left: 125%;
+    opacity: 0;
+  }
+}
+
+@keyframes aiGlowMove {
+  0% {
+    transform: translate3d(-5%, -5%, 0) scale(.9);
+    opacity: .45;
+  }
+
+  50% {
+    transform: translate3d(5%, 4%, 0) scale(1.05);
+    opacity: .9;
+  }
+
+  100% {
+    transform: translate3d(-2%, 8%, 0) scale(1);
+    opacity: .55;
+  }
+}
+
+@keyframes aiHorizontalScan {
+  0% {
+    top: -5%;
+    opacity: 0;
+  }
+
+  15% {
+    opacity: .8;
+  }
+
+  50% {
+    top: 50%;
+    opacity: 1;
+  }
+
+  85% {
+    opacity: .7;
+  }
+
+  100% {
+    top: 105%;
+    opacity: 0;
+  }
+}
+
+/* ========================================================= 
+     PROGRESS SHINE 
+  ========================================================= */
+@keyframes aiProgressShine {
+  0% {
+    left: -80px;
+  }
+
+  100% {
+    left: 100%;
   }
 }
 
@@ -902,6 +954,7 @@ html.light .footer-text::before {
 ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
+
   .ai-background-loader::before,
   .ai-background-loader::after,
   .ai-glow,
@@ -1019,4 +1072,3 @@ html.light .footer-text::before {
   background:
     rgb(139, 92, 246) !important;
 }
-
