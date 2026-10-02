@@ -1,4 +1,4 @@
-@import "tailwindcss";
+﻿@import "tailwindcss";
 
 /* =========================================================
    TAILWIND DARK MODE
@@ -696,7 +696,7 @@ html.light .footer-text::before {
 
   height: 100%;
 
-  width: var(--progress-width);
+
 
   border-radius: 999px;
 
