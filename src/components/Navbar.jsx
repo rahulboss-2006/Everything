@@ -5,9 +5,17 @@ import {
   Sparkles,
   User,
   X,
+  Home,
+  Info,
+  Layers3,
+  Mail,
+  ChevronRight,
 } from "lucide-react";
 
-import { Link, useLocation } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+} from "react-router-dom";
 
 import {
   useEffect,
@@ -20,6 +28,10 @@ import { useAuth } from "../context/AuthContext";
 import logoLight from "../assets/logo-light.png";
 import logoDark from "../assets/logo-dark.png";
 
+
+/* =========================================
+   THEME DETECTION
+========================================= */
 
 function getCurrentTheme() {
   const root = document.documentElement;
@@ -50,10 +62,40 @@ function getCurrentTheme() {
     return "light";
   }
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
+  return window.matchMedia(
+    "(prefers-color-scheme: dark)"
+  ).matches
     ? "dark"
     : "light";
 }
+
+
+/* =========================================
+   NAVIGATION ITEMS
+========================================= */
+
+const navigation = [
+  {
+    name: "Home",
+    path: "/",
+    icon: Home,
+  },
+  {
+    name: "About",
+    path: "/about",
+    icon: Info,
+  },
+  {
+    name: "Features",
+    path: "/features",
+    icon: Layers3,
+  },
+  {
+    name: "Contact",
+    path: "/contact",
+    icon: Mail,
+  },
+];
 
 
 function Navbar() {
@@ -65,11 +107,11 @@ function Navbar() {
 
   const location = useLocation();
 
-  const [currentTheme, setCurrentTheme] = useState(
-    getCurrentTheme()
-  );
+  const [currentTheme, setCurrentTheme] =
+    useState(getCurrentTheme);
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] =
+    useState(false);
 
 
   /* =========================================
@@ -85,7 +127,8 @@ function Navbar() {
 
     updateTheme();
 
-    const observer = new MutationObserver(updateTheme);
+    const observer =
+      new MutationObserver(updateTheme);
 
     observer.observe(root, {
       attributes: true,
@@ -105,9 +148,10 @@ function Navbar() {
       });
     }
 
-    const systemTheme = window.matchMedia(
-      "(prefers-color-scheme: dark)"
-    );
+    const systemTheme =
+      window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      );
 
     systemTheme.addEventListener(
       "change",
@@ -135,32 +179,7 @@ function Navbar() {
 
 
   /* =========================================
-     CLOSE MENU ON DESKTOP
-  ========================================= */
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setMobileMenuOpen(false);
-      }
-    };
-
-    window.addEventListener(
-      "resize",
-      handleResize
-    );
-
-    return () => {
-      window.removeEventListener(
-        "resize",
-        handleResize
-      );
-    };
-  }, []);
-
-
-  /* =========================================
-     PREVENT BODY SCROLL WHEN MENU OPEN
+     LOCK BODY SCROLL
   ========================================= */
 
   useEffect(() => {
@@ -182,21 +201,13 @@ function Navbar() {
 
   async function handleLogout() {
     setMobileMenuOpen(false);
+
     await logout();
   }
 
 
   /* =========================================
-     MOBILE MENU TOGGLE
-  ========================================= */
-
-  function toggleMobileMenu() {
-    setMobileMenuOpen((prev) => !prev);
-  }
-
-
-  /* =========================================
-     CURRENT LOGO
+     LOGO
   ========================================= */
 
   const currentLogo =
@@ -205,339 +216,888 @@ function Navbar() {
       : logoLight;
 
 
+  /* =========================================
+     ACTIVE ROUTE
+  ========================================= */
+
+  const isActive = (path) => {
+    if (path === "/") {
+      return location.pathname === "/";
+    }
+
+    return location.pathname.startsWith(path);
+  };
+
+
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-slate-800/70 dark:bg-slate-950/80">
-
+    <>
       {/* =========================================
-          DESKTOP / MAIN HEADER
+          NAVBAR
       ========================================= */}
 
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <header className="sticky top-0 z-50 px-3 pt-3 sm:px-5 lg:px-6">
 
-        {/* =========================================
-            LOGO
-        ========================================= */}
+        <div className="mx-auto max-w-7xl">
 
-        <Link
-          to="/"
-          onClick={() => setMobileMenuOpen(false)}
-          className="flex shrink-0 items-center gap-2 text-xl font-bold"
-        >
-          <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-slate-100 shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900 dark:ring-slate-700/60 sm:h-12 sm:w-12">
+          <div
+            className="
+              relative
+              flex
+              h-[68px]
+              items-center
+              justify-between
+              rounded-2xl
+              border
+              border-slate-200/70
+              bg-white/80
+              px-3
+              shadow-[0_8px_30px_rgb(0,0,0,0.04)]
+              backdrop-blur-2xl
 
-            <img
-              key={currentTheme}
-              src={currentLogo}
-              alt="Everything"
-              className="h-full w-full object-contain p-1.5"
-            />
+              dark:border-slate-800/80
+              dark:bg-slate-950/80
+              dark:shadow-[0_8px_30px_rgb(0,0,0,0.2)]
 
-          </div>
-
-          <span className="hidden xs:inline sm:inline">
-            Everything
-          </span>
-        </Link>
-
-
-        {/* =========================================
-            DESKTOP NAVIGATION
-        ========================================= */}
-
-        <nav className="hidden items-center gap-6 md:flex lg:gap-8">
-
-          <Link
-            to="/"
-            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
+              sm:px-4
+              lg:px-5
+            "
           >
-            Home
-          </Link>
 
-          <Link
-            to="/about"
-            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
-          >
-            About
-          </Link>
-
-          <Link
-            to="/features"
-            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
-          >
-            Features
-          </Link>
-
-          <Link
-            to="/contact"
-            className="text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
-          >
-            Contact
-          </Link>
-
-        </nav>
-
-
-        {/* =========================================
-            RIGHT SIDE
-        ========================================= */}
-
-        <div className="flex items-center gap-2 sm:gap-3">
-
-          <ThemeToggle />
-
-
-          {/* =========================================
-              DESKTOP LOGIN
-          ========================================= */}
-
-          {!loading && !user && (
-            <Link
-              to="/login"
-              className="hidden items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 md:flex dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              <LogIn size={16} />
-
-              Login
-            </Link>
-          )}
-
-
-          {/* =========================================
-              DESKTOP LOGGED-IN USER
-          ========================================= */}
-
-          {!loading && user && (
-            <div className="hidden items-center gap-2 md:flex">
-
-              {/* CREDITS */}
-
-              <Link
-                to="/recharge"
-                className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm transition hover:bg-slate-100 lg:flex dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-              >
-                <Sparkles
-                  size={15}
-                  className="text-slate-500 dark:text-slate-400"
-                />
-
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  {user.credits}
-                </span>
-
-                <span className="text-slate-500 dark:text-slate-400">
-                  credits
-                </span>
-              </Link>
-
-
-              {/* USER */}
-
-              <div className="hidden items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 lg:flex dark:bg-slate-800">
-
-                <User size={16} />
-
-                <span className="max-w-[160px] truncate text-sm font-medium">
-                  {user.email}
-                </span>
-
-              </div>
-
-
-              {/* LOGOUT */}
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                <LogOut size={16} />
-
-                <span className="hidden lg:inline">
-                  Logout
-                </span>
-              </button>
-
-            </div>
-          )}
-
-
-          {/* =========================================
-              MOBILE HAMBURGER
-          ========================================= */}
-
-          <button
-            type="button"
-            onClick={toggleMobileMenu}
-            aria-label={
-              mobileMenuOpen
-                ? "Close menu"
-                : "Open menu"
-            }
-            aria-expanded={mobileMenuOpen}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-700 transition hover:bg-slate-100 md:hidden dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            {mobileMenuOpen ? (
-              <X size={21} />
-            ) : (
-              <Menu size={21} />
-            )}
-          </button>
-
-        </div>
-
-      </div>
-
-
-      {/* =========================================
-          MOBILE MENU
-      ========================================= */}
-
-      <div
-        className={`overflow-hidden border-t border-slate-200/70 bg-white/95 backdrop-blur-xl transition-all duration-300 md:hidden dark:border-slate-800/70 dark:bg-slate-950/95 ${
-          mobileMenuOpen
-            ? "max-h-[calc(100vh-4rem)] opacity-100"
-            : "max-h-0 opacity-0"
-        }`}
-      >
-
-        <div className="mx-auto max-w-7xl overflow-y-auto px-4 py-4 sm:px-6">
-
-          {/* =========================================
-              MOBILE NAVIGATION
-          ========================================= */}
-
-          <nav className="flex flex-col gap-1">
+            {/* =========================================
+                LOGO
+            ========================================= */}
 
             <Link
               to="/"
-              className="rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="
+                group
+                flex
+                shrink-0
+                items-center
+                gap-2.5
+              "
             >
-              Home
-            </Link>
 
-            <Link
-              to="/about"
-              className="rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              About
-            </Link>
+              <div
+                className="
+                  relative
+                  flex
+                  h-11
+                  w-11
+                  items-center
+                  justify-center
+                  overflow-hidden
+                  rounded-xl
+                  border
+                  border-slate-200
+                  bg-slate-50
+                  shadow-sm
+                  transition
+                  duration-300
+                  group-hover:scale-105
+                  group-hover:shadow-md
 
-            <Link
-              to="/features"
-              className="rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Features
-            </Link>
-
-            <Link
-              to="/contact"
-              className="rounded-xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Contact
-            </Link>
-
-          </nav>
-
-
-          {/* =========================================
-              MOBILE AUTH SECTION
-          ========================================= */}
-
-          {!loading && !user && (
-            <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
-
-              <Link
-                to="/login"
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                  dark:border-slate-700
+                  dark:bg-slate-900
+                "
               >
-                <LogIn size={17} />
 
-                Login
-              </Link>
-
-            </div>
-          )}
-
-
-          {/* =========================================
-              MOBILE USER SECTION
-          ========================================= */}
-
-          {!loading && user && (
-            <div className="mt-4 space-y-3 border-t border-slate-200 pt-4 dark:border-slate-800">
-
-              {/* USER INFO */}
-
-              <div className="flex items-center gap-3 rounded-xl bg-slate-100 p-3 dark:bg-slate-800">
-
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white dark:bg-slate-700">
-                  <User size={17} />
-                </div>
-
-                <div className="min-w-0">
-
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Signed in as
-                  </p>
-
-                  <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
-                    {user.email}
-                  </p>
-
-                </div>
+                <img
+                  key={currentTheme}
+                  src={currentLogo}
+                  alt="Everything"
+                  className="
+                    h-full
+                    w-full
+                    object-contain
+                    p-1.5
+                  "
+                />
 
               </div>
 
 
-              {/* CREDITS */}
+              <div className="hidden xs:block">
 
-              <Link
-                to="/recharge"
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
-              >
-
-                <div className="flex items-center gap-2">
-
-                  <Sparkles
-                    size={17}
-                    className="text-slate-500 dark:text-slate-400"
-                  />
-
-                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                    Credits
-                  </span>
-
+                <div
+                  className="
+                    text-[17px]
+                    font-bold
+                    tracking-tight
+                    text-slate-950
+                    dark:text-white
+                  "
+                >
+                  Everything
                 </div>
 
-                <span className="font-semibold text-slate-900 dark:text-white">
-                  {user.credits}
-                </span>
+                <div
+                  className="
+                    hidden
+                    text-[10px]
+                    font-medium
+                    uppercase
+                    tracking-[0.18em]
+                    text-slate-400
+                    sm:block
+                  "
+                >
+                  Everything you need
+                </div>
 
-              </Link>
+              </div>
+
+            </Link>
 
 
-              {/* LOGOUT */}
+            {/* =========================================
+                DESKTOP NAVIGATION
+            ========================================= */}
+
+            <nav
+              className="
+                absolute
+                left-1/2
+                hidden
+                -translate-x-1/2
+                items-center
+                gap-1
+                md:flex
+              "
+            >
+
+              {navigation.map((item) => {
+                const active = isActive(item.path);
+
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`
+                      relative
+                      rounded-xl
+                      px-4
+                      py-2.5
+                      text-sm
+                      font-medium
+                      transition-all
+                      duration-200
+
+                      ${
+                        active
+                          ? `
+                            bg-slate-100
+                            text-slate-950
+                            shadow-sm
+
+                            dark:bg-slate-800
+                            dark:text-white
+                          `
+                          : `
+                            text-slate-500
+                            hover:bg-slate-50
+                            hover:text-slate-950
+
+                            dark:text-slate-400
+                            dark:hover:bg-slate-900
+                            dark:hover:text-white
+                          `
+                      }
+                    `}
+                  >
+                    {item.name}
+                  </Link>
+                );
+              })}
+
+            </nav>
+
+
+            {/* =========================================
+                RIGHT ACTIONS
+            ========================================= */}
+
+            <div className="flex items-center gap-2">
+
+              <ThemeToggle />
+
+
+              {/* =========================================
+                  DESKTOP LOGGED OUT
+              ========================================= */}
+
+              {!loading && !user && (
+                <Link
+                  to="/login"
+                  className="
+                    hidden
+                    items-center
+                    gap-2
+                    rounded-xl
+                    bg-slate-950
+                    px-4
+                    py-2.5
+                    text-sm
+                    font-semibold
+                    text-white
+                    shadow-sm
+                    transition
+                    duration-200
+                    hover:-translate-y-0.5
+                    hover:shadow-lg
+
+                    dark:bg-white
+                    dark:text-slate-950
+
+                    md:flex
+                  "
+                >
+
+                  <LogIn size={16} />
+
+                  <span>
+                    Login
+                  </span>
+
+                </Link>
+              )}
+
+
+              {/* =========================================
+                  DESKTOP LOGGED IN
+              ========================================= */}
+
+              {!loading && user && (
+                <div className="hidden items-center gap-2 md:flex">
+
+                  {/* CREDITS */}
+
+                  <Link
+                    to="/recharge"
+                    className="
+                      group
+                      flex
+                      items-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-white
+                      px-3
+                      py-2
+                      transition
+                      hover:border-slate-300
+                      hover:shadow-sm
+
+                      dark:border-slate-700
+                      dark:bg-slate-900
+                      dark:hover:border-slate-600
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        h-7
+                        w-7
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-slate-100
+
+                        dark:bg-slate-800
+                      "
+                    >
+                      <Sparkles
+                        size={14}
+                        className="
+                          text-slate-600
+                          dark:text-slate-300
+                        "
+                      />
+                    </div>
+
+                    <div className="hidden lg:block">
+
+                      <div
+                        className="
+                          text-[10px]
+                          font-medium
+                          uppercase
+                          tracking-wide
+                          text-slate-400
+                        "
+                      >
+                        Balance
+                      </div>
+
+                      <div
+                        className="
+                          text-sm
+                          font-bold
+                          leading-none
+                          text-slate-900
+                          dark:text-white
+                        "
+                      >
+                        {user.credits}
+                        <span
+                          className="
+                            ml-1
+                            text-xs
+                            font-medium
+                            text-slate-400
+                          "
+                        >
+                          credits
+                        </span>
+                      </div>
+
+                    </div>
+
+                  </Link>
+
+
+                  {/* USER */}
+
+                  <div
+                    className="
+                      hidden
+                      max-w-[180px]
+                      items-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      px-3
+                      py-2
+
+                      lg:flex
+
+                      dark:border-slate-800
+                      dark:bg-slate-900
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        h-7
+                        w-7
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-lg
+                        bg-white
+                        shadow-sm
+
+                        dark:bg-slate-800
+                      "
+                    >
+                      <User size={14} />
+                    </div>
+
+                    <span
+                      className="
+                        truncate
+                        text-xs
+                        font-semibold
+                        text-slate-700
+                        dark:text-slate-200
+                      "
+                    >
+                      {user.email}
+                    </span>
+
+                  </div>
+
+
+                  {/* LOGOUT */}
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="
+                      flex
+                      h-10
+                      w-10
+                      items-center
+                      justify-center
+                      rounded-xl
+                      border
+                      border-slate-200
+                      text-slate-500
+                      transition
+                      hover:border-red-200
+                      hover:bg-red-50
+                      hover:text-red-600
+
+                      dark:border-slate-700
+                      dark:text-slate-400
+                      dark:hover:border-red-900
+                      dark:hover:bg-red-950/40
+                      dark:hover:text-red-400
+                    "
+                    aria-label="Logout"
+                    title="Logout"
+                  >
+                    <LogOut size={16} />
+                  </button>
+
+                </div>
+              )}
+
+
+              {/* =========================================
+                  MOBILE MENU BUTTON
+              ========================================= */}
 
               <button
                 type="button"
-                onClick={handleLogout}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                onClick={() =>
+                  setMobileMenuOpen(
+                    (prev) => !prev
+                  )
+                }
+                aria-label={
+                  mobileMenuOpen
+                    ? "Close menu"
+                    : "Open menu"
+                }
+                aria-expanded={mobileMenuOpen}
+                className="
+                  flex
+                  h-10
+                  w-10
+                  items-center
+                  justify-center
+                  rounded-xl
+                  border
+                  border-slate-200
+                  bg-white
+                  text-slate-700
+                  shadow-sm
+                  transition
+                  hover:bg-slate-50
+
+                  dark:border-slate-700
+                  dark:bg-slate-900
+                  dark:text-slate-200
+                  dark:hover:bg-slate-800
+
+                  md:hidden
+                "
               >
 
-                <LogOut size={17} />
-
-                Logout
+                {mobileMenuOpen ? (
+                  <X size={20} />
+                ) : (
+                  <Menu size={20} />
+                )}
 
               </button>
 
             </div>
-          )}
+
+          </div>
+
+
+          {/* =========================================
+              MOBILE MENU
+          ========================================= */}
+
+          <div
+            className={`
+              overflow-hidden
+              transition-all
+              duration-300
+              ease-out
+              md:hidden
+
+              ${
+                mobileMenuOpen
+                  ? "max-h-[calc(100vh-100px)] opacity-100"
+                  : "pointer-events-none max-h-0 opacity-0"
+              }
+            `}
+          >
+
+            <div
+              className="
+                mt-2
+                overflow-hidden
+                rounded-2xl
+                border
+                border-slate-200/70
+                bg-white/95
+                p-2
+                shadow-[0_20px_50px_rgb(0,0,0,0.08)]
+                backdrop-blur-2xl
+
+                dark:border-slate-800
+                dark:bg-slate-950/95
+                dark:shadow-[0_20px_50px_rgb(0,0,0,0.3)]
+              "
+            >
+
+              {/* =========================================
+                  MOBILE NAV LINKS
+              ========================================= */}
+
+              <div className="space-y-1">
+
+                {navigation.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path);
+
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      className={`
+                        flex
+                        items-center
+                        justify-between
+                        rounded-xl
+                        px-3
+                        py-3
+                        transition
+
+                        ${
+                          active
+                            ? `
+                              bg-slate-100
+                              text-slate-950
+
+                              dark:bg-slate-800
+                              dark:text-white
+                            `
+                            : `
+                              text-slate-600
+                              hover:bg-slate-50
+                              hover:text-slate-950
+
+                              dark:text-slate-300
+                              dark:hover:bg-slate-900
+                              dark:hover:text-white
+                            `
+                        }
+                      `}
+                    >
+
+                      <div className="flex items-center gap-3">
+
+                        <div
+                          className={`
+                            flex
+                            h-9
+                            w-9
+                            items-center
+                            justify-center
+                            rounded-lg
+
+                            ${
+                              active
+                                ? `
+                                  bg-white
+                                  shadow-sm
+
+                                  dark:bg-slate-700
+                                `
+                                : `
+                                  bg-slate-100
+
+                                  dark:bg-slate-900
+                                `
+                            }
+                          `}
+                        >
+                          <Icon size={17} />
+                        </div>
+
+                        <span className="text-sm font-semibold">
+                          {item.name}
+                        </span>
+
+                      </div>
+
+                      <ChevronRight
+                        size={16}
+                        className="
+                          text-slate-400
+                        "
+                      />
+
+                    </Link>
+                  );
+                })}
+
+              </div>
+
+
+              {/* =========================================
+                  MOBILE AUTH
+              ========================================= */}
+
+              {!loading && !user && (
+                <div
+                  className="
+                    mt-2
+                    border-t
+                    border-slate-200
+                    pt-2
+
+                    dark:border-slate-800
+                  "
+                >
+
+                  <Link
+                    to="/login"
+                    className="
+                      flex
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      bg-slate-950
+                      px-4
+                      py-3
+                      text-sm
+                      font-semibold
+                      text-white
+                      shadow-sm
+                      transition
+                      hover:shadow-md
+
+                      dark:bg-white
+                      dark:text-slate-950
+                    "
+                  >
+
+                    <LogIn size={17} />
+
+                    Login
+
+                  </Link>
+
+                </div>
+              )}
+
+
+              {/* =========================================
+                  MOBILE USER
+              ========================================= */}
+
+              {!loading && user && (
+                <div
+                  className="
+                    mt-2
+                    space-y-2
+                    border-t
+                    border-slate-200
+                    pt-2
+
+                    dark:border-slate-800
+                  "
+                >
+
+                  {/* USER CARD */}
+
+                  <div
+                    className="
+                      flex
+                      items-center
+                      gap-3
+                      rounded-xl
+                      bg-slate-50
+                      p-3
+
+                      dark:bg-slate-900
+                    "
+                  >
+
+                    <div
+                      className="
+                        flex
+                        h-10
+                        w-10
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-xl
+                        bg-white
+                        shadow-sm
+
+                        dark:bg-slate-800
+                      "
+                    >
+                      <User size={17} />
+                    </div>
+
+                    <div className="min-w-0">
+
+                      <p
+                        className="
+                          text-[10px]
+                          font-semibold
+                          uppercase
+                          tracking-wider
+                          text-slate-400
+                        "
+                      >
+                        Signed in as
+                      </p>
+
+                      <p
+                        className="
+                          truncate
+                          text-sm
+                          font-semibold
+                          text-slate-800
+
+                          dark:text-slate-100
+                        "
+                      >
+                        {user.email}
+                      </p>
+
+                    </div>
+
+                  </div>
+
+
+                  {/* CREDIT CARD */}
+
+                  <Link
+                    to="/recharge"
+                    className="
+                      flex
+                      items-center
+                      justify-between
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-white
+                      p-3
+                      transition
+                      hover:bg-slate-50
+
+                      dark:border-slate-800
+                      dark:bg-slate-900
+                      dark:hover:bg-slate-800
+                    "
+                  >
+
+                    <div className="flex items-center gap-3">
+
+                      <div
+                        className="
+                          flex
+                          h-10
+                          w-10
+                          items-center
+                          justify-center
+                          rounded-xl
+                          bg-slate-100
+
+                          dark:bg-slate-800
+                        "
+                      >
+                        <Sparkles
+                          size={17}
+                          className="
+                            text-slate-600
+                            dark:text-slate-300
+                          "
+                        />
+                      </div>
+
+                      <div>
+
+                        <p
+                          className="
+                            text-xs
+                            font-medium
+                            text-slate-400
+                          "
+                        >
+                          Available balance
+                        </p>
+
+                        <p
+                          className="
+                            text-sm
+                            font-bold
+                            text-slate-900
+
+                            dark:text-white
+                          "
+                        >
+                          {user.credits} credits
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                    <ChevronRight
+                      size={17}
+                      className="text-slate-400"
+                    />
+
+                  </Link>
+
+
+                  {/* LOGOUT */}
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="
+                      flex
+                      w-full
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-slate-200
+                      px-4
+                      py-3
+                      text-sm
+                      font-semibold
+                      text-slate-600
+                      transition
+                      hover:border-red-200
+                      hover:bg-red-50
+                      hover:text-red-600
+
+                      dark:border-slate-800
+                      dark:text-slate-300
+                      dark:hover:border-red-900
+                      dark:hover:bg-red-950/30
+                      dark:hover:text-red-400
+                    "
+                  >
+
+                    <LogOut size={17} />
+
+                    Logout
+
+                  </button>
+
+                </div>
+              )}
+
+            </div>
+
+          </div>
 
         </div>
 
-      </div>
-
-    </header>
+      </header>
+    </>
   );
 }
 
