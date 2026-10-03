@@ -19,6 +19,7 @@ import {
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -30,7 +31,7 @@ import logoDark from "../assets/logo-dark.png";
 
 
 /* =========================================================
-   THEME DETECTION
+   THEME
 ========================================================= */
 
 function getCurrentTheme() {
@@ -40,13 +41,8 @@ function getCurrentTheme() {
     root.dataset.theme ||
     document.body?.dataset.theme;
 
-  if (theme === "dark") {
-    return "dark";
-  }
-
-  if (theme === "light") {
-    return "light";
-  }
+  if (theme === "dark") return "dark";
+  if (theme === "light") return "light";
 
   if (
     root.classList.contains("dark") ||
@@ -71,7 +67,7 @@ function getCurrentTheme() {
 
 
 /* =========================================================
-   NAVIGATION ITEMS
+   NAVIGATION
 ========================================================= */
 
 const navigation = [
@@ -107,15 +103,17 @@ function Navbar() {
 
   const location = useLocation();
 
+  const menuRef = useRef(null);
+
   const [currentTheme, setCurrentTheme] =
     useState(getCurrentTheme);
 
-  const [mobileMenuOpen, setMobileMenuOpen] =
+  const [menuOpen, setMenuOpen] =
     useState(false);
 
 
   /* =========================================================
-     WATCH THEME CHANGES
+     WATCH THEME
   ========================================================= */
 
   useEffect(() => {
@@ -148,12 +146,12 @@ function Navbar() {
       });
     }
 
-    const systemTheme =
+    const mediaQuery =
       window.matchMedia(
         "(prefers-color-scheme: dark)"
       );
 
-    systemTheme.addEventListener(
+    mediaQuery.addEventListener(
       "change",
       updateTheme
     );
@@ -161,7 +159,7 @@ function Navbar() {
     return () => {
       observer.disconnect();
 
-      systemTheme.removeEventListener(
+      mediaQuery.removeEventListener(
         "change",
         updateTheme
       );
@@ -170,45 +168,75 @@ function Navbar() {
 
 
   /* =========================================================
-     CLOSE MENU ON ROUTE CHANGE
+     CLOSE ON ROUTE CHANGE
   ========================================================= */
 
   useEffect(() => {
-    setMobileMenuOpen(false);
+    setMenuOpen(false);
   }, [location.pathname]);
 
 
   /* =========================================================
-     CLOSE MENU WITH ESC
+     ESC
   ========================================================= */
 
   useEffect(() => {
-    const handleEscape = (event) => {
+    const handleKeyDown = (event) => {
       if (event.key === "Escape") {
-        setMobileMenuOpen(false);
+        setMenuOpen(false);
       }
     };
 
-    window.addEventListener(
+    document.addEventListener(
       "keydown",
-      handleEscape
+      handleKeyDown
     );
 
     return () => {
-      window.removeEventListener(
+      document.removeEventListener(
         "keydown",
-        handleEscape
+        handleKeyDown
       );
     };
   }, []);
 
 
   /* =========================================================
-     BODY SCROLL LOCK
+     OUTSIDE CLICK
   ========================================================= */
 
   useEffect(() => {
-    if (mobileMenuOpen) {
+    const handleClick = (event) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+
+    if (menuOpen) {
+      document.addEventListener(
+        "mousedown",
+        handleClick
+      );
+    }
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClick
+      );
+    };
+  }, [menuOpen]);
+
+
+  /* =========================================================
+     BODY SCROLL
+  ========================================================= */
+
+  useEffect(() => {
+    if (menuOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -217,7 +245,7 @@ function Navbar() {
     return () => {
       document.body.style.overflow = "";
     };
-  }, [mobileMenuOpen]);
+  }, [menuOpen]);
 
 
   /* =========================================================
@@ -225,8 +253,7 @@ function Navbar() {
   ========================================================= */
 
   async function handleLogout() {
-    setMobileMenuOpen(false);
-
+    setMenuOpen(false);
     await logout();
   }
 
@@ -256,14 +283,20 @@ function Navbar() {
 
   return (
     <header
+      ref={menuRef}
       className="
         sticky
         top-0
         z-50
+
+        w-full
+
         px-2.5
         pt-2.5
+
         sm:px-4
         sm:pt-3
+
         lg:px-6
       "
     >
@@ -277,7 +310,7 @@ function Navbar() {
       >
 
         {/* =====================================================
-            MAIN NAVBAR
+            NAVBAR
         ===================================================== */}
 
         <div
@@ -285,15 +318,19 @@ function Navbar() {
             relative
             z-50
 
-            grid
-            grid-cols-[auto_1fr_auto]
+            flex
+            min-h-[64px]
+            w-full
             items-center
+            justify-between
 
             gap-2
 
             rounded-2xl
+
             border
             border-slate-200/80
+
             bg-white/95
 
             px-2.5
@@ -305,12 +342,11 @@ function Navbar() {
 
             dark:border-slate-800
             dark:bg-slate-950/95
-            dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)]
+            dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]
 
-            sm:min-h-[66px]
             sm:px-3
 
-            lg:gap-4
+            lg:min-h-[68px]
             lg:px-4
           "
         >
@@ -321,21 +357,15 @@ function Navbar() {
 
           <Link
             to="/"
-            onClick={() =>
-              setMobileMenuOpen(false)
-            }
             className="
               group
               flex
               min-w-0
               shrink-0
               items-center
-              gap-2
-              sm:gap-2.5
+              gap-2.5
             "
           >
-
-            {/* Logo box */}
 
             <div
               className="
@@ -346,6 +376,7 @@ function Navbar() {
                 items-center
                 justify-center
                 overflow-hidden
+
                 rounded-xl
 
                 border
@@ -356,7 +387,7 @@ function Navbar() {
                 shadow-sm
 
                 transition
-                duration-300
+                duration-200
 
                 group-hover:scale-105
 
@@ -383,20 +414,12 @@ function Navbar() {
             </div>
 
 
-            {/* Brand */}
-
-            <div
-              className="
-                hidden
-                min-w-0
-                sm:block
-              "
-            >
+            <div className="hidden min-w-0 sm:block">
 
               <p
                 className="
                   truncate
-                  text-base
+                  text-[16px]
                   font-bold
                   leading-tight
                   tracking-tight
@@ -414,7 +437,6 @@ function Navbar() {
               <p
                 className="
                   hidden
-                  truncate
                   text-[9px]
                   font-medium
                   uppercase
@@ -435,19 +457,21 @@ function Navbar() {
           {/* ===================================================
               DESKTOP NAVIGATION
 
-              Only visible at 1024px+
+              1024px+
           =================================================== */}
 
           <nav
             className="
               hidden
-              min-w-0
+
+              flex-1
+
               items-center
               justify-center
-              gap-0.5
+
+              gap-1
 
               lg:flex
-              lg:gap-1
             "
           >
 
@@ -462,21 +486,16 @@ function Navbar() {
                   className={`
                     whitespace-nowrap
 
-                    rounded-lg
+                    rounded-xl
 
-                    px-2.5
-                    py-2
+                    px-3
+                    py-2.5
 
-                    text-[13px]
+                    text-sm
                     font-medium
 
                     transition-all
                     duration-200
-
-                    lg:rounded-xl
-                    lg:px-3
-                    lg:py-2.5
-                    lg:text-sm
 
                     ${
                       active
@@ -516,28 +535,24 @@ function Navbar() {
           <div
             className="
               flex
-              min-w-0
               shrink-0
               items-center
               justify-end
-
               gap-1.5
-
               sm:gap-2
             "
           >
 
             {/* =================================================
-                DESKTOP THEME TOGGLE
-
-                Hidden below 1024px
+                DESKTOP THEME
             ================================================= */}
 
             <div
               className="
                 hidden
                 shrink-0
-                lg:block
+                lg:flex
+                lg:items-center
               "
             >
               <ThemeToggle />
@@ -553,15 +568,16 @@ function Navbar() {
                 to="/login"
                 className="
                   hidden
+
                   shrink-0
                   items-center
-                  gap-1.5
+                  gap-2
 
                   rounded-xl
 
                   bg-slate-950
 
-                  px-3
+                  px-4
                   py-2.5
 
                   text-sm
@@ -579,17 +595,12 @@ function Navbar() {
                   dark:text-slate-950
 
                   lg:flex
-
-                  lg:gap-2
-                  lg:px-4
                 "
               >
 
                 <LogIn size={16} />
 
-                <span>
-                  Login
-                </span>
+                Login
 
               </Link>
             )}
@@ -603,12 +614,10 @@ function Navbar() {
               <div
                 className="
                   hidden
-                  min-w-0
                   items-center
-                  gap-1.5
+                  gap-2
 
                   lg:flex
-                  lg:gap-2
                 "
               >
 
@@ -629,7 +638,7 @@ function Navbar() {
 
                     bg-white
 
-                    px-2
+                    px-3
                     py-2
 
                     transition
@@ -640,8 +649,6 @@ function Navbar() {
                     dark:border-slate-700
                     dark:bg-slate-900
                     dark:hover:border-slate-600
-
-                    lg:px-3
                   "
                 >
 
@@ -650,7 +657,6 @@ function Navbar() {
                       flex
                       h-7
                       w-7
-                      shrink-0
                       items-center
                       justify-center
 
@@ -722,8 +728,7 @@ function Navbar() {
                 <div
                   className="
                     hidden
-                    min-w-0
-                    max-w-[170px]
+                    max-w-[180px]
                     items-center
                     gap-2
 
@@ -734,7 +739,7 @@ function Navbar() {
 
                     bg-slate-50
 
-                    px-2.5
+                    px-3
                     py-2
 
                     xl:flex
@@ -765,12 +770,9 @@ function Navbar() {
                     <User size={14} />
                   </div>
 
-
                   <span
                     className="
-                      min-w-0
                       truncate
-
                       text-xs
                       font-semibold
 
@@ -833,22 +835,22 @@ function Navbar() {
             {/* =================================================
                 TABLET + MOBILE HAMBURGER
 
-                Visible below 1024px
+                < 1024px
             ================================================= */}
 
             <button
               type="button"
               onClick={() =>
-                setMobileMenuOpen(
-                  (prev) => !prev
+                setMenuOpen(
+                  (previous) => !previous
                 )
               }
               aria-label={
-                mobileMenuOpen
+                menuOpen
                   ? "Close menu"
                   : "Open menu"
               }
-              aria-expanded={mobileMenuOpen}
+              aria-expanded={menuOpen}
               className="
                 flex
                 h-10
@@ -884,7 +886,7 @@ function Navbar() {
               "
             >
 
-              {mobileMenuOpen ? (
+              {menuOpen ? (
                 <X size={20} />
               ) : (
                 <Menu size={20} />
@@ -898,60 +900,32 @@ function Navbar() {
 
 
         {/* =====================================================
-            TABLET + MOBILE MENU
-
-            Visible below 1024px
+            TABLET + MOBILE DROPDOWN
         ===================================================== */}
 
         <div
           className={`
-            relative
-            z-40
+            grid
+
+            transition-[grid-template-rows,opacity]
+            duration-300
+            ease-out
+
             lg:hidden
 
             ${
-              mobileMenuOpen
-                ? "visible"
-                : "invisible"
+              menuOpen
+                ? "grid-rows-[1fr] opacity-100"
+                : "grid-rows-[0fr] opacity-0"
             }
           `}
         >
 
-          <div
-            className={`
-              absolute
-              left-0
-              right-0
-              top-2
-
-              origin-top
-
-              transition-all
-              duration-200
-              ease-out
-
-              ${
-                mobileMenuOpen
-                  ? `
-                    translate-y-0
-                    scale-100
-                    opacity-100
-                  `
-                  : `
-                    pointer-events-none
-                    -translate-y-2
-                    scale-[0.98]
-                    opacity-0
-                  `
-              }
-            `}
-          >
+          <div className="min-h-0 overflow-hidden">
 
             <div
               className="
-                max-h-[calc(100vh-90px)]
-
-                overflow-y-auto
+                mt-2
 
                 rounded-2xl
 
@@ -962,18 +936,18 @@ function Navbar() {
 
                 p-2
 
-                shadow-[0_20px_50px_rgba(15,23,42,0.14)]
-
-                backdrop-blur-xl
+                shadow-[0_18px_45px_rgba(15,23,42,0.12)]
 
                 dark:border-slate-800
                 dark:bg-slate-950
-                dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)]
+                dark:shadow-[0_18px_45px_rgba(0,0,0,0.35)]
               "
             >
 
               {/* =================================================
-                  THEME
+                  THEME TOGGLE
+
+                  ALWAYS VISIBLE ON PHONE + TABLET
               ================================================= */}
 
               <div
@@ -981,6 +955,7 @@ function Navbar() {
                   mb-2
 
                   flex
+                  min-h-[58px]
                   items-center
                   justify-between
 
@@ -999,7 +974,7 @@ function Navbar() {
                 "
               >
 
-                <div>
+                <div className="min-w-0">
 
                   <p
                     className="
@@ -1026,13 +1001,27 @@ function Navbar() {
                 </div>
 
 
-                <ThemeToggle />
+                {/* IMPORTANT:
+                    ThemeToggle must NOT have
+                    hidden/sm:hidden/md:hidden
+                */}
+
+                <div
+                  className="
+                    flex
+                    shrink-0
+                    items-center
+                    justify-center
+                  "
+                >
+                  <ThemeToggle />
+                </div>
 
               </div>
 
 
               {/* =================================================
-                  MOBILE / TABLET NAVIGATION
+                  NAVIGATION
               ================================================= */}
 
               <nav className="space-y-1">
@@ -1057,7 +1046,8 @@ function Navbar() {
                         px-3
                         py-3
 
-                        transition
+                        transition-colors
+                        duration-200
 
                         ${
                           active
@@ -1075,7 +1065,6 @@ function Navbar() {
                               hover:text-slate-950
 
                               dark:text-slate-300
-
                               dark:hover:bg-slate-900
                               dark:hover:text-white
                             `
@@ -1139,6 +1128,7 @@ function Navbar() {
                       <ChevronRight
                         size={16}
                         className="
+                          shrink-0
                           text-slate-400
                         "
                       />
@@ -1187,8 +1177,6 @@ function Navbar() {
                       text-sm
                       font-semibold
                       text-white
-
-                      shadow-sm
 
                       transition
 
@@ -1264,9 +1252,7 @@ function Navbar() {
                         dark:bg-slate-800
                       "
                     >
-
                       <User size={17} />
-
                     </div>
 
 
@@ -1288,7 +1274,6 @@ function Navbar() {
                       <p
                         className="
                           truncate
-
                           text-sm
                           font-semibold
 
@@ -1469,7 +1454,6 @@ function Navbar() {
     </header>
   );
 }
-
 
 export default Navbar;
 
