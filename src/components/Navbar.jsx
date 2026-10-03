@@ -31,7 +31,7 @@ import logoDark from "../assets/logo-dark.png";
 
 
 /* =========================================================
-   THEME
+   THEME DETECTION
 ========================================================= */
 
 function getCurrentTheme() {
@@ -103,7 +103,7 @@ function Navbar() {
 
   const location = useLocation();
 
-  const menuRef = useRef(null);
+  const navbarRef = useRef(null);
 
   const [currentTheme, setCurrentTheme] =
     useState(getCurrentTheme);
@@ -168,7 +168,7 @@ function Navbar() {
 
 
   /* =========================================================
-     CLOSE ON ROUTE CHANGE
+     CLOSE MENU WHEN ROUTE CHANGES
   ========================================================= */
 
   useEffect(() => {
@@ -177,11 +177,11 @@ function Navbar() {
 
 
   /* =========================================================
-     ESC
+     CLOSE MENU WITH ESC
   ========================================================= */
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    const handleEscape = (event) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
       }
@@ -189,27 +189,27 @@ function Navbar() {
 
     document.addEventListener(
       "keydown",
-      handleKeyDown
+      handleEscape
     );
 
     return () => {
       document.removeEventListener(
         "keydown",
-        handleKeyDown
+        handleEscape
       );
     };
   }, []);
 
 
   /* =========================================================
-     OUTSIDE CLICK
+     CLOSE ON OUTSIDE CLICK
   ========================================================= */
 
   useEffect(() => {
-    const handleClick = (event) => {
+    const handleOutsideClick = (event) => {
       if (
-        menuRef.current &&
-        !menuRef.current.contains(event.target)
+        navbarRef.current &&
+        !navbarRef.current.contains(event.target)
       ) {
         setMenuOpen(false);
       }
@@ -218,14 +218,14 @@ function Navbar() {
     if (menuOpen) {
       document.addEventListener(
         "mousedown",
-        handleClick
+        handleOutsideClick
       );
     }
 
     return () => {
       document.removeEventListener(
         "mousedown",
-        handleClick
+        handleOutsideClick
       );
     };
   }, [menuOpen]);
@@ -283,21 +283,20 @@ function Navbar() {
 
   return (
     <header
-      ref={menuRef}
+      ref={navbarRef}
       className="
         sticky
         top-0
         z-50
-
         w-full
 
-        px-2.5
-        pt-2.5
+        px-2
+        pt-2
 
-        sm:px-4
+        sm:px-3
         sm:pt-3
 
-        lg:px-6
+        lg:px-5
       "
     >
 
@@ -310,7 +309,7 @@ function Navbar() {
       >
 
         {/* =====================================================
-            NAVBAR
+            MAIN NAVBAR
         ===================================================== */}
 
         <div
@@ -319,10 +318,9 @@ function Navbar() {
             z-50
 
             flex
-            min-h-[64px]
+            min-h-[62px]
             w-full
             items-center
-            justify-between
 
             gap-2
 
@@ -344,6 +342,7 @@ function Navbar() {
             dark:bg-slate-950/95
             dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)]
 
+            sm:min-h-[66px]
             sm:px-3
 
             lg:min-h-[68px]
@@ -363,7 +362,7 @@ function Navbar() {
               min-w-0
               shrink-0
               items-center
-              gap-2.5
+              gap-2
             "
           >
 
@@ -373,8 +372,10 @@ function Navbar() {
                 h-10
                 w-10
                 shrink-0
+
                 items-center
                 justify-center
+
                 overflow-hidden
 
                 rounded-xl
@@ -386,7 +387,7 @@ function Navbar() {
 
                 shadow-sm
 
-                transition
+                transition-transform
                 duration-200
 
                 group-hover:scale-105
@@ -437,10 +438,12 @@ function Navbar() {
               <p
                 className="
                   hidden
+
                   text-[9px]
                   font-medium
                   uppercase
                   tracking-[0.16em]
+
                   text-slate-400
 
                   lg:block
@@ -455,9 +458,9 @@ function Navbar() {
 
 
           {/* ===================================================
-              DESKTOP NAVIGATION
+              DESKTOP NAV
 
-              1024px+
+              ONLY 1024px+
           =================================================== */}
 
           <nav
@@ -465,10 +468,8 @@ function Navbar() {
               hidden
 
               flex-1
-
               items-center
               justify-center
-
               gap-1
 
               lg:flex
@@ -534,25 +535,32 @@ function Navbar() {
 
           <div
             className="
+              ml-auto
               flex
               shrink-0
               items-center
               justify-end
               gap-1.5
+
               sm:gap-2
             "
           >
 
             {/* =================================================
                 DESKTOP THEME
+
+                IMPORTANT:
+                No hidden inside ThemeToggle
             ================================================= */}
 
             <div
               className="
                 hidden
                 shrink-0
-                lg:flex
-                lg:items-center
+                items-center
+                justify-center
+
+                lg:!flex
               "
             >
               <ThemeToggle />
@@ -614,6 +622,7 @@ function Navbar() {
               <div
                 className="
                   hidden
+
                   items-center
                   gap-2
 
@@ -657,6 +666,8 @@ function Navbar() {
                       flex
                       h-7
                       w-7
+                      shrink-0
+
                       items-center
                       justify-center
 
@@ -667,7 +678,6 @@ function Navbar() {
                       dark:bg-slate-800
                     "
                   >
-
                     <Sparkles
                       size={14}
                       className="
@@ -675,7 +685,6 @@ function Navbar() {
                         dark:text-slate-300
                       "
                     />
-
                   </div>
 
 
@@ -728,7 +737,9 @@ function Navbar() {
                 <div
                   className="
                     hidden
+
                     max-w-[180px]
+
                     items-center
                     gap-2
 
@@ -755,6 +766,7 @@ function Navbar() {
                       h-7
                       w-7
                       shrink-0
+
                       items-center
                       justify-center
 
@@ -799,6 +811,7 @@ function Navbar() {
                     h-10
                     w-10
                     shrink-0
+
                     items-center
                     justify-center
 
@@ -823,9 +836,7 @@ function Navbar() {
                     dark:hover:text-red-400
                   "
                 >
-
                   <LogOut size={16} />
-
                 </button>
 
               </div>
@@ -833,7 +844,7 @@ function Navbar() {
 
 
             {/* =================================================
-                TABLET + MOBILE HAMBURGER
+                TABLET + PHONE HAMBURGER
 
                 < 1024px
             ================================================= */}
@@ -852,10 +863,12 @@ function Navbar() {
               }
               aria-expanded={menuOpen}
               className="
-                flex
+                !flex
+
                 h-10
                 w-10
                 shrink-0
+
                 items-center
                 justify-center
 
@@ -900,12 +913,16 @@ function Navbar() {
 
 
         {/* =====================================================
-            TABLET + MOBILE DROPDOWN
+            MOBILE / TABLET MENU
+
+            SMOOTH TOP → BOTTOM
         ===================================================== */}
 
         <div
           className={`
             grid
+
+            overflow-hidden
 
             transition-[grid-template-rows,opacity]
             duration-300
@@ -945,17 +962,23 @@ function Navbar() {
             >
 
               {/* =================================================
-                  THEME TOGGLE
+                  THEME
 
-                  ALWAYS VISIBLE ON PHONE + TABLET
+                  FORCE VISIBLE
               ================================================= */}
 
               <div
                 className="
                   mb-2
 
-                  flex
+                  !flex
+                  !visible
+                  !opacity-100
+
                   min-h-[58px]
+
+                  shrink-0
+
                   items-center
                   justify-between
 
@@ -1001,15 +1024,20 @@ function Navbar() {
                 </div>
 
 
-                {/* IMPORTANT:
-                    ThemeToggle must NOT have
-                    hidden/sm:hidden/md:hidden
-                */}
+                {/* =================================================
+                    THEME TOGGLE WRAPPER
+
+                    NEVER HIDDEN
+                ================================================= */}
 
                 <div
                   className="
-                    flex
+                    !flex
+                    !visible
+                    !opacity-100
+
                     shrink-0
+
                     items-center
                     justify-center
                   "
@@ -1086,6 +1114,7 @@ function Navbar() {
                             h-9
                             w-9
                             shrink-0
+
                             items-center
                             justify-center
 
@@ -1111,7 +1140,6 @@ function Navbar() {
                           <Icon size={17} />
 
                         </div>
-
 
                         <span
                           className="
@@ -1148,10 +1176,8 @@ function Navbar() {
                 <div
                   className="
                     mt-2
-
                     border-t
                     border-slate-200
-
                     pt-2
 
                     dark:border-slate-800
@@ -1163,6 +1189,7 @@ function Navbar() {
                     className="
                       flex
                       w-full
+
                       items-center
                       justify-center
                       gap-2
@@ -1240,6 +1267,7 @@ function Navbar() {
                         h-10
                         w-10
                         shrink-0
+
                         items-center
                         justify-center
 
@@ -1332,6 +1360,7 @@ function Navbar() {
                           h-10
                           w-10
                           shrink-0
+
                           items-center
                           justify-center
 
@@ -1386,9 +1415,7 @@ function Navbar() {
 
                     <ChevronRight
                       size={17}
-                      className="
-                        text-slate-400
-                      "
+                      className="text-slate-400"
                     />
 
                   </Link>
@@ -1402,6 +1429,7 @@ function Navbar() {
                     className="
                       flex
                       w-full
+
                       items-center
                       justify-center
                       gap-2
@@ -1456,4 +1484,3 @@ function Navbar() {
 }
 
 export default Navbar;
-
