@@ -20,7 +20,7 @@ export default function ThemeToggle() {
         flex
         shrink-0
         items-center
-        gap-1
+        gap-0.5
 
         rounded-xl
 
@@ -36,8 +36,6 @@ export default function ThemeToggle() {
       "
     >
 
-      {/* SYSTEM */}
-
       <ThemeButton
         active={theme === "system"}
         onClick={() => setTheme("system")}
@@ -45,18 +43,12 @@ export default function ThemeToggle() {
         title="System"
       />
 
-
-      {/* LIGHT */}
-
       <ThemeButton
         active={theme === "light"}
         onClick={() => setTheme("light")}
         icon={<Sun size={15} />}
         title="Light"
       />
-
-
-      {/* DARK */}
 
       <ThemeButton
         active={theme === "dark"}
@@ -69,10 +61,6 @@ export default function ThemeToggle() {
   );
 }
 
-
-/* =========================================================
-   THEME BUTTON
-========================================================= */
 
 function ThemeButton({
   active,
@@ -90,6 +78,7 @@ function ThemeButton({
 
       className={`
         flex
+
         h-8
         w-8
         shrink-0

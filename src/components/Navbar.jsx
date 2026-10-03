@@ -31,47 +31,6 @@ import logoDark from "../assets/logo-dark.png";
 
 
 /* =========================================================
-   THEME
-========================================================= */
-
-function getCurrentTheme() {
-  const root = document.documentElement;
-
-  const theme =
-    root.dataset.theme ||
-    document.body?.dataset.theme;
-
-  if (theme === "dark") {
-    return "dark";
-  }
-
-  if (theme === "light") {
-    return "light";
-  }
-
-  if (
-    root.classList.contains("dark") ||
-    document.body?.classList.contains("dark")
-  ) {
-    return "dark";
-  }
-
-  if (
-    root.classList.contains("light") ||
-    document.body?.classList.contains("light")
-  ) {
-    return "light";
-  }
-
-  return window.matchMedia(
-    "(prefers-color-scheme: dark)"
-  ).matches
-    ? "dark"
-    : "light";
-}
-
-
-/* =========================================================
    NAVIGATION
 ========================================================= */
 
@@ -110,22 +69,38 @@ function Navbar() {
 
   const navbarRef = useRef(null);
 
-  const [currentTheme, setCurrentTheme] =
-    useState(getCurrentTheme);
-
-  const [menuOpen, setMenuOpen] =
+  const [mobileMenuOpen, setMobileMenuOpen] =
     useState(false);
+
+  const [isDark, setIsDark] =
+    useState(() => {
+      if (typeof window === "undefined") {
+        return false;
+      }
+
+      const root =
+        document.documentElement;
+
+      return (
+        root.classList.contains("dark") ||
+        root.dataset.theme === "dark"
+      );
+    });
 
 
   /* =========================================================
-     WATCH THEME
+     WATCH DARK MODE
   ========================================================= */
 
   useEffect(() => {
-    const root = document.documentElement;
-
     const updateTheme = () => {
-      setCurrentTheme(getCurrentTheme());
+      const root =
+        document.documentElement;
+
+      setIsDark(
+        root.classList.contains("dark") ||
+        root.dataset.theme === "dark"
+      );
     };
 
     updateTheme();
@@ -133,41 +108,32 @@ function Navbar() {
     const observer =
       new MutationObserver(updateTheme);
 
-    observer.observe(root, {
-      attributes: true,
-      attributeFilter: [
-        "class",
-        "data-theme",
-      ],
-    });
-
-    if (document.body) {
-      observer.observe(document.body, {
+    observer.observe(
+      document.documentElement,
+      {
         attributes: true,
         attributeFilter: [
           "class",
           "data-theme",
         ],
-      });
-    }
-
-    const systemTheme =
-      window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      );
-
-    systemTheme.addEventListener(
-      "change",
-      updateTheme
+      }
     );
+
+    if (document.body) {
+      observer.observe(
+        document.body,
+        {
+          attributes: true,
+          attributeFilter: [
+            "class",
+            "data-theme",
+          ],
+        }
+      );
+    }
 
     return () => {
       observer.disconnect();
-
-      systemTheme.removeEventListener(
-        "change",
-        updateTheme
-      );
     };
   }, []);
 
@@ -177,33 +143,54 @@ function Navbar() {
   ========================================================= */
 
   useEffect(() => {
-    setMenuOpen(false);
+    setMobileMenuOpen(false);
   }, [location.pathname]);
 
 
   /* =========================================================
-     ESC KEY
+     ESC CLOSE
   ========================================================= */
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    if (!mobileMenuOpen) {
+      return;
+    }
+
+    const handleEscape = (event) => {
       if (event.key === "Escape") {
-        setMenuOpen(false);
+        setMobileMenuOpen(false);
       }
     };
 
     document.addEventListener(
       "keydown",
-      handleKeyDown
+      handleEscape
     );
 
     return () => {
       document.removeEventListener(
         "keydown",
-        handleKeyDown
+        handleEscape
       );
     };
-  }, []);
+  }, [mobileMenuOpen]);
+
+
+  /* =========================================================
+     BODY SCROLL LOCK
+  ========================================================= */
+
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
 
 
   /* =========================================================
@@ -211,7 +198,7 @@ function Navbar() {
   ========================================================= */
 
   useEffect(() => {
-    if (!menuOpen) {
+    if (!mobileMenuOpen) {
       return;
     }
 
@@ -222,7 +209,7 @@ function Navbar() {
           event.target
         )
       ) {
-        setMenuOpen(false);
+        setMobileMenuOpen(false);
       }
     };
 
@@ -237,24 +224,7 @@ function Navbar() {
         handleOutsideClick
       );
     };
-  }, [menuOpen]);
-
-
-  /* =========================================================
-     BODY SCROLL LOCK
-  ========================================================= */
-
-  useEffect(() => {
-    if (menuOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [menuOpen]);
+  }, [mobileMenuOpen]);
 
 
   /* =========================================================
@@ -262,8 +232,22 @@ function Navbar() {
   ========================================================= */
 
   async function handleLogout() {
-    setMenuOpen(false);
+    setMobileMenuOpen(false);
+
     await logout();
+  }
+
+
+  /* =========================================================
+     ACTIVE ROUTE
+  ========================================================= */
+
+  function isActive(path) {
+    if (path === "/") {
+      return location.pathname === "/";
+    }
+
+    return location.pathname.startsWith(path);
   }
 
 
@@ -271,23 +255,9 @@ function Navbar() {
      LOGO
   ========================================================= */
 
-  const currentLogo =
-    currentTheme === "dark"
-      ? logoDark
-      : logoLight;
-
-
-  /* =========================================================
-     ACTIVE ROUTE
-  ========================================================= */
-
-  const isActive = (path) => {
-    if (path === "/") {
-      return location.pathname === "/";
-    }
-
-    return location.pathname.startsWith(path);
-  };
+  const currentLogo = isDark
+    ? logoDark
+    : logoLight;
 
 
   return (
@@ -317,9 +287,9 @@ function Navbar() {
         "
       >
 
-        {/* =====================================================
+        {/* ===================================================
             MAIN NAVBAR
-        ===================================================== */}
+        =================================================== */}
 
         <div
           className="
@@ -329,9 +299,7 @@ function Navbar() {
             flex
             min-h-[62px]
             w-full
-
             items-center
-            gap-2
 
             rounded-2xl
 
@@ -359,9 +327,9 @@ function Navbar() {
           "
         >
 
-          {/* ===================================================
+          {/* =================================================
               LOGO
-          =================================================== */}
+          ================================================= */}
 
           <Link
             to="/"
@@ -371,7 +339,7 @@ function Navbar() {
               min-w-0
               shrink-0
               items-center
-              gap-2
+              gap-2.5
             "
           >
 
@@ -410,7 +378,6 @@ function Navbar() {
             >
 
               <img
-                key={currentTheme}
                 src={currentLogo}
                 alt="Everything"
                 className="
@@ -435,6 +402,7 @@ function Navbar() {
               <p
                 className="
                   truncate
+
                   text-[16px]
                   font-bold
                   leading-tight
@@ -472,10 +440,10 @@ function Navbar() {
           </Link>
 
 
-          {/* ===================================================
+          {/* =================================================
               DESKTOP NAVIGATION
-              1024px+
-          =================================================== */}
+              LG AND ABOVE
+          ================================================= */}
 
           <nav
             className="
@@ -484,6 +452,7 @@ function Navbar() {
               flex-1
               items-center
               justify-center
+
               gap-1
 
               lg:flex
@@ -503,7 +472,7 @@ function Navbar() {
 
                     rounded-xl
 
-                    px-3
+                    px-3.5
                     py-2.5
 
                     text-sm
@@ -543,40 +512,32 @@ function Navbar() {
           </nav>
 
 
-          {/* ===================================================
+          {/* =================================================
               RIGHT SIDE
-          =================================================== */}
+          ================================================= */}
 
           <div
             className="
               ml-auto
-
               flex
               shrink-0
-
               items-center
-              justify-end
-
               gap-1.5
-
               sm:gap-2
             "
           >
 
             {/* =================================================
                 DESKTOP THEME
-                ONLY 1024px+
+                LG+
             ================================================= */}
 
             <div
               className="
                 hidden
-
                 shrink-0
-
                 items-center
                 justify-center
-
                 lg:flex
               "
             >
@@ -593,9 +554,7 @@ function Navbar() {
                 to="/login"
                 className="
                   hidden
-
                   shrink-0
-
                   items-center
                   gap-2
 
@@ -623,11 +582,8 @@ function Navbar() {
                   lg:flex
                 "
               >
-
                 <LogIn size={16} />
-
                 Login
-
               </Link>
             )}
 
@@ -640,10 +596,8 @@ function Navbar() {
               <div
                 className="
                   hidden
-
                   items-center
                   gap-2
-
                   lg:flex
                 "
               >
@@ -655,7 +609,6 @@ function Navbar() {
                   className="
                     flex
                     shrink-0
-
                     items-center
                     gap-2
 
@@ -697,7 +650,6 @@ function Navbar() {
                       dark:bg-slate-800
                     "
                   >
-
                     <Sparkles
                       size={14}
                       className="
@@ -705,9 +657,7 @@ function Navbar() {
                         dark:text-slate-300
                       "
                     />
-
                   </div>
-
 
                   <div className="hidden xl:block">
 
@@ -728,9 +678,7 @@ function Navbar() {
                         text-sm
                         font-bold
                         leading-tight
-
                         text-slate-900
-
                         dark:text-white
                       "
                     >
@@ -758,9 +706,7 @@ function Navbar() {
                 <div
                   className="
                     hidden
-
                     max-w-[180px]
-
                     items-center
                     gap-2
 
@@ -787,16 +733,11 @@ function Navbar() {
                       h-7
                       w-7
                       shrink-0
-
                       items-center
                       justify-center
-
                       rounded-lg
-
                       bg-white
-
                       shadow-sm
-
                       dark:bg-slate-800
                     "
                   >
@@ -806,12 +747,9 @@ function Navbar() {
                   <span
                     className="
                       truncate
-
                       text-xs
                       font-semibold
-
                       text-slate-700
-
                       dark:text-slate-200
                     "
                   >
@@ -828,6 +766,7 @@ function Navbar() {
                   onClick={handleLogout}
                   aria-label="Logout"
                   title="Logout"
+
                   className="
                     flex
                     h-10
@@ -866,23 +805,29 @@ function Navbar() {
 
 
             {/* =================================================
-                TABLET + PHONE HAMBURGER
-                BELOW 1024px
+                HAMBURGER
+                TABLET + PHONE
             ================================================= */}
 
             <button
               type="button"
+
               onClick={() =>
-                setMenuOpen(
+                setMobileMenuOpen(
                   (previous) => !previous
                 )
               }
+
               aria-label={
-                menuOpen
+                mobileMenuOpen
                   ? "Close menu"
                   : "Open menu"
               }
-              aria-expanded={menuOpen}
+
+              aria-expanded={
+                mobileMenuOpen
+              }
+
               className="
                 flex
 
@@ -920,7 +865,7 @@ function Navbar() {
               "
             >
 
-              {menuOpen ? (
+              {mobileMenuOpen ? (
                 <X size={20} />
               ) : (
                 <Menu size={20} />
@@ -934,31 +879,35 @@ function Navbar() {
 
 
         {/* =====================================================
-            TABLET + PHONE MENU
-            SMOOTH TOP TO BOTTOM
+            TABLET + MOBILE MENU
+
+            LG-এর নিচে শুধু এখানে থাকবে
         ===================================================== */}
 
         <div
           className={`
-            overflow-hidden
-
             lg:hidden
 
-            transition-[max-height,opacity]
+            overflow-hidden
+
+            transition-[max-height,opacity,transform]
             duration-300
-            ease-in-out
+
+            ease-[cubic-bezier(0.22,1,0.36,1)]
 
             ${
-              menuOpen
+              mobileMenuOpen
                 ? `
                   visible
-                  max-h-[1000px]
+                  max-h-[1200px]
+                  translate-y-0
                   opacity-100
                 `
                 : `
                   invisible
                   pointer-events-none
                   max-h-0
+                  -translate-y-2
                   opacity-0
                 `
             }
@@ -969,47 +918,52 @@ function Navbar() {
             className="
               mt-2
 
+              overflow-hidden
+
               rounded-2xl
 
               border
               border-slate-200/80
 
-              bg-white
+              bg-white/95
 
               p-2
 
-              shadow-[0_18px_45px_rgba(15,23,42,0.12)]
+              shadow-[0_20px_50px_rgba(15,23,42,0.10)]
+
+              backdrop-blur-xl
 
               dark:border-slate-800
-              dark:bg-slate-950
-
-              dark:shadow-[0_18px_45px_rgba(0,0,0,0.35)]
+              dark:bg-slate-950/95
+              dark:shadow-[0_20px_50px_rgba(0,0,0,0.30)]
             "
           >
 
             {/* =================================================
-                MOBILE/TABLET THEME
-                ALWAYS VISIBLE WHEN MENU OPEN
+                THEME
             ================================================= */}
 
             <div
               className="
                 flex
-                min-h-[58px]
+
+                min-h-[64px]
                 w-full
 
                 items-center
                 justify-between
 
+                gap-3
+
                 rounded-xl
 
                 border
-                border-slate-200
+                border-slate-200/80
 
                 bg-slate-50
 
                 px-3
-                py-2.5
+                py-2
 
                 dark:border-slate-800
                 dark:bg-slate-900
@@ -1033,31 +987,41 @@ function Navbar() {
 
                 <p
                   className="
+                    mt-0.5
+
                     text-[11px]
+
                     text-slate-400
                   "
                 >
-                  Change theme
+                  Choose your preferred theme
                 </p>
 
               </div>
 
 
-              {/* THEME BUTTON */}
+              {/* THEME CONTROL */}
 
               <div
                 className="
                   flex
-
-                  h-10
-                  w-10
                   shrink-0
-
                   items-center
                   justify-center
 
-                  opacity-100
-                  visible
+                  rounded-xl
+
+                  bg-white
+
+                  p-0.5
+
+                  shadow-sm
+
+                  ring-1
+                  ring-slate-200/70
+
+                  dark:bg-slate-950
+                  dark:ring-slate-700/70
                 "
               >
                 <ThemeToggle />
@@ -1082,8 +1046,11 @@ function Navbar() {
                   <Link
                     key={item.path}
                     to={item.path}
+
                     className={`
                       flex
+
+                      min-h-[50px]
 
                       items-center
                       justify-between
@@ -1091,9 +1058,8 @@ function Navbar() {
                       rounded-xl
 
                       px-3
-                      py-3
 
-                      transition-colors
+                      transition-all
                       duration-200
 
                       ${
@@ -1130,7 +1096,6 @@ function Navbar() {
                       <div
                         className={`
                           flex
-
                           h-9
                           w-9
                           shrink-0
@@ -1156,11 +1121,8 @@ function Navbar() {
                           }
                         `}
                       >
-
                         <Icon size={17} />
-
                       </div>
-
 
                       <span
                         className="
@@ -1172,7 +1134,6 @@ function Navbar() {
                       </span>
 
                     </div>
-
 
                     <ChevronRight
                       size={16}
@@ -1209,8 +1170,11 @@ function Navbar() {
 
                 <Link
                   to="/login"
+
                   className="
                     flex
+
+                    min-h-[50px]
                     w-full
 
                     items-center
@@ -1222,7 +1186,6 @@ function Navbar() {
                     bg-slate-950
 
                     px-4
-                    py-3
 
                     text-sm
                     font-semibold
@@ -1238,11 +1201,8 @@ function Navbar() {
                     dark:text-slate-950
                   "
                 >
-
                   <LogIn size={17} />
-
                   Login
-
                 </Link>
 
               </div>
@@ -1269,7 +1229,7 @@ function Navbar() {
                 "
               >
 
-                {/* USER */}
+                {/* USER CARD */}
 
                 <div
                   className="
@@ -1310,7 +1270,6 @@ function Navbar() {
                     <User size={17} />
                   </div>
 
-
                   <div className="min-w-0">
 
                     <p
@@ -1319,7 +1278,6 @@ function Navbar() {
                         font-semibold
                         uppercase
                         tracking-wider
-
                         text-slate-400
                       "
                     >
@@ -1346,12 +1304,15 @@ function Navbar() {
                 </div>
 
 
-                {/* CREDITS */}
+                {/* CREDIT */}
 
                 <Link
                   to="/recharge"
+
                   className="
                     flex
+
+                    min-h-[62px]
 
                     items-center
                     justify-between
@@ -1363,7 +1324,7 @@ function Navbar() {
 
                     bg-white
 
-                    p-3
+                    px-3
 
                     transition
 
@@ -1401,7 +1362,6 @@ function Navbar() {
                         dark:bg-slate-800
                       "
                     >
-
                       <Sparkles
                         size={17}
                         className="
@@ -1409,9 +1369,7 @@ function Navbar() {
                           dark:text-slate-300
                         "
                       />
-
                     </div>
-
 
                     <div>
 
@@ -1442,13 +1400,9 @@ function Navbar() {
 
                   </div>
 
-
                   <ChevronRight
                     size={17}
-                    className="
-                      shrink-0
-                      text-slate-400
-                    "
+                    className="text-slate-400"
                   />
 
                 </Link>
@@ -1459,8 +1413,11 @@ function Navbar() {
                 <button
                   type="button"
                   onClick={handleLogout}
+
                   className="
                     flex
+
+                    min-h-[50px]
                     w-full
 
                     items-center
@@ -1471,9 +1428,6 @@ function Navbar() {
 
                     border
                     border-slate-200
-
-                    px-4
-                    py-3
 
                     text-sm
                     font-semibold
@@ -1494,11 +1448,8 @@ function Navbar() {
                     dark:hover:text-red-400
                   "
                 >
-
                   <LogOut size={17} />
-
                   Logout
-
                 </button>
 
               </div>
