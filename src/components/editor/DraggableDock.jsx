@@ -3,30 +3,34 @@ import { useEffect, useRef, useState } from "react";
 /*
   DraggableDock
 
-  Wrap a dock/panel to make it draggable anywhere on the screen:
-
-    <DraggableDock>
-      <CropDock ... />
-    </DraggableDock>
-
-  - Drag by grabbing any empty part of the dock. Buttons, inputs, sliders,
-    selects and labels keep working normally.
-  - Double-click an empty part of the dock to snap it back to its place.
-  - The dock is kept inside the browser window.
-
-  How it works: the wrapper is a transparent `fixed inset-0` layer, which is
-  the same containing block the dock had before (the editor's fixed overlay),
-  so `absolute bottom-3 left-[40.6%]` resolves to exactly the same place.
-  Moving the layer with `transform` moves the dock without touching the dock's
-  own classes, so it works with any Tailwind version and any `-translate-*`
-  centering.
+  Features:
+  - Moves only the actual dock, NOT the whole website.
+  - Drag from empty area.
+  - Buttons, inputs, selects, sliders, links and labels work normally.
+  - Mouse + touch + pen supported.
+  - Dock stays inside viewport.
+  - Double-click / double-tap empty area resets position.
+  - Keeps the dock's original Tailwind positioning intact.
+  - Shows grab hand normally and grabbing hand while dragging.
 */
 
-// Elements that must keep their normal behaviour instead of starting a drag.
 const NO_DRAG_SELECTOR =
   'button, input, select, textarea, label, a, [role="slider"], [data-no-drag]';
 
 const EDGE = 8;
+
+/*
+  Find the element that should actually move.
+
+  A dock can mark its visible card with [data-dock-card]. Some docks use a
+  full-width positioning wrapper as their first child (ResizeDock does), and
+  moving that wrapper breaks the viewport bounds and blocks the canvas under
+  it, so the real card is preferred and the first child is the fallback.
+*/
+function findDock(layer) {
+  if (!layer) return null;
+  return layer.querySelector("[data-dock-card]") || layer.firstElementChild;
+}
 
 function clampRange(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -34,27 +38,45 @@ function clampRange(value, min, max) {
 
 function DraggableDock({ children, disabled = false }) {
   const layerRef = useRef(null);
+  const dockRef = useRef(null);
   const dragRef = useRef(null);
 
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
 
-  const getDock = () => layerRef.current?.firstElementChild || null;
+  /*
+    Keep the actual dock element in sync after every render.
 
-  // The layer ignores the mouse, so the dock itself must accept it.
-  // Runs after every render because the dock mounts/unmounts with the tool.
+    The full-screen layer is only a positioning/event layer.
+    IMPORTANT:
+    We do NOT transform the full-screen layer, only the real dock card.
+    Running after every render also re-applies the saved position when a
+    dock is closed and opened again (the element is new, the offset is not).
+  */
   useEffect(() => {
-    const dock = getDock();
+    const dock = findDock(layerRef.current);
+
+    dockRef.current = dock;
+
     if (!dock) return;
 
     dock.style.pointerEvents = "auto";
 
-    if (!disabled) {
-      dock.style.cursor = dragging ? "grabbing" : "grab";
+    if (offset.x || offset.y) {
+      dock.style.transform = `translate3d(${offset.x}px, ${offset.y}px, 0)`;
+    } else {
+      dock.style.transform = "";
     }
+
+    dock.style.cursor = disabled ? "" : dragging ? "grabbing" : "grab";
+    dock.style.touchAction = disabled ? "auto" : "none";
+    dock.style.userSelect = dragging ? "none" : "";
+    dock.style.webkitUserSelect = dragging ? "none" : "";
   });
 
-  // Snap back if the window is resized, so the dock can never get lost.
+  /*
+    Reset when viewport size changes.
+  */
   useEffect(() => {
     function handleResize() {
       setOffset({ x: 0, y: 0 });
@@ -62,16 +84,24 @@ function DraggableDock({ children, disabled = false }) {
 
     window.addEventListener("resize", handleResize);
 
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
-  // Global listeners only while a drag is active.
+  /*
+    Global pointer movement.
+
+    Only active while dragging.
+  */
   useEffect(() => {
     if (!dragging) return undefined;
 
     function handleMove(event) {
       const drag = dragRef.current;
       if (!drag) return;
+
+      event.preventDefault();
 
       const dx = clampRange(
         event.clientX - drag.startX,
@@ -85,7 +115,10 @@ function DraggableDock({ children, disabled = false }) {
         drag.maxDy
       );
 
-      setOffset({ x: drag.originX + dx, y: drag.originY + dy });
+      setOffset({
+        x: drag.originX + dx,
+        y: drag.originY + dy,
+      });
     }
 
     function handleUp() {
@@ -94,9 +127,13 @@ function DraggableDock({ children, disabled = false }) {
     }
 
     const previousUserSelect = document.body.style.userSelect;
+
     document.body.style.userSelect = "none";
 
-    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointermove", handleMove, {
+      passive: false,
+    });
+
     window.addEventListener("pointerup", handleUp);
     window.addEventListener("pointercancel", handleUp);
 
@@ -109,25 +146,64 @@ function DraggableDock({ children, disabled = false }) {
     };
   }, [dragging]);
 
+  /*
+    Start dragging.
+  */
   function handlePointerDown(event) {
-    if (disabled || event.button !== 0) return;
-    if (event.target.closest?.(NO_DRAG_SELECTOR)) return;
+    if (disabled) return;
 
-    const dock = getDock();
+    /*
+      Only left mouse button.
+      Touch / pen normally use button === 0.
+    */
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    /*
+      Do not drag when clicking controls.
+    */
+    if (event.target.closest?.(NO_DRAG_SELECTOR)) {
+      return;
+    }
+
+    const dock = findDock(layerRef.current) || dockRef.current;
+
     if (!dock) return;
 
-    event.preventDefault();
-
-    // Current on-screen box (already includes the current offset).
     const rect = dock.getBoundingClientRect();
 
+    /*
+      Prevent text selection and native mobile gestures.
+    */
+    event.preventDefault();
+
+    /*
+      Capture pointer on the ACTUAL dock,
+      not on the full-screen layer.
+    */
+    try {
+      dock.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Ignore unsupported pointer capture.
+    }
+
+    /*
+      Calculate how far the dock is allowed to move.
+
+      rect already contains the current offset,
+      so we calculate the remaining movement from here.
+    */
     dragRef.current = {
       startX: event.clientX,
       startY: event.clientY,
+
       originX: offset.x,
       originY: offset.y,
+
       minDx: EDGE - rect.left,
       maxDx: window.innerWidth - EDGE - rect.right,
+
       minDy: EDGE - rect.top,
       maxDy: window.innerHeight - EDGE - rect.bottom,
     };
@@ -135,11 +211,20 @@ function DraggableDock({ children, disabled = false }) {
     setDragging(true);
   }
 
+  /*
+    Double-click / double-tap empty area = reset.
+  */
   function handleDoubleClick(event) {
     if (disabled) return;
-    if (event.target.closest?.(NO_DRAG_SELECTOR)) return;
 
-    setOffset({ x: 0, y: 0 });
+    if (event.target.closest?.(NO_DRAG_SELECTOR)) {
+      return;
+    }
+
+    setOffset({
+      x: 0,
+      y: 0,
+    });
   }
 
   return (
@@ -147,10 +232,14 @@ function DraggableDock({ children, disabled = false }) {
       ref={layerRef}
       className="pointer-events-none fixed inset-0 z-50"
       style={{
-        transform:
-          offset.x || offset.y
-            ? `translate(${offset.x}px, ${offset.y}px)`
-            : undefined,
+        /*
+          IMPORTANT:
+          No transform here.
+
+          The wrapper covers the viewport only so the dock
+          can sit above the editor. It does NOT move.
+        */
+        touchAction: "none",
       }}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}

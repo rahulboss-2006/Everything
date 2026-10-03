@@ -64,26 +64,34 @@ export default function EditorCanvas({
   return (
     <>
       {/* PREVIEW */}
-
-      <div className="relative flex min-h-[300px] w-full items-center justify-center rounded-[28px] bg-[#020618]">
+      <div
+        className="
+          relative flex h-[34dvh] min-h-[150px] w-full
+          items-center justify-center overflow-hidden
+          rounded-[18px] bg-[#020618]
+          sm:h-[48dvh] sm:min-h-[300px] sm:rounded-[28px]
+          lg:h-auto lg:min-h-[300px]
+        "
+      >
         <div
-          className="relative flex min-h-[300px] min-w-0 items-center justify-center overscroll-contain rounded-[28px] p-3"
+          className="
+            relative flex h-full min-h-0 min-w-0 w-full
+            items-center justify-center overflow-hidden
+            overscroll-contain rounded-[18px] p-1
+            sm:rounded-[28px] sm:p-3
+          "
           style={{
-            overflow: resizeMode ? "visible" : "hidden",
-
             backgroundImage: `
               linear-gradient(45deg, rgba(148,163,184,0.16) 25%, transparent 25%),
               linear-gradient(-45deg, rgba(148,163,184,0.16) 25%, transparent 25%),
               linear-gradient(45deg, transparent 75%, rgba(148,163,184,0.16) 75%),
               linear-gradient(-45deg, transparent 75%, rgba(148,163,184,0.16) 75%)
             `,
-
             backgroundSize: "24px 24px",
-
             backgroundPosition: "0 0, 0 12px, 12px -12px, -12px 0",
           }}
         >
-          <div className="relative inline-flex max-w-full flex-col items-center justify-center">
+          <div className="relative flex h-full min-h-0 min-w-0 w-full items-center justify-center">
             <div
               ref={previewRef}
               onMouseEnter={() => {
@@ -94,17 +102,23 @@ export default function EditorCanvas({
               onMouseLeave={() => {
                 setIsCropHovering(false);
               }}
-              className="relative inline-flex max-h-[60vh] max-w-full shrink-0 items-center justify-center rounded-2xl"
+              className="
+                relative flex h-full min-h-0 min-w-0 w-full
+                items-center justify-center rounded-xl
+                sm:rounded-2xl
+              "
               style={{
                 overflow: resizeMode ? "visible" : "hidden",
-
                 touchAction:
                   cropMode || objectMode || resizeMode ? "none" : "auto",
               }}
             >
               <div
                 ref={zoomAreaRef}
-                className="relative inline-block max-h-[60vh] max-w-full shrink-0"
+                className="
+                  relative flex max-h-full max-w-full
+                  shrink-0 items-center justify-center
+                "
                 style={{
                   width: resizeStageSize.width
                     ? `${resizeStageSize.width}px`
@@ -114,12 +128,13 @@ export default function EditorCanvas({
                     ? `${resizeStageSize.height}px`
                     : undefined,
 
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+
                   overflow: resizeMode ? "visible" : "hidden",
 
                   transform: resizeMode ? "none" : `scale(${zoom / 100})`,
-
                   transformOrigin: "center center",
-
                   willChange: "transform",
 
                   touchAction:
@@ -156,7 +171,8 @@ export default function EditorCanvas({
                         ? handleObjectPointerUp
                         : handleImagePointerUp
                   }
-                  className={`block max-h-[60vh] max-w-full rounded-2xl ${objectMode
+                  className={`block h-auto max-h-full max-w-full rounded-xl object-contain sm:rounded-2xl ${
+                    objectMode
                       ? "cursor-crosshair"
                       : cropMode
                         ? isCtrlDragging
@@ -165,32 +181,32 @@ export default function EditorCanvas({
                             ? "cursor-grab"
                             : "cursor-default"
                         : "cursor-grab active:cursor-grabbing"
-                    }`}
+                  }`}
                   style={{
                     touchAction: "none",
-
                     userSelect: "none",
+                    display: "block",
 
                     ...(resizeStageSize.width && resizeStageSize.height
                       ? {
-                        width: `${resizeStageSize.width}px`,
-                        height: `${resizeStageSize.height}px`,
-                        maxWidth: "none",
-                        maxHeight: "none",
-                      }
+                          width: `${resizeStageSize.width}px`,
+                          height: `${resizeStageSize.height}px`,
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                        }
                       : {}),
 
                     ...(resizeMode
                       ? {
-                        position: "absolute",
-                        inset: 0,
-                        width: "100%",
-                        height: "100%",
-                        maxWidth: "none",
-                        maxHeight: "none",
-                        opacity: 0,
-                        pointerEvents: "none",
-                      }
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          maxWidth: "none",
+                          maxHeight: "none",
+                          opacity: 0,
+                          pointerEvents: "none",
+                        }
                       : {}),
                   }}
                 />
@@ -199,7 +215,11 @@ export default function EditorCanvas({
                   <canvas
                     ref={aiObjectOverlayCanvasRef}
                     aria-hidden="true"
-                    className="pointer-events-none absolute inset-0 z-20 block h-full w-full rounded-2xl"
+                    className="
+                      pointer-events-none absolute inset-0 z-20
+                      block h-full w-full rounded-xl
+                      sm:rounded-2xl
+                    "
                     style={{
                       width: "100%",
                       height: "100%",
@@ -209,7 +229,6 @@ export default function EditorCanvas({
                 )}
 
                 {/* RND RESIZE */}
-
                 {resizeMode &&
                   resizePreviewSrc &&
                   resizeFrame.width > 0 &&
@@ -228,15 +247,11 @@ export default function EditorCanvas({
                       minHeight={40}
                       maxWidth={resizeStageSize.width || undefined}
                       maxHeight={resizeStageSize.height || undefined}
-                      /*
-                       * Corner handles keep the existing aspect-ratio lock.
-                       * The 4 middle handles resize only their own side.
-                       */
                       lockAspectRatio={
                         resizeLockRatio &&
-                          !["top", "right", "bottom", "left"].includes(
-                            resizeActiveDirection
-                          )
+                        !["top", "right", "bottom", "left"].includes(
+                          resizeActiveDirection
+                        )
                           ? resizeRndRatioRef.current
                           : false
                       }
@@ -361,20 +376,15 @@ export default function EditorCanvas({
                   )}
 
                 {/* BACKGROUND LOADER */}
-
                 {removingBackground && (
                   <div className="ai-background-loader">
-
-                    {/* Animated background layers */}
                     <div className="ai-diagonal-scan" />
                     <div className="ai-light-sweep" />
                     <div className="ai-glow-layer" />
                     <div className="ai-horizontal-scan" />
 
-                    {/* Progress UI */}
                     <div className="ai-progress-content">
                       <div className="ai-progress-card">
-
                         <div className="ai-progress-title">
                           <span className="ai-progress-spinner" />
                           <span>Removing Background...</span>
@@ -399,7 +409,6 @@ export default function EditorCanvas({
                         <div className="ai-progress-text">
                           {aiProgressLabel}
                         </div>
-
                       </div>
                     </div>
                   </div>
@@ -407,21 +416,15 @@ export default function EditorCanvas({
               </div>
 
               {/* AI OBJECT REMOVE LOADER */}
-
-
               {aiObjectMode && objectApplying && (
                 <div className="ai-background-loader">
-
-                  {/* Animated background layers */}
                   <div className="ai-diagonal-scan" />
                   <div className="ai-light-sweep" />
                   <div className="ai-glow-layer" />
                   <div className="ai-horizontal-scan" />
 
-                  {/* Progress UI */}
                   <div className="ai-progress-content">
                     <div className="ai-progress-card">
-
                       <div className="ai-progress-title">
                         <span className="ai-progress-spinner" />
                         <span>AI Object Removing...</span>
@@ -446,23 +449,21 @@ export default function EditorCanvas({
                       <div className="ai-progress-text">
                         {aiProgressLabel}
                       </div>
-
                     </div>
                   </div>
                 </div>
               )}
 
-
-              { }
-
+              {/* CROP OVERLAY */}
               {cropMode && image && (
                 <div
-                  className={`absolute inset-0 z-20 overflow-visible ${isCtrlDragging
+                  className={`absolute inset-0 z-20 overflow-visible ${
+                    isCtrlDragging
                       ? "cursor-grabbing"
                       : isCtrlPressed
                         ? "cursor-grab"
                         : "cursor-default"
-                    }`}
+                  }`}
                   onPointerDown={handleCropPointerDown}
                   onPointerMove={handleCropPointerMove}
                   onPointerUp={handleCropPointerUp}
