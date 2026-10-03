@@ -29,9 +29,9 @@ import logoLight from "../assets/logo-light.png";
 import logoDark from "../assets/logo-dark.png";
 
 
-/* =========================================
-   THEME DETECTION
-========================================= */
+/* =========================================================
+   THEME
+========================================================= */
 
 function getCurrentTheme() {
   const root = document.documentElement;
@@ -65,9 +65,9 @@ function getCurrentTheme() {
 }
 
 
-/* =========================================
+/* =========================================================
    NAVIGATION
-========================================= */
+========================================================= */
 
 const navigation = [
   {
@@ -109,9 +109,9 @@ function Navbar() {
     useState(false);
 
 
-  /* =========================================
-     THEME WATCHER
-  ========================================= */
+  /* =========================================================
+     THEME WATCH
+  ========================================================= */
 
   useEffect(() => {
     const root = document.documentElement;
@@ -143,12 +143,11 @@ function Navbar() {
       });
     }
 
-    const systemTheme =
-      window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      );
+    const mediaQuery = window.matchMedia(
+      "(prefers-color-scheme: dark)"
+    );
 
-    systemTheme.addEventListener(
+    mediaQuery.addEventListener(
       "change",
       updateTheme
     );
@@ -156,7 +155,7 @@ function Navbar() {
     return () => {
       observer.disconnect();
 
-      systemTheme.removeEventListener(
+      mediaQuery.removeEventListener(
         "change",
         updateTheme
       );
@@ -164,18 +163,43 @@ function Navbar() {
   }, []);
 
 
-  /* =========================================
-     CLOSE MENU WHEN ROUTE CHANGES
-  ========================================= */
+  /* =========================================================
+     ROUTE CHANGE
+  ========================================================= */
 
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
 
-  /* =========================================
-     BODY SCROLL LOCK
-  ========================================= */
+  /* =========================================================
+     ESC KEY
+  ========================================================= */
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, []);
+
+
+  /* =========================================================
+     BODY SCROLL
+  ========================================================= */
 
   useEffect(() => {
     if (mobileMenuOpen) {
@@ -190,34 +214,9 @@ function Navbar() {
   }, [mobileMenuOpen]);
 
 
-  /* =========================================
-     CLOSE MENU WHEN RESIZING TO DESKTOP
-  ========================================= */
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768) {
-        setMobileMenuOpen(false);
-      }
-    };
-
-    window.addEventListener(
-      "resize",
-      handleResize
-    );
-
-    return () => {
-      window.removeEventListener(
-        "resize",
-        handleResize
-      );
-    };
-  }, []);
-
-
-  /* =========================================
+  /* =========================================================
      LOGOUT
-  ========================================= */
+  ========================================================= */
 
   async function handleLogout() {
     setMobileMenuOpen(false);
@@ -225,9 +224,9 @@ function Navbar() {
   }
 
 
-  /* =========================================
+  /* =========================================================
      LOGO
-  ========================================= */
+  ========================================================= */
 
   const currentLogo =
     currentTheme === "dark"
@@ -235,9 +234,9 @@ function Navbar() {
       : logoLight;
 
 
-  /* =========================================
+  /* =========================================================
      ACTIVE ROUTE
-  ========================================= */
+  ========================================================= */
 
   const isActive = (path) => {
     if (path === "/") {
@@ -254,61 +253,73 @@ function Navbar() {
         sticky
         top-0
         z-50
-        px-3
-        pt-3
+        px-2.5
+        pt-2.5
         sm:px-4
+        sm:pt-3
         lg:px-6
       "
     >
 
-      <div className="mx-auto max-w-7xl">
+      <div
+        className="
+          mx-auto
+          w-full
+          max-w-7xl
+        "
+      >
 
-        {/* =========================================
+        {/* =================================================
             MAIN NAVBAR
-        ========================================= */}
+        ================================================= */}
 
         <div
           className="
             relative
             z-50
-            flex
-            h-16
+            grid
+
+            grid-cols-[auto_1fr_auto]
+
             items-center
-            justify-between
+            gap-2
+
             rounded-2xl
             border
-            border-slate-200/70
-            bg-white/90
-            px-3
+            border-slate-200/80
+            bg-white/95
+            px-2.5
+            py-2
+
             shadow-[0_8px_30px_rgba(15,23,42,0.06)]
+
             backdrop-blur-xl
 
             dark:border-slate-800
-            dark:bg-slate-950/90
-            dark:shadow-[0_8px_30px_rgba(0,0,0,0.25)]
+            dark:bg-slate-950/95
+            dark:shadow-[0_8px_30px_rgba(0,0,0,0.28)]
 
-            sm:h-[68px]
-            sm:px-4
-            lg:px-5
+            sm:min-h-[66px]
+            sm:px-3
+
+            lg:gap-4
+            lg:px-4
           "
         >
 
-          {/* =========================================
+          {/* =================================================
               LOGO
-          ========================================= */}
+          ================================================= */}
 
           <Link
             to="/"
-            onClick={() =>
-              setMobileMenuOpen(false)
-            }
             className="
               group
               flex
               min-w-0
-              shrink-0
               items-center
-              gap-2.5
+              gap-2
+              sm:gap-2.5
             "
           >
 
@@ -353,26 +364,37 @@ function Navbar() {
             </div>
 
 
-            <div className="hidden min-w-0 sm:block">
+            {/* Brand text */}
 
-              <div
+            <div
+              className="
+                hidden
+                min-w-0
+                sm:block
+              "
+            >
+
+              <p
                 className="
                   truncate
-                  text-base
+                  text-[16px]
                   font-bold
+                  leading-tight
                   tracking-tight
                   text-slate-950
+
                   dark:text-white
 
-                  sm:text-[17px]
+                  lg:text-[17px]
                 "
               >
                 Everything
-              </div>
+              </p>
 
-              <div
+              <p
                 className="
                   hidden
+                  truncate
                   text-[9px]
                   font-medium
                   uppercase
@@ -383,26 +405,31 @@ function Navbar() {
                 "
               >
                 Everything you need
-              </div>
+              </p>
 
             </div>
 
           </Link>
 
 
-          {/* =========================================
+          {/* =================================================
               DESKTOP NAVIGATION
-          ========================================= */}
+
+              IMPORTANT:
+              Normal grid item.
+              NO absolute positioning.
+          ================================================= */}
 
           <nav
             className="
-              absolute
-              left-1/2
               hidden
-              -translate-x-1/2
+              min-w-0
               items-center
-              gap-1
+              justify-center
+              gap-0.5
+
               md:flex
+              lg:gap-1
             "
           >
 
@@ -415,15 +442,19 @@ function Navbar() {
                   key={item.path}
                   to={item.path}
                   className={`
-                    rounded-xl
-                    px-3
+                    whitespace-nowrap
+                    rounded-lg
+                    px-2.5
                     py-2
-                    text-sm
+                    text-[13px]
                     font-medium
                     transition-all
                     duration-200
-                    lg:px-4
+
+                    lg:rounded-xl
+                    lg:px-3
                     lg:py-2.5
+                    lg:text-sm
 
                     ${
                       active
@@ -455,37 +486,45 @@ function Navbar() {
           </nav>
 
 
-          {/* =========================================
+          {/* =================================================
               RIGHT SIDE
-          ========================================= */}
+          ================================================= */}
 
           <div
             className="
               flex
+              min-w-0
               shrink-0
               items-center
+              justify-end
               gap-1.5
+
               sm:gap-2
             "
           >
 
-            <ThemeToggle />
+            {/* Theme */}
+
+            <div className="shrink-0">
+              <ThemeToggle />
+            </div>
 
 
-            {/* =========================================
-                DESKTOP LOGIN
-            ========================================= */}
+            {/* =================================================
+                DESKTOP LOGGED OUT
+            ================================================= */}
 
             {!loading && !user && (
               <Link
                 to="/login"
                 className="
                   hidden
+                  shrink-0
                   items-center
-                  gap-2
+                  gap-1.5
                   rounded-xl
                   bg-slate-950
-                  px-3.5
+                  px-3
                   py-2.5
                   text-sm
                   font-semibold
@@ -499,42 +538,52 @@ function Navbar() {
                   dark:text-slate-950
 
                   md:flex
+                  lg:gap-2
                   lg:px-4
                 "
               >
+
                 <LogIn size={16} />
-                <span>Login</span>
+
+                <span>
+                  Login
+                </span>
+
               </Link>
             )}
 
 
-            {/* =========================================
-                DESKTOP USER
-            ========================================= */}
+            {/* =================================================
+                DESKTOP LOGGED IN
+            ================================================= */}
 
             {!loading && user && (
               <div
                 className="
                   hidden
+                  min-w-0
                   items-center
-                  gap-2
+                  gap-1.5
+
                   md:flex
+                  lg:gap-2
                 "
               >
 
-                {/* CREDITS */}
+                {/* Credits */}
 
                 <Link
                   to="/recharge"
                   className="
                     flex
+                    shrink-0
                     items-center
                     gap-2
                     rounded-xl
                     border
                     border-slate-200
                     bg-white
-                    px-2.5
+                    px-2
                     py-2
                     transition
                     hover:border-slate-300
@@ -573,7 +622,7 @@ function Navbar() {
 
                   <div className="hidden lg:block">
 
-                    <div
+                    <p
                       className="
                         text-[9px]
                         font-semibold
@@ -583,14 +632,15 @@ function Navbar() {
                       "
                     >
                       Balance
-                    </div>
+                    </p>
 
-                    <div
+                    <p
                       className="
                         text-sm
                         font-bold
                         leading-tight
                         text-slate-900
+
                         dark:text-white
                       "
                     >
@@ -606,29 +656,30 @@ function Navbar() {
                       >
                         credits
                       </span>
-                    </div>
+                    </p>
 
                   </div>
 
                 </Link>
 
 
-                {/* USER EMAIL */}
+                {/* User */}
 
                 <div
                   className="
                     hidden
-                    max-w-[170px]
+                    min-w-0
+                    max-w-[150px]
                     items-center
                     gap-2
                     rounded-xl
                     border
                     border-slate-200
                     bg-slate-50
-                    px-3
+                    px-2.5
                     py-2
 
-                    lg:flex
+                    xl:flex
 
                     dark:border-slate-800
                     dark:bg-slate-900
@@ -655,10 +706,12 @@ function Navbar() {
 
                   <span
                     className="
+                      min-w-0
                       truncate
                       text-xs
                       font-semibold
                       text-slate-700
+
                       dark:text-slate-200
                     "
                   >
@@ -668,7 +721,7 @@ function Navbar() {
                 </div>
 
 
-                {/* LOGOUT */}
+                {/* Logout */}
 
                 <button
                   type="button"
@@ -679,6 +732,7 @@ function Navbar() {
                     flex
                     h-10
                     w-10
+                    shrink-0
                     items-center
                     justify-center
                     rounded-xl
@@ -686,6 +740,7 @@ function Navbar() {
                     border-slate-200
                     text-slate-500
                     transition
+
                     hover:border-red-200
                     hover:bg-red-50
                     hover:text-red-600
@@ -704,9 +759,9 @@ function Navbar() {
             )}
 
 
-            {/* =========================================
+            {/* =================================================
                 MOBILE MENU BUTTON
-            ========================================= */}
+            ================================================= */}
 
             <button
               type="button"
@@ -725,6 +780,7 @@ function Navbar() {
                 flex
                 h-10
                 w-10
+                shrink-0
                 items-center
                 justify-center
                 rounded-xl
@@ -733,32 +789,23 @@ function Navbar() {
                 bg-white
                 text-slate-700
                 shadow-sm
-                transition
+                transition-all
                 duration-200
-                hover:bg-slate-50
                 active:scale-95
 
                 dark:border-slate-700
                 dark:bg-slate-900
                 dark:text-slate-200
-                dark:hover:bg-slate-800
 
                 md:hidden
               "
             >
 
-              <span
-                className="
-                  transition-transform
-                  duration-200
-                "
-              >
-                {mobileMenuOpen ? (
-                  <X size={20} />
-                ) : (
-                  <Menu size={20} />
-                )}
-              </span>
+              {mobileMenuOpen ? (
+                <X size={20} />
+              ) : (
+                <Menu size={20} />
+              )}
 
             </button>
 
@@ -767,13 +814,16 @@ function Navbar() {
         </div>
 
 
-        {/* =========================================
+        {/* =================================================
             MOBILE MENU
 
-            IMPORTANT:
-            No max-height animation.
-            It fades/slides from navbar downward.
-        ========================================= */}
+            Smooth:
+            opacity
+            scale
+            translateY
+
+            Opens directly below navbar.
+        ================================================= */}
 
         <div
           className={`
@@ -795,25 +845,23 @@ function Navbar() {
               left-0
               right-0
               top-2
-
               origin-top
-
               transition-all
-              duration-250
+              duration-200
               ease-out
 
               ${
                 mobileMenuOpen
                   ? `
                     translate-y-0
-                    scale-y-100
+                    scale-100
                     opacity-100
                   `
                   : `
-                    -translate-y-2
-                    scale-y-95
-                    opacity-0
                     pointer-events-none
+                    -translate-y-2
+                    scale-[0.98]
+                    opacity-0
                   `
               }
             `}
@@ -821,23 +869,25 @@ function Navbar() {
 
             <div
               className="
-                overflow-hidden
+                max-h-[calc(100vh-90px)]
+                overflow-y-auto
                 rounded-2xl
                 border
                 border-slate-200/80
                 bg-white
                 p-2
-                shadow-[0_18px_45px_rgba(15,23,42,0.12)]
+                shadow-[0_20px_50px_rgba(15,23,42,0.12)]
+                backdrop-blur-xl
 
                 dark:border-slate-800
                 dark:bg-slate-950
-                dark:shadow-[0_18px_45px_rgba(0,0,0,0.35)]
+                dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)]
               "
             >
 
-              {/* =========================================
-                  NAV LINKS
-              ========================================= */}
+              {/* =================================================
+                  MOBILE NAV
+              ================================================= */}
 
               <nav className="space-y-1">
 
@@ -857,8 +907,7 @@ function Navbar() {
                         rounded-xl
                         px-3
                         py-3
-                        transition-all
-                        duration-200
+                        transition
 
                         ${
                           active
@@ -944,9 +993,9 @@ function Navbar() {
               </nav>
 
 
-              {/* =========================================
-                  LOGGED OUT
-              ========================================= */}
+              {/* =================================================
+                  MOBILE AUTH
+              ================================================= */}
 
               {!loading && !user && (
                 <div
@@ -975,9 +1024,6 @@ function Navbar() {
                       text-sm
                       font-semibold
                       text-white
-                      shadow-sm
-                      transition
-                      hover:shadow-md
 
                       dark:bg-white
                       dark:text-slate-950
@@ -994,9 +1040,9 @@ function Navbar() {
               )}
 
 
-              {/* =========================================
-                  LOGGED IN
-              ========================================= */}
+              {/* =================================================
+                  MOBILE USER
+              ================================================= */}
 
               {!loading && user && (
                 <div
@@ -1011,7 +1057,7 @@ function Navbar() {
                   "
                 >
 
-                  {/* USER */}
+                  {/* User */}
 
                   <div
                     className="
@@ -1076,7 +1122,7 @@ function Navbar() {
                   </div>
 
 
-                  {/* CREDITS */}
+                  {/* Credits */}
 
                   <Link
                     to="/recharge"
@@ -1167,7 +1213,7 @@ function Navbar() {
                   </Link>
 
 
-                  {/* LOGOUT */}
+                  {/* Logout */}
 
                   <button
                     type="button"
@@ -1187,6 +1233,7 @@ function Navbar() {
                       font-semibold
                       text-slate-600
                       transition
+
                       hover:border-red-200
                       hover:bg-red-50
                       hover:text-red-600
