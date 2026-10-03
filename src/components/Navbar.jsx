@@ -30,7 +30,7 @@ import logoDark from "../assets/logo-dark.png";
 
 
 /* =========================================================
-   THEME
+   THEME DETECTION
 ========================================================= */
 
 function getCurrentTheme() {
@@ -40,8 +40,13 @@ function getCurrentTheme() {
     root.dataset.theme ||
     document.body?.dataset.theme;
 
-  if (theme === "dark") return "dark";
-  if (theme === "light") return "light";
+  if (theme === "dark") {
+    return "dark";
+  }
+
+  if (theme === "light") {
+    return "light";
+  }
 
   if (
     root.classList.contains("dark") ||
@@ -66,7 +71,7 @@ function getCurrentTheme() {
 
 
 /* =========================================================
-   NAVIGATION
+   NAVIGATION ITEMS
 ========================================================= */
 
 const navigation = [
@@ -110,7 +115,7 @@ function Navbar() {
 
 
   /* =========================================================
-     THEME WATCH
+     WATCH THEME CHANGES
   ========================================================= */
 
   useEffect(() => {
@@ -143,11 +148,12 @@ function Navbar() {
       });
     }
 
-    const mediaQuery = window.matchMedia(
-      "(prefers-color-scheme: dark)"
-    );
+    const systemTheme =
+      window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      );
 
-    mediaQuery.addEventListener(
+    systemTheme.addEventListener(
       "change",
       updateTheme
     );
@@ -155,7 +161,7 @@ function Navbar() {
     return () => {
       observer.disconnect();
 
-      mediaQuery.removeEventListener(
+      systemTheme.removeEventListener(
         "change",
         updateTheme
       );
@@ -164,7 +170,7 @@ function Navbar() {
 
 
   /* =========================================================
-     ROUTE CHANGE
+     CLOSE MENU ON ROUTE CHANGE
   ========================================================= */
 
   useEffect(() => {
@@ -173,11 +179,11 @@ function Navbar() {
 
 
   /* =========================================================
-     ESC KEY
+     CLOSE MENU WITH ESC
   ========================================================= */
 
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    const handleEscape = (event) => {
       if (event.key === "Escape") {
         setMobileMenuOpen(false);
       }
@@ -185,20 +191,20 @@ function Navbar() {
 
     window.addEventListener(
       "keydown",
-      handleKeyDown
+      handleEscape
     );
 
     return () => {
       window.removeEventListener(
         "keydown",
-        handleKeyDown
+        handleEscape
       );
     };
   }, []);
 
 
   /* =========================================================
-     BODY SCROLL
+     BODY SCROLL LOCK
   ========================================================= */
 
   useEffect(() => {
@@ -220,6 +226,7 @@ function Navbar() {
 
   async function handleLogout() {
     setMobileMenuOpen(false);
+
     await logout();
   }
 
@@ -269,25 +276,26 @@ function Navbar() {
         "
       >
 
-        {/* =================================================
+        {/* =====================================================
             MAIN NAVBAR
-        ================================================= */}
+        ===================================================== */}
 
         <div
           className="
             relative
             z-50
+
             grid
-
             grid-cols-[auto_1fr_auto]
-
             items-center
+
             gap-2
 
             rounded-2xl
             border
             border-slate-200/80
             bg-white/95
+
             px-2.5
             py-2
 
@@ -307,21 +315,27 @@ function Navbar() {
           "
         >
 
-          {/* =================================================
+          {/* ===================================================
               LOGO
-          ================================================= */}
+          =================================================== */}
 
           <Link
             to="/"
+            onClick={() =>
+              setMobileMenuOpen(false)
+            }
             className="
               group
               flex
               min-w-0
+              shrink-0
               items-center
               gap-2
               sm:gap-2.5
             "
           >
+
+            {/* Logo box */}
 
             <div
               className="
@@ -333,12 +347,17 @@ function Navbar() {
                 justify-center
                 overflow-hidden
                 rounded-xl
+
                 border
                 border-slate-200
+
                 bg-slate-50
+
                 shadow-sm
+
                 transition
                 duration-300
+
                 group-hover:scale-105
 
                 dark:border-slate-700
@@ -364,7 +383,7 @@ function Navbar() {
             </div>
 
 
-            {/* Brand text */}
+            {/* Brand */}
 
             <div
               className="
@@ -377,10 +396,11 @@ function Navbar() {
               <p
                 className="
                   truncate
-                  text-[16px]
+                  text-base
                   font-bold
                   leading-tight
                   tracking-tight
+
                   text-slate-950
 
                   dark:text-white
@@ -412,13 +432,11 @@ function Navbar() {
           </Link>
 
 
-          {/* =================================================
+          {/* ===================================================
               DESKTOP NAVIGATION
 
-              IMPORTANT:
-              Normal grid item.
-              NO absolute positioning.
-          ================================================= */}
+              Only visible at 1024px+
+          =================================================== */}
 
           <nav
             className="
@@ -428,7 +446,7 @@ function Navbar() {
               justify-center
               gap-0.5
 
-              md:flex
+              lg:flex
               lg:gap-1
             "
           >
@@ -443,11 +461,15 @@ function Navbar() {
                   to={item.path}
                   className={`
                     whitespace-nowrap
+
                     rounded-lg
+
                     px-2.5
                     py-2
+
                     text-[13px]
                     font-medium
+
                     transition-all
                     duration-200
 
@@ -468,6 +490,7 @@ function Navbar() {
                         `
                         : `
                           text-slate-500
+
                           hover:bg-slate-50
                           hover:text-slate-950
 
@@ -486,9 +509,9 @@ function Navbar() {
           </nav>
 
 
-          {/* =================================================
+          {/* ===================================================
               RIGHT SIDE
-          ================================================= */}
+          =================================================== */}
 
           <div
             className="
@@ -497,21 +520,32 @@ function Navbar() {
               shrink-0
               items-center
               justify-end
+
               gap-1.5
 
               sm:gap-2
             "
           >
 
-            {/* Theme */}
+            {/* =================================================
+                DESKTOP THEME TOGGLE
 
-            <div className="shrink-0">
+                Hidden below 1024px
+            ================================================= */}
+
+            <div
+              className="
+                hidden
+                shrink-0
+                lg:block
+              "
+            >
               <ThemeToggle />
             </div>
 
 
             {/* =================================================
-                DESKTOP LOGGED OUT
+                DESKTOP LOGIN
             ================================================= */}
 
             {!loading && !user && (
@@ -522,22 +556,30 @@ function Navbar() {
                   shrink-0
                   items-center
                   gap-1.5
+
                   rounded-xl
+
                   bg-slate-950
+
                   px-3
                   py-2.5
+
                   text-sm
                   font-semibold
                   text-white
+
                   shadow-sm
+
                   transition
+
                   hover:-translate-y-0.5
                   hover:shadow-md
 
                   dark:bg-white
                   dark:text-slate-950
 
-                  md:flex
+                  lg:flex
+
                   lg:gap-2
                   lg:px-4
                 "
@@ -554,7 +596,7 @@ function Navbar() {
 
 
             {/* =================================================
-                DESKTOP LOGGED IN
+                DESKTOP USER
             ================================================= */}
 
             {!loading && user && (
@@ -565,7 +607,7 @@ function Navbar() {
                   items-center
                   gap-1.5
 
-                  md:flex
+                  lg:flex
                   lg:gap-2
                 "
               >
@@ -579,13 +621,19 @@ function Navbar() {
                     shrink-0
                     items-center
                     gap-2
+
                     rounded-xl
+
                     border
                     border-slate-200
+
                     bg-white
+
                     px-2
                     py-2
+
                     transition
+
                     hover:border-slate-300
                     hover:shadow-sm
 
@@ -605,12 +653,15 @@ function Navbar() {
                       shrink-0
                       items-center
                       justify-center
+
                       rounded-lg
+
                       bg-slate-100
 
                       dark:bg-slate-800
                     "
                   >
+
                     <Sparkles
                       size={14}
                       className="
@@ -618,9 +669,11 @@ function Navbar() {
                         dark:text-slate-300
                       "
                     />
+
                   </div>
 
-                  <div className="hidden lg:block">
+
+                  <div className="hidden xl:block">
 
                     <p
                       className="
@@ -639,6 +692,7 @@ function Navbar() {
                         text-sm
                         font-bold
                         leading-tight
+
                         text-slate-900
 
                         dark:text-white
@@ -669,13 +723,17 @@ function Navbar() {
                   className="
                     hidden
                     min-w-0
-                    max-w-[150px]
+                    max-w-[170px]
                     items-center
                     gap-2
+
                     rounded-xl
+
                     border
                     border-slate-200
+
                     bg-slate-50
+
                     px-2.5
                     py-2
 
@@ -694,8 +752,11 @@ function Navbar() {
                       shrink-0
                       items-center
                       justify-center
+
                       rounded-lg
+
                       bg-white
+
                       shadow-sm
 
                       dark:bg-slate-800
@@ -704,12 +765,15 @@ function Navbar() {
                     <User size={14} />
                   </div>
 
+
                   <span
                     className="
                       min-w-0
                       truncate
+
                       text-xs
                       font-semibold
+
                       text-slate-700
 
                       dark:text-slate-200
@@ -735,10 +799,14 @@ function Navbar() {
                     shrink-0
                     items-center
                     justify-center
+
                     rounded-xl
+
                     border
                     border-slate-200
+
                     text-slate-500
+
                     transition
 
                     hover:border-red-200
@@ -747,12 +815,15 @@ function Navbar() {
 
                     dark:border-slate-700
                     dark:text-slate-400
+
                     dark:hover:border-red-900
                     dark:hover:bg-red-950/30
                     dark:hover:text-red-400
                   "
                 >
+
                   <LogOut size={16} />
+
                 </button>
 
               </div>
@@ -760,7 +831,9 @@ function Navbar() {
 
 
             {/* =================================================
-                MOBILE MENU BUTTON
+                TABLET + MOBILE HAMBURGER
+
+                Visible below 1024px
             ================================================= */}
 
             <button
@@ -783,21 +856,31 @@ function Navbar() {
                 shrink-0
                 items-center
                 justify-center
+
                 rounded-xl
+
                 border
                 border-slate-200
+
                 bg-white
+
                 text-slate-700
+
                 shadow-sm
+
                 transition-all
                 duration-200
+
+                hover:bg-slate-50
+
                 active:scale-95
 
                 dark:border-slate-700
                 dark:bg-slate-900
                 dark:text-slate-200
+                dark:hover:bg-slate-800
 
-                md:hidden
+                lg:hidden
               "
             >
 
@@ -814,22 +897,17 @@ function Navbar() {
         </div>
 
 
-        {/* =================================================
-            MOBILE MENU
+        {/* =====================================================
+            TABLET + MOBILE MENU
 
-            Smooth:
-            opacity
-            scale
-            translateY
-
-            Opens directly below navbar.
-        ================================================= */}
+            Visible below 1024px
+        ===================================================== */}
 
         <div
           className={`
             relative
             z-40
-            md:hidden
+            lg:hidden
 
             ${
               mobileMenuOpen
@@ -845,7 +923,9 @@ function Navbar() {
               left-0
               right-0
               top-2
+
               origin-top
+
               transition-all
               duration-200
               ease-out
@@ -870,13 +950,20 @@ function Navbar() {
             <div
               className="
                 max-h-[calc(100vh-90px)]
+
                 overflow-y-auto
+
                 rounded-2xl
+
                 border
                 border-slate-200/80
+
                 bg-white
+
                 p-2
-                shadow-[0_20px_50px_rgba(15,23,42,0.12)]
+
+                shadow-[0_20px_50px_rgba(15,23,42,0.14)]
+
                 backdrop-blur-xl
 
                 dark:border-slate-800
@@ -886,13 +973,73 @@ function Navbar() {
             >
 
               {/* =================================================
-                  MOBILE NAV
+                  THEME
+              ================================================= */}
+
+              <div
+                className="
+                  mb-2
+
+                  flex
+                  items-center
+                  justify-between
+
+                  rounded-xl
+
+                  border
+                  border-slate-200
+
+                  bg-slate-50
+
+                  px-3
+                  py-2.5
+
+                  dark:border-slate-800
+                  dark:bg-slate-900
+                "
+              >
+
+                <div>
+
+                  <p
+                    className="
+                      text-sm
+                      font-semibold
+
+                      text-slate-800
+
+                      dark:text-white
+                    "
+                  >
+                    Appearance
+                  </p>
+
+                  <p
+                    className="
+                      text-[11px]
+                      text-slate-400
+                    "
+                  >
+                    Change theme
+                  </p>
+
+                </div>
+
+
+                <ThemeToggle />
+
+              </div>
+
+
+              {/* =================================================
+                  MOBILE / TABLET NAVIGATION
               ================================================= */}
 
               <nav className="space-y-1">
 
                 {navigation.map((item) => {
                   const Icon = item.icon;
+
                   const active =
                     isActive(item.path);
 
@@ -904,9 +1051,12 @@ function Navbar() {
                         flex
                         items-center
                         justify-between
+
                         rounded-xl
+
                         px-3
                         py-3
+
                         transition
 
                         ${
@@ -920,10 +1070,12 @@ function Navbar() {
                             `
                             : `
                               text-slate-600
+
                               hover:bg-slate-50
                               hover:text-slate-950
 
                               dark:text-slate-300
+
                               dark:hover:bg-slate-900
                               dark:hover:text-white
                             `
@@ -947,6 +1099,7 @@ function Navbar() {
                             shrink-0
                             items-center
                             justify-center
+
                             rounded-lg
 
                             ${
@@ -965,8 +1118,11 @@ function Navbar() {
                             }
                           `}
                         >
+
                           <Icon size={17} />
+
                         </div>
+
 
                         <span
                           className="
@@ -978,6 +1134,7 @@ function Navbar() {
                         </span>
 
                       </div>
+
 
                       <ChevronRight
                         size={16}
@@ -994,15 +1151,17 @@ function Navbar() {
 
 
               {/* =================================================
-                  MOBILE AUTH
+                  LOGGED OUT
               ================================================= */}
 
               {!loading && !user && (
                 <div
                   className="
                     mt-2
+
                     border-t
                     border-slate-200
+
                     pt-2
 
                     dark:border-slate-800
@@ -1017,13 +1176,23 @@ function Navbar() {
                       items-center
                       justify-center
                       gap-2
+
                       rounded-xl
+
                       bg-slate-950
+
                       px-4
                       py-3
+
                       text-sm
                       font-semibold
                       text-white
+
+                      shadow-sm
+
+                      transition
+
+                      hover:shadow-md
 
                       dark:bg-white
                       dark:text-slate-950
@@ -1041,7 +1210,7 @@ function Navbar() {
 
 
               {/* =================================================
-                  MOBILE USER
+                  LOGGED IN
               ================================================= */}
 
               {!loading && user && (
@@ -1049,8 +1218,10 @@ function Navbar() {
                   className="
                     mt-2
                     space-y-2
+
                     border-t
                     border-slate-200
+
                     pt-2
 
                     dark:border-slate-800
@@ -1064,8 +1235,11 @@ function Navbar() {
                       flex
                       items-center
                       gap-3
+
                       rounded-xl
+
                       bg-slate-50
+
                       p-3
 
                       dark:bg-slate-900
@@ -1080,15 +1254,21 @@ function Navbar() {
                         shrink-0
                         items-center
                         justify-center
+
                         rounded-xl
+
                         bg-white
+
                         shadow-sm
 
                         dark:bg-slate-800
                       "
                     >
+
                       <User size={17} />
+
                     </div>
+
 
                     <div className="min-w-0">
 
@@ -1098,6 +1278,7 @@ function Navbar() {
                           font-semibold
                           uppercase
                           tracking-wider
+
                           text-slate-400
                         "
                       >
@@ -1107,8 +1288,10 @@ function Navbar() {
                       <p
                         className="
                           truncate
+
                           text-sm
                           font-semibold
+
                           text-slate-800
 
                           dark:text-slate-100
@@ -1130,12 +1313,18 @@ function Navbar() {
                       flex
                       items-center
                       justify-between
+
                       rounded-xl
+
                       border
                       border-slate-200
+
                       bg-white
+
                       p-3
+
                       transition
+
                       hover:bg-slate-50
 
                       dark:border-slate-800
@@ -1160,12 +1349,15 @@ function Navbar() {
                           shrink-0
                           items-center
                           justify-center
+
                           rounded-xl
+
                           bg-slate-100
 
                           dark:bg-slate-800
                         "
                       >
+
                         <Sparkles
                           size={17}
                           className="
@@ -1173,7 +1365,9 @@ function Navbar() {
                             dark:text-slate-300
                           "
                         />
+
                       </div>
+
 
                       <div>
 
@@ -1191,6 +1385,7 @@ function Navbar() {
                           className="
                             text-sm
                             font-bold
+
                             text-slate-900
 
                             dark:text-white
@@ -1202,6 +1397,7 @@ function Navbar() {
                       </div>
 
                     </div>
+
 
                     <ChevronRight
                       size={17}
@@ -1224,14 +1420,20 @@ function Navbar() {
                       items-center
                       justify-center
                       gap-2
+
                       rounded-xl
+
                       border
                       border-slate-200
+
                       px-4
                       py-3
+
                       text-sm
                       font-semibold
+
                       text-slate-600
+
                       transition
 
                       hover:border-red-200
@@ -1240,6 +1442,7 @@ function Navbar() {
 
                       dark:border-slate-800
                       dark:text-slate-300
+
                       dark:hover:border-red-900
                       dark:hover:bg-red-950/30
                       dark:hover:text-red-400
@@ -1266,6 +1469,7 @@ function Navbar() {
     </header>
   );
 }
+
 
 export default Navbar;
 
