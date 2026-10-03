@@ -1,3 +1,4 @@
+
 import {
   useCallback,
   useEffect,
@@ -93,57 +94,57 @@ export default function CropTool({
 
   const cropAreaRef = useRef(null);
 
- useEffect(() => {
-  function handleWheel(event) {
-    const cropArea = cropAreaRef.current;
+  useEffect(() => {
+    function handleWheel(event) {
+      const cropArea = cropAreaRef.current;
 
-    if (!cropArea) {
-      return;
+      if (!cropArea) {
+        return;
+      }
+
+      // Mouse cursor crop area-এর ভিতরে আছে কিনা
+      if (!cropArea.contains(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      setZoom((currentZoom) => {
+        const step = 0.1;
+
+        const nextZoom =
+          event.deltaY < 0
+            ? currentZoom + step
+            : currentZoom - step;
+
+        return Math.min(
+          3,
+          Math.max(
+            1,
+            Number(nextZoom.toFixed(1))
+          )
+        );
+      });
     }
 
-    // Mouse cursor crop area-এর ভিতরে আছে কিনা
-    if (!cropArea.contains(event.target)) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    setZoom((currentZoom) => {
-      const step = 0.1;
-
-      const nextZoom =
-        event.deltaY < 0
-          ? currentZoom + step
-          : currentZoom - step;
-
-      return Math.min(
-        3,
-        Math.max(
-          1,
-          Number(nextZoom.toFixed(1))
-        )
-      );
-    });
-  }
-
-  document.addEventListener(
-    "wheel",
-    handleWheel,
-    {
-      passive: false,
-      capture: true,
-    }
-  );
-
-  return () => {
-    document.removeEventListener(
+    document.addEventListener(
       "wheel",
       handleWheel,
-      true
+      {
+        passive: false,
+        capture: true,
+      }
     );
-  };
-}, []);
+
+    return () => {
+      document.removeEventListener(
+        "wheel",
+        handleWheel,
+        true
+      );
+    };
+  }, []);
 
   async function handleApply() {
     if (!croppedAreaPixels || applying) {
@@ -185,15 +186,59 @@ export default function CropTool({
   }
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-slate-950/95 backdrop-blur-xl">
+    <div
+      className="
+        absolute
+        inset-0
+        z-50
+        flex
+        min-h-0
+        flex-col
+        overflow-hidden
+        bg-slate-950/95
+        backdrop-blur-xl
+      "
+    >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <div>
-          <h3 className="text-sm font-semibold text-white">
+      <div
+        className="
+          flex
+          shrink-0
+          items-center
+          justify-between
+          gap-3
+          border-b
+          border-white/10
+          px-4
+          py-3
+
+          max-[480px]:px-3
+          max-[480px]:py-2.5
+        "
+      >
+        <div className="min-w-0">
+          <h3
+            className="
+              truncate
+              text-sm
+              font-semibold
+              text-white
+
+              max-[480px]:text-[13px]
+            "
+          >
             Crop Image
           </h3>
 
-          <p className="text-xs text-slate-400">
+          <p
+            className="
+              truncate
+              text-xs
+              text-slate-400
+
+              max-[480px]:hidden
+            "
+          >
             Drag the image and resize the crop area
           </p>
         </div>
@@ -202,53 +247,130 @@ export default function CropTool({
           type="button"
           onClick={onCancel}
           disabled={applying}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+          className="
+            shrink-0
+            rounded-xl
+            border
+            border-white/10
+            bg-white/5
+            px-4
+            py-2
+            text-sm
+            text-slate-300
+            transition
+            hover:bg-white/10
+            hover:text-white
+            disabled:opacity-50
+
+            max-[480px]:px-3
+            max-[480px]:py-1.5
+            max-[480px]:text-xs
+          "
         >
           Cancel
         </button>
       </div>
 
-     {/* Crop Area */}
-<div
-  ref={cropAreaRef}
-  className="relative min-h-0 flex-1 overflow-hidden"
-  style={{
-    touchAction: "none",
-  }}
->
-  <Cropper
-  image={image.src}
-  crop={crop}
-  zoom={zoom}
-  aspect={aspect || undefined}
-  onCropChange={setCrop}
-  onCropComplete={handleCropComplete}
-  onZoomChange={setZoom}
-  zoomWithScroll={false}
-  objectFit="contain"
-  showGrid
-  restrictPosition={false}
-/>
-</div>
+      {/* Crop Area */}
+      <div
+        ref={cropAreaRef}
+        className="
+          relative
+          min-h-0
+          flex-1
+          overflow-hidden
+        "
+        style={{
+          touchAction: "none",
+        }}
+      >
+        <Cropper
+          image={image.src}
+          crop={crop}
+          zoom={zoom}
+          aspect={aspect || undefined}
+          onCropChange={setCrop}
+          onCropComplete={handleCropComplete}
+          onZoomChange={setZoom}
+          zoomWithScroll={false}
+          objectFit="contain"
+          showGrid
+          restrictPosition={false}
+        />
+      </div>
 
       {/* Controls */}
-      <div className="border-t border-white/10 bg-slate-950/90 p-4">
-        <div className="mx-auto flex max-w-xl flex-col gap-4">
+      <div
+        className="
+          max-h-[45vh]
+          shrink-0
+          overflow-y-auto
+          border-t
+          border-white/10
+          bg-slate-950/90
+          p-4
 
+          max-[640px]:max-h-[50vh]
+          max-[480px]:max-h-[52vh]
+          max-[480px]:p-3
+        "
+      >
+        <div
+          className="
+            mx-auto
+            flex
+            w-full
+            max-w-xl
+            flex-col
+            gap-4
+
+            max-[480px]:gap-3
+          "
+        >
           {/* Error */}
           {error && (
-            <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            <div
+              className="
+                rounded-xl
+                border
+                border-red-400/20
+                bg-red-500/10
+                px-4
+                py-3
+                text-sm
+                text-red-300
+
+                max-[480px]:px-3
+                max-[480px]:py-2.5
+                max-[480px]:text-xs
+              "
+            >
               {error}
             </div>
           )}
 
           {/* Aspect Ratio */}
           <div>
-            <p className="mb-2 text-xs font-medium text-slate-400">
+            <p
+              className="
+                mb-2
+                text-xs
+                font-medium
+                text-slate-400
+              "
+            >
               Aspect Ratio
             </p>
 
-            <div className="flex flex-wrap gap-2">
+            <div
+              className="
+                flex
+                flex-wrap
+                gap-2
+
+                max-[480px]:gap-1.5
+              "
+            >
               {[
                 ["Free", null],
                 ["1 : 1", 1],
@@ -260,10 +382,25 @@ export default function CropTool({
                   key={label}
                   type="button"
                   onClick={() => setAspect(value)}
-                  className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${aspect === value
-                      ? "border-violet-400/60 bg-violet-500/20 text-violet-200"
-                      : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
-                    }`}
+                  className={`
+                    shrink-0
+                    rounded-xl
+                    border
+                    px-3
+                    py-2
+                    text-xs
+                    font-medium
+                    transition
+
+                    max-[480px]:px-2.5
+                    max-[480px]:py-1.5
+
+                    ${
+                      aspect === value
+                        ? "border-violet-400/60 bg-violet-500/20 text-violet-200"
+                        : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
+                    }
+                  `}
                 >
                   {label}
                 </button>
@@ -273,7 +410,14 @@ export default function CropTool({
 
           {/* Zoom */}
           <div>
-            <div className="mb-2 flex items-center justify-between">
+            <div
+              className="
+                mb-2
+                flex
+                items-center
+                justify-between
+              "
+            >
               <span className="text-xs font-medium text-slate-400">
                 Zoom
               </span>
@@ -292,7 +436,10 @@ export default function CropTool({
               onChange={(event) =>
                 setZoom(Number(event.target.value))
               }
-              className="w-full accent-violet-500"
+              className="
+                w-full
+                accent-violet-500
+              "
             />
           </div>
 
@@ -300,8 +447,39 @@ export default function CropTool({
           <button
             type="button"
             onClick={handleApply}
-            disabled={applying || !croppedAreaPixels}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-600 to-fuchsia-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-900/30 transition hover:scale-[1.01] hover:from-violet-500 hover:to-fuchsia-500 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={
+              applying || !croppedAreaPixels
+            }
+            className="
+              flex
+              min-h-11
+              w-full
+              items-center
+              justify-center
+              gap-2
+              rounded-2xl
+              bg-gradient-to-r
+              from-violet-600
+              to-fuchsia-600
+              px-5
+              py-3
+              text-sm
+              font-semibold
+              text-white
+              shadow-lg
+              shadow-violet-900/30
+              transition
+              hover:scale-[1.01]
+              hover:from-violet-500
+              hover:to-fuchsia-500
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+
+              max-[480px]:rounded-xl
+              max-[480px]:px-4
+              max-[480px]:py-2.5
+              max-[480px]:text-xs
+            "
           >
             {applying
               ? "Applying Crop..."
