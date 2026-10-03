@@ -281,6 +281,7 @@ function Navbar() {
 
       <div
         className="
+          relative
           mx-auto
           w-full
           max-w-7xl
@@ -376,7 +377,6 @@ function Navbar() {
                 sm:w-11
               "
             >
-
               <img
                 src={currentLogo}
                 alt="Everything"
@@ -387,7 +387,6 @@ function Navbar() {
                   p-1.5
                 "
               />
-
             </div>
 
 
@@ -442,7 +441,7 @@ function Navbar() {
 
           {/* =================================================
               DESKTOP NAVIGATION
-              LG AND ABOVE
+              LG+
           ================================================= */}
 
           <nav
@@ -523,6 +522,7 @@ function Navbar() {
               shrink-0
               items-center
               gap-1.5
+
               sm:gap-2
             "
           >
@@ -538,6 +538,7 @@ function Navbar() {
                 shrink-0
                 items-center
                 justify-center
+
                 lg:flex
               "
             >
@@ -555,12 +556,14 @@ function Navbar() {
                 className="
                   hidden
                   shrink-0
+
                   items-center
+                  justify-center
                   gap-2
 
                   rounded-xl
 
-                  bg-slate-950
+                  bg-[#0E172B]
 
                   px-4
                   py-2.5
@@ -571,19 +574,26 @@ function Navbar() {
 
                   shadow-sm
 
-                  transition
+                  transition-all
+                  duration-200
 
                   hover:-translate-y-0.5
                   hover:shadow-md
 
-                  dark:bg-white
-                  dark:text-slate-950
+                  dark:bg-[#0E172B]
+                  dark:text-white
 
                   lg:flex
                 "
               >
-                <LogIn size={16} />
-                Login
+                <LogIn
+                  size={16}
+                  className="shrink-0"
+                />
+
+                <span className="whitespace-nowrap">
+                  Login
+                </span>
               </Link>
             )}
 
@@ -596,8 +606,10 @@ function Navbar() {
               <div
                 className="
                   hidden
+
                   items-center
                   gap-2
+
                   lg:flex
                 "
               >
@@ -609,6 +621,7 @@ function Navbar() {
                   className="
                     flex
                     shrink-0
+
                     items-center
                     gap-2
 
@@ -678,7 +691,9 @@ function Navbar() {
                         text-sm
                         font-bold
                         leading-tight
+
                         text-slate-900
+
                         dark:text-white
                       "
                     >
@@ -707,6 +722,7 @@ function Navbar() {
                   className="
                     hidden
                     max-w-[180px]
+
                     items-center
                     gap-2
 
@@ -733,11 +749,16 @@ function Navbar() {
                       h-7
                       w-7
                       shrink-0
+
                       items-center
                       justify-center
+
                       rounded-lg
+
                       bg-white
+
                       shadow-sm
+
                       dark:bg-slate-800
                     "
                   >
@@ -747,9 +768,12 @@ function Navbar() {
                   <span
                     className="
                       truncate
+
                       text-xs
                       font-semibold
+
                       text-slate-700
+
                       dark:text-slate-200
                     "
                   >
@@ -830,7 +854,6 @@ function Navbar() {
 
               className="
                 flex
-
                 h-10
                 w-10
                 shrink-0
@@ -864,13 +887,11 @@ function Navbar() {
                 lg:hidden
               "
             >
-
               {mobileMenuOpen ? (
                 <X size={20} />
               ) : (
                 <Menu size={20} />
               )}
-
             </button>
 
           </div>
@@ -879,18 +900,26 @@ function Navbar() {
 
 
         {/* =====================================================
-            TABLET + MOBILE MENU
+            MOBILE/TABLET MENU OVERLAY
 
-            LG-এর নিচে শুধু এখানে থাকবে
+            IMPORTANT:
+            absolute হওয়ায় নিচের component সরবে না।
         ===================================================== */}
 
         <div
           className={`
+            absolute
+            left-0
+            right-0
+            top-[calc(100%+8px)]
+
+            z-40
+
             lg:hidden
 
-            overflow-hidden
+            origin-top
 
-            transition-[max-height,opacity,transform]
+            transition-all
             duration-300
 
             ease-[cubic-bezier(0.22,1,0.36,1)]
@@ -899,15 +928,16 @@ function Navbar() {
               mobileMenuOpen
                 ? `
                   visible
-                  max-h-[1200px]
+                  pointer-events-auto
                   translate-y-0
+                  scale-y-100
                   opacity-100
                 `
                 : `
                   invisible
                   pointer-events-none
-                  max-h-0
-                  -translate-y-2
+                  -translate-y-3
+                  scale-y-95
                   opacity-0
                 `
             }
@@ -916,26 +946,29 @@ function Navbar() {
 
           <div
             className="
-              mt-2
-
-              overflow-hidden
+              max-h-[calc(100vh-90px)]
+              overflow-y-auto
 
               rounded-2xl
 
               border
               border-slate-200/80
 
-              bg-white/95
+              bg-white/98
 
               p-2
 
-              shadow-[0_20px_50px_rgba(15,23,42,0.10)]
+              shadow-[0_20px_50px_rgba(15,23,42,0.14)]
 
-              backdrop-blur-xl
+              backdrop-blur-2xl
 
               dark:border-slate-800
-              dark:bg-slate-950/95
-              dark:shadow-[0_20px_50px_rgba(0,0,0,0.30)]
+              dark:bg-slate-950/98
+              dark:shadow-[0_20px_50px_rgba(0,0,0,0.35)]
+
+              overscroll-contain
+
+              [scrollbar-width:thin]
             "
           >
 
@@ -946,7 +979,6 @@ function Navbar() {
             <div
               className="
                 flex
-
                 min-h-[64px]
                 w-full
 
@@ -1049,7 +1081,6 @@ function Navbar() {
 
                     className={`
                       flex
-
                       min-h-[50px]
 
                       items-center
@@ -1173,7 +1204,6 @@ function Navbar() {
 
                   className="
                     flex
-
                     min-h-[50px]
                     w-full
 
@@ -1183,7 +1213,7 @@ function Navbar() {
 
                     rounded-xl
 
-                    bg-slate-950
+                    bg-[#0E172B]
 
                     px-4
 
@@ -1193,16 +1223,26 @@ function Navbar() {
 
                     shadow-sm
 
-                    transition
+                    transition-all
+                    duration-200
 
+                    hover:-translate-y-0.5
                     hover:shadow-md
 
-                    dark:bg-white
-                    dark:text-slate-950
+                    dark:bg-[#0E172B]
+                    dark:text-white
                   "
                 >
-                  <LogIn size={17} />
-                  Login
+
+                  <LogIn
+                    size={17}
+                    className="shrink-0"
+                  />
+
+                  <span className="whitespace-nowrap">
+                    Login
+                  </span>
+
                 </Link>
 
               </div>
@@ -1250,7 +1290,6 @@ function Navbar() {
                   <div
                     className="
                       flex
-
                       h-10
                       w-10
                       shrink-0
@@ -1278,6 +1317,7 @@ function Navbar() {
                         font-semibold
                         uppercase
                         tracking-wider
+
                         text-slate-400
                       "
                     >
@@ -1311,7 +1351,6 @@ function Navbar() {
 
                   className="
                     flex
-
                     min-h-[62px]
 
                     items-center
@@ -1347,7 +1386,6 @@ function Navbar() {
                     <div
                       className="
                         flex
-
                         h-10
                         w-10
                         shrink-0
@@ -1416,7 +1454,6 @@ function Navbar() {
 
                   className="
                     flex
-
                     min-h-[50px]
                     w-full
 

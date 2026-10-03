@@ -350,7 +350,7 @@ function ImageEditor({ file, onComplete, onClose }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/75 p-3 backdrop-blur-xl sm:p-6">
       <RndHandleStyles />
 
-      <div className="flex max-h-[95vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-white shadow-2xl dark:bg-slate-950">
+      <div className="flex h-[95dvh] max-h-[95dvh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-white/10 bg-white shadow-2xl dark:bg-slate-950">
         <EditorHeader
           cropMode={cropMode}
           isCropHovering={crop.isCropHovering}
@@ -363,90 +363,100 @@ function ImageEditor({ file, onComplete, onClose }) {
         />
 
         {/* MAIN */}
-        <div className="min-h-0 flex-1 overflow-auto overscroll-contain">
-          <div className="grid gap-6 p-4 lg:grid-cols-[1fr_320px] lg:p-6">
-            <EditorCanvas
-              resizeMode={resizeMode}
-              cropMode={cropMode}
-              objectMode={objectMode}
-              previewRef={previewRef}
-              zoomAreaRef={zoomAreaRef}
-              resizeStageSize={resize.resizeStageSize}
-              zoom={zoom}
-              canvasRef={canvasRef}
-              aiObjectMode={aiObjectMode}
-              aiObjectOverlayCanvasRef={object.aiObjectOverlayCanvasRef}
-              handleObjectPointerDown={object.handleObjectPointerDown}
-              handleObjectPointerMove={object.handleObjectPointerMove}
-              handleObjectPointerUp={object.handleObjectPointerUp}
-              handleImagePointerDown={imageDrag.handleImagePointerDown}
-              handleImagePointerMove={imageDrag.handleImagePointerMove}
-              handleImagePointerUp={imageDrag.handleImagePointerUp}
-              isCtrlDragging={crop.isCtrlDragging}
-              isCtrlPressed={isCtrlPressed}
-              setIsCropHovering={crop.setIsCropHovering}
-              resizePreviewSrc={resize.resizePreviewSrc}
-              resizeFrame={resize.resizeFrame}
-              resizeLockRatio={resize.resizeLockRatio}
-              resizeActiveDirection={resize.resizeActiveDirection}
-              resizeRndRatioRef={resize.resizeRndRatioRef}
-              resizePreviewScaleRef={resize.resizePreviewScaleRef}
-              setResizeActiveDirection={resize.setResizeActiveDirection}
-              setResizeFrame={resize.setResizeFrame}
-              setResizeWidth={resize.setResizeWidth}
-              setResizeHeight={resize.setResizeHeight}
-              applying={applying}
-              removingBackground={removingBackground}
-              backgroundProgress={background.backgroundProgress}
-              objectApplying={objectApplying}
-              aiProgress={object.aiProgress}
-              aiProgressLabel={object.aiProgressLabel}
-              image={image}
-              handleCropPointerDown={crop.handleCropPointerDown}
-              handleCropPointerMove={crop.handleCropPointerMove}
-              handleCropPointerUp={crop.handleCropPointerUp}
-              cropBox={crop.cropBox}
-              objectBrushSize={object.objectBrushSize}
-              setObjectBrushSize={object.setObjectBrushSize}
-              cancelObjectRemove={object.cancelObjectRemove}
-              applyObjectRemove={object.applyObjectRemove}
-            />
-
-            <div className="relative">
-              <LayersButton
-                count={allLayers.length}
-                disabled={applying || removingBackground || objectApplying}
-                onClick={() => setShowLayers(true)}
-              />
-
-              <EditorControls
-                brightness={brightness}
-                setBrightness={setBrightness}
-                contrast={contrast}
-                setContrast={setContrast}
-                saturation={saturation}
-                setSaturation={setSaturation}
-                editorControlsDisabled={editorControlsDisabled}
-                activeTool={activeTool}
-                startCrop={crop.startCrop}
-                startResize={resize.startResize}
-                removingBackground={removingBackground}
-                handleBackgroundRemove={background.handleBackgroundRemove}
-                handleObjectRemove={object.handleObjectRemove}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:block lg:overflow-auto lg:overscroll-contain">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4 lg:grid lg:grid-cols-[1fr_320px] lg:gap-6 lg:p-6">
+            {/* Canvas: fixed on mobile/tablet */}
+            <div className="h-[42dvh] shrink-0 overflow-hidden sm:h-[50dvh] lg:sticky lg:top-10 lg:h-auto lg:self-start lg:overflow-visible [&>*]:h-full lg:[&>*]:h-auto">
+              <EditorCanvas
+                resizeMode={resizeMode}
+                cropMode={cropMode}
+                objectMode={objectMode}
+                previewRef={previewRef}
+                zoomAreaRef={zoomAreaRef}
+                resizeStageSize={resize.resizeStageSize}
+                zoom={zoom}
                 canvasRef={canvasRef}
-                setEffectPreviewSrc={setEffectPreviewSrc}
-                setShowEffects={setShowEffects}
-                handleAIObjectRemove={object.handleAIObjectRemove}
                 aiObjectMode={aiObjectMode}
-                objectApplying={objectApplying}
-                handleRotate={handleRotate}
-                handleFlipHorizontal={handleFlipHorizontal}
-                handleFlipVertical={handleFlipVertical}
-                handleReset={handleReset}
-                handleApply={handleApply}
+                aiObjectOverlayCanvasRef={object.aiObjectOverlayCanvasRef}
+                handleObjectPointerDown={object.handleObjectPointerDown}
+                handleObjectPointerMove={object.handleObjectPointerMove}
+                handleObjectPointerUp={object.handleObjectPointerUp}
+                handleImagePointerDown={imageDrag.handleImagePointerDown}
+                handleImagePointerMove={imageDrag.handleImagePointerMove}
+                handleImagePointerUp={imageDrag.handleImagePointerUp}
+                isCtrlDragging={crop.isCtrlDragging}
+                isCtrlPressed={isCtrlPressed}
+                setIsCropHovering={crop.setIsCropHovering}
+                resizePreviewSrc={resize.resizePreviewSrc}
+                resizeFrame={resize.resizeFrame}
+                resizeLockRatio={resize.resizeLockRatio}
+                resizeActiveDirection={resize.resizeActiveDirection}
+                resizeRndRatioRef={resize.resizeRndRatioRef}
+                resizePreviewScaleRef={resize.resizePreviewScaleRef}
+                setResizeActiveDirection={resize.setResizeActiveDirection}
+                setResizeFrame={resize.setResizeFrame}
+                setResizeWidth={resize.setResizeWidth}
+                setResizeHeight={resize.setResizeHeight}
                 applying={applying}
+                removingBackground={removingBackground}
+                backgroundProgress={background.backgroundProgress}
+                objectApplying={objectApplying}
+                aiProgress={object.aiProgress}
+                aiProgressLabel={object.aiProgressLabel}
+                image={image}
+                handleCropPointerDown={crop.handleCropPointerDown}
+                handleCropPointerMove={crop.handleCropPointerMove}
+                handleCropPointerUp={crop.handleCropPointerUp}
+                cropBox={crop.cropBox}
+                objectBrushSize={object.objectBrushSize}
+                setObjectBrushSize={object.setObjectBrushSize}
+                cancelObjectRemove={object.cancelObjectRemove}
+                applyObjectRemove={object.applyObjectRemove}
               />
+            </div>
 
+            {/* Controls: scrolls on mobile/tablet */}
+            <div className="relative min-h-0 flex-1 lg:flex-none">
+              <div className="h-full overflow-y-auto overscroll-contain pb-24 lg:h-auto lg:overflow-visible lg:pb-0">
+                {/* Eta ager relative wrapper-er kaj kore, button ekhon content-er shathe scroll korbe */}
+                <div className="relative">
+                  <LayersButton
+                    count={allLayers.length}
+                    disabled={applying || removingBackground || objectApplying}
+                    onClick={() => setShowLayers(true)}
+                  />
+
+                  <EditorControls
+                    brightness={brightness}
+                    setBrightness={setBrightness}
+                    contrast={contrast}
+                    setContrast={setContrast}
+                    saturation={saturation}
+                    setSaturation={setSaturation}
+                    editorControlsDisabled={editorControlsDisabled}
+                    activeTool={activeTool}
+                    startCrop={crop.startCrop}
+                    startResize={resize.startResize}
+                    removingBackground={removingBackground}
+                    handleBackgroundRemove={background.handleBackgroundRemove}
+                    handleObjectRemove={object.handleObjectRemove}
+                    canvasRef={canvasRef}
+                    setEffectPreviewSrc={setEffectPreviewSrc}
+                    setShowEffects={setShowEffects}
+                    handleAIObjectRemove={object.handleAIObjectRemove}
+                    aiObjectMode={aiObjectMode}
+                    objectApplying={objectApplying}
+                    handleRotate={handleRotate}
+                    handleFlipHorizontal={handleFlipHorizontal}
+                    handleFlipVertical={handleFlipVertical}
+                    handleReset={handleReset}
+                    handleApply={handleApply}
+                    applying={applying}
+                  />
+                </div>
+              </div>
+
+              {/* Outside the scroll container so an absolute panel isn't clipped */}
               {showLayers && (
                 <LayersPanel
                   allLayers={allLayers}
