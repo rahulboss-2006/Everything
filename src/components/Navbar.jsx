@@ -31,7 +31,7 @@ import logoDark from "../assets/logo-dark.png";
 
 
 /* =========================================================
-   THEME DETECTION
+   THEME
 ========================================================= */
 
 function getCurrentTheme() {
@@ -41,8 +41,13 @@ function getCurrentTheme() {
     root.dataset.theme ||
     document.body?.dataset.theme;
 
-  if (theme === "dark") return "dark";
-  if (theme === "light") return "light";
+  if (theme === "dark") {
+    return "dark";
+  }
+
+  if (theme === "light") {
+    return "light";
+  }
 
   if (
     root.classList.contains("dark") ||
@@ -146,12 +151,12 @@ function Navbar() {
       });
     }
 
-    const mediaQuery =
+    const systemTheme =
       window.matchMedia(
         "(prefers-color-scheme: dark)"
       );
 
-    mediaQuery.addEventListener(
+    systemTheme.addEventListener(
       "change",
       updateTheme
     );
@@ -159,7 +164,7 @@ function Navbar() {
     return () => {
       observer.disconnect();
 
-      mediaQuery.removeEventListener(
+      systemTheme.removeEventListener(
         "change",
         updateTheme
       );
@@ -168,7 +173,7 @@ function Navbar() {
 
 
   /* =========================================================
-     CLOSE MENU WHEN ROUTE CHANGES
+     CLOSE MENU ON ROUTE CHANGE
   ========================================================= */
 
   useEffect(() => {
@@ -177,11 +182,11 @@ function Navbar() {
 
 
   /* =========================================================
-     CLOSE MENU WITH ESC
+     ESC KEY
   ========================================================= */
 
   useEffect(() => {
-    const handleEscape = (event) => {
+    const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         setMenuOpen(false);
       }
@@ -189,38 +194,42 @@ function Navbar() {
 
     document.addEventListener(
       "keydown",
-      handleEscape
+      handleKeyDown
     );
 
     return () => {
       document.removeEventListener(
         "keydown",
-        handleEscape
+        handleKeyDown
       );
     };
   }, []);
 
 
   /* =========================================================
-     CLOSE ON OUTSIDE CLICK
+     OUTSIDE CLICK
   ========================================================= */
 
   useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
     const handleOutsideClick = (event) => {
       if (
         navbarRef.current &&
-        !navbarRef.current.contains(event.target)
+        !navbarRef.current.contains(
+          event.target
+        )
       ) {
         setMenuOpen(false);
       }
     };
 
-    if (menuOpen) {
-      document.addEventListener(
-        "mousedown",
-        handleOutsideClick
-      );
-    }
+    document.addEventListener(
+      "mousedown",
+      handleOutsideClick
+    );
 
     return () => {
       document.removeEventListener(
@@ -232,7 +241,7 @@ function Navbar() {
 
 
   /* =========================================================
-     BODY SCROLL
+     BODY SCROLL LOCK
   ========================================================= */
 
   useEffect(() => {
@@ -320,8 +329,8 @@ function Navbar() {
             flex
             min-h-[62px]
             w-full
-            items-center
 
+            items-center
             gap-2
 
             rounded-2xl
@@ -415,7 +424,13 @@ function Navbar() {
             </div>
 
 
-            <div className="hidden min-w-0 sm:block">
+            <div
+              className="
+                hidden
+                min-w-0
+                sm:block
+              "
+            >
 
               <p
                 className="
@@ -458,9 +473,8 @@ function Navbar() {
 
 
           {/* ===================================================
-              DESKTOP NAV
-
-              ONLY 1024px+
+              DESKTOP NAVIGATION
+              1024px+
           =================================================== */}
 
           <nav
@@ -536,10 +550,13 @@ function Navbar() {
           <div
             className="
               ml-auto
+
               flex
               shrink-0
+
               items-center
               justify-end
+
               gap-1.5
 
               sm:gap-2
@@ -548,19 +565,19 @@ function Navbar() {
 
             {/* =================================================
                 DESKTOP THEME
-
-                IMPORTANT:
-                No hidden inside ThemeToggle
+                ONLY 1024px+
             ================================================= */}
 
             <div
               className="
                 hidden
+
                 shrink-0
+
                 items-center
                 justify-center
 
-                lg:!flex
+                lg:flex
               "
             >
               <ThemeToggle />
@@ -578,6 +595,7 @@ function Navbar() {
                   hidden
 
                   shrink-0
+
                   items-center
                   gap-2
 
@@ -630,13 +648,14 @@ function Navbar() {
                 "
               >
 
-                {/* Credits */}
+                {/* CREDIT */}
 
                 <Link
                   to="/recharge"
                   className="
                     flex
                     shrink-0
+
                     items-center
                     gap-2
 
@@ -678,6 +697,7 @@ function Navbar() {
                       dark:bg-slate-800
                     "
                   >
+
                     <Sparkles
                       size={14}
                       className="
@@ -685,6 +705,7 @@ function Navbar() {
                         dark:text-slate-300
                       "
                     />
+
                   </div>
 
 
@@ -732,7 +753,7 @@ function Navbar() {
                 </Link>
 
 
-                {/* User */}
+                {/* USER */}
 
                 <div
                   className="
@@ -785,6 +806,7 @@ function Navbar() {
                   <span
                     className="
                       truncate
+
                       text-xs
                       font-semibold
 
@@ -799,7 +821,7 @@ function Navbar() {
                 </div>
 
 
-                {/* Logout */}
+                {/* LOGOUT */}
 
                 <button
                   type="button"
@@ -845,8 +867,7 @@ function Navbar() {
 
             {/* =================================================
                 TABLET + PHONE HAMBURGER
-
-                < 1024px
+                BELOW 1024px
             ================================================= */}
 
             <button
@@ -863,7 +884,7 @@ function Navbar() {
               }
               aria-expanded={menuOpen}
               className="
-                !flex
+                flex
 
                 h-10
                 w-10
@@ -913,437 +934,189 @@ function Navbar() {
 
 
         {/* =====================================================
-            MOBILE / TABLET MENU
-
-            SMOOTH TOP → BOTTOM
+            TABLET + PHONE MENU
+            SMOOTH TOP TO BOTTOM
         ===================================================== */}
 
         <div
           className={`
-            grid
-
             overflow-hidden
-
-            transition-[grid-template-rows,opacity]
-            duration-300
-            ease-out
 
             lg:hidden
 
+            transition-[max-height,opacity]
+            duration-300
+            ease-in-out
+
             ${
               menuOpen
-                ? "grid-rows-[1fr] opacity-100"
-                : "grid-rows-[0fr] opacity-0"
+                ? `
+                  visible
+                  max-h-[1000px]
+                  opacity-100
+                `
+                : `
+                  invisible
+                  pointer-events-none
+                  max-h-0
+                  opacity-0
+                `
             }
           `}
         >
 
-          <div className="min-h-0 overflow-hidden">
+          <div
+            className="
+              mt-2
+
+              rounded-2xl
+
+              border
+              border-slate-200/80
+
+              bg-white
+
+              p-2
+
+              shadow-[0_18px_45px_rgba(15,23,42,0.12)]
+
+              dark:border-slate-800
+              dark:bg-slate-950
+
+              dark:shadow-[0_18px_45px_rgba(0,0,0,0.35)]
+            "
+          >
+
+            {/* =================================================
+                MOBILE/TABLET THEME
+                ALWAYS VISIBLE WHEN MENU OPEN
+            ================================================= */}
 
             <div
               className="
-                mt-2
+                flex
+                min-h-[58px]
+                w-full
 
-                rounded-2xl
+                items-center
+                justify-between
+
+                rounded-xl
 
                 border
-                border-slate-200/80
+                border-slate-200
 
-                bg-white
+                bg-slate-50
 
-                p-2
-
-                shadow-[0_18px_45px_rgba(15,23,42,0.12)]
+                px-3
+                py-2.5
 
                 dark:border-slate-800
-                dark:bg-slate-950
-                dark:shadow-[0_18px_45px_rgba(0,0,0,0.35)]
+                dark:bg-slate-900
               "
             >
 
-              {/* =================================================
-                  THEME
+              <div className="min-w-0">
 
-                  FORCE VISIBLE
-              ================================================= */}
-
-              <div
-                className="
-                  mb-2
-
-                  !flex
-                  !visible
-                  !opacity-100
-
-                  min-h-[58px]
-
-                  shrink-0
-
-                  items-center
-                  justify-between
-
-                  rounded-xl
-
-                  border
-                  border-slate-200
-
-                  bg-slate-50
-
-                  px-3
-                  py-2.5
-
-                  dark:border-slate-800
-                  dark:bg-slate-900
-                "
-              >
-
-                <div className="min-w-0">
-
-                  <p
-                    className="
-                      text-sm
-                      font-semibold
-
-                      text-slate-800
-
-                      dark:text-white
-                    "
-                  >
-                    Appearance
-                  </p>
-
-                  <p
-                    className="
-                      text-[11px]
-                      text-slate-400
-                    "
-                  >
-                    Change theme
-                  </p>
-
-                </div>
-
-
-                {/* =================================================
-                    THEME TOGGLE WRAPPER
-
-                    NEVER HIDDEN
-                ================================================= */}
-
-                <div
+                <p
                   className="
-                    !flex
-                    !visible
-                    !opacity-100
+                    text-sm
+                    font-semibold
 
-                    shrink-0
+                    text-slate-800
 
-                    items-center
-                    justify-center
+                    dark:text-white
                   "
                 >
-                  <ThemeToggle />
-                </div>
+                  Appearance
+                </p>
+
+                <p
+                  className="
+                    text-[11px]
+                    text-slate-400
+                  "
+                >
+                  Change theme
+                </p>
 
               </div>
 
 
-              {/* =================================================
-                  NAVIGATION
-              ================================================= */}
+              {/* THEME BUTTON */}
 
-              <nav className="space-y-1">
+              <div
+                className="
+                  flex
 
-                {navigation.map((item) => {
-                  const Icon = item.icon;
+                  h-10
+                  w-10
+                  shrink-0
 
-                  const active =
-                    isActive(item.path);
+                  items-center
+                  justify-center
 
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`
-                        flex
-                        items-center
-                        justify-between
+                  opacity-100
+                  visible
+                "
+              >
+                <ThemeToggle />
+              </div>
 
-                        rounded-xl
-
-                        px-3
-                        py-3
-
-                        transition-colors
-                        duration-200
-
-                        ${
-                          active
-                            ? `
-                              bg-slate-100
-                              text-slate-950
-
-                              dark:bg-slate-800
-                              dark:text-white
-                            `
-                            : `
-                              text-slate-600
-
-                              hover:bg-slate-50
-                              hover:text-slate-950
-
-                              dark:text-slate-300
-                              dark:hover:bg-slate-900
-                              dark:hover:text-white
-                            `
-                        }
-                      `}
-                    >
-
-                      <div
-                        className="
-                          flex
-                          items-center
-                          gap-3
-                        "
-                      >
-
-                        <div
-                          className={`
-                            flex
-                            h-9
-                            w-9
-                            shrink-0
-
-                            items-center
-                            justify-center
-
-                            rounded-lg
-
-                            ${
-                              active
-                                ? `
-                                  bg-white
-                                  shadow-sm
-
-                                  dark:bg-slate-700
-                                `
-                                : `
-                                  bg-slate-100
-
-                                  dark:bg-slate-900
-                                `
-                            }
-                          `}
-                        >
-
-                          <Icon size={17} />
-
-                        </div>
-
-                        <span
-                          className="
-                            text-sm
-                            font-semibold
-                          "
-                        >
-                          {item.name}
-                        </span>
-
-                      </div>
+            </div>
 
 
-                      <ChevronRight
-                        size={16}
-                        className="
-                          shrink-0
-                          text-slate-400
-                        "
-                      />
+            {/* =================================================
+                NAVIGATION
+            ================================================= */}
 
-                    </Link>
-                  );
-                })}
+            <nav className="mt-2 space-y-1">
 
-              </nav>
+              {navigation.map((item) => {
+                const Icon = item.icon;
 
+                const active =
+                  isActive(item.path);
 
-              {/* =================================================
-                  LOGGED OUT
-              ================================================= */}
-
-              {!loading && !user && (
-                <div
-                  className="
-                    mt-2
-                    border-t
-                    border-slate-200
-                    pt-2
-
-                    dark:border-slate-800
-                  "
-                >
-
+                return (
                   <Link
-                    to="/login"
-                    className="
+                    key={item.path}
+                    to={item.path}
+                    className={`
                       flex
-                      w-full
 
-                      items-center
-                      justify-center
-                      gap-2
-
-                      rounded-xl
-
-                      bg-slate-950
-
-                      px-4
-                      py-3
-
-                      text-sm
-                      font-semibold
-                      text-white
-
-                      transition
-
-                      hover:shadow-md
-
-                      dark:bg-white
-                      dark:text-slate-950
-                    "
-                  >
-
-                    <LogIn size={17} />
-
-                    Login
-
-                  </Link>
-
-                </div>
-              )}
-
-
-              {/* =================================================
-                  LOGGED IN
-              ================================================= */}
-
-              {!loading && user && (
-                <div
-                  className="
-                    mt-2
-                    space-y-2
-
-                    border-t
-                    border-slate-200
-
-                    pt-2
-
-                    dark:border-slate-800
-                  "
-                >
-
-                  {/* User */}
-
-                  <div
-                    className="
-                      flex
-                      items-center
-                      gap-3
-
-                      rounded-xl
-
-                      bg-slate-50
-
-                      p-3
-
-                      dark:bg-slate-900
-                    "
-                  >
-
-                    <div
-                      className="
-                        flex
-                        h-10
-                        w-10
-                        shrink-0
-
-                        items-center
-                        justify-center
-
-                        rounded-xl
-
-                        bg-white
-
-                        shadow-sm
-
-                        dark:bg-slate-800
-                      "
-                    >
-                      <User size={17} />
-                    </div>
-
-
-                    <div className="min-w-0">
-
-                      <p
-                        className="
-                          text-[10px]
-                          font-semibold
-                          uppercase
-                          tracking-wider
-
-                          text-slate-400
-                        "
-                      >
-                        Signed in as
-                      </p>
-
-                      <p
-                        className="
-                          truncate
-                          text-sm
-                          font-semibold
-
-                          text-slate-800
-
-                          dark:text-slate-100
-                        "
-                      >
-                        {user.email}
-                      </p>
-
-                    </div>
-
-                  </div>
-
-
-                  {/* Credits */}
-
-                  <Link
-                    to="/recharge"
-                    className="
-                      flex
                       items-center
                       justify-between
 
                       rounded-xl
 
-                      border
-                      border-slate-200
+                      px-3
+                      py-3
 
-                      bg-white
+                      transition-colors
+                      duration-200
 
-                      p-3
+                      ${
+                        active
+                          ? `
+                            bg-slate-100
+                            text-slate-950
 
-                      transition
+                            dark:bg-slate-800
+                            dark:text-white
+                          `
+                          : `
+                            text-slate-600
 
-                      hover:bg-slate-50
+                            hover:bg-slate-50
+                            hover:text-slate-950
 
-                      dark:border-slate-800
-                      dark:bg-slate-900
-                      dark:hover:bg-slate-800
-                    "
+                            dark:text-slate-300
+                            dark:hover:bg-slate-900
+                            dark:hover:text-white
+                          `
+                      }
+                    `}
                   >
 
                     <div
@@ -1355,123 +1128,381 @@ function Navbar() {
                     >
 
                       <div
-                        className="
+                        className={`
                           flex
-                          h-10
-                          w-10
+
+                          h-9
+                          w-9
                           shrink-0
 
                           items-center
                           justify-center
 
-                          rounded-xl
+                          rounded-lg
 
-                          bg-slate-100
+                          ${
+                            active
+                              ? `
+                                bg-white
+                                shadow-sm
 
-                          dark:bg-slate-800
-                        "
+                                dark:bg-slate-700
+                              `
+                              : `
+                                bg-slate-100
+
+                                dark:bg-slate-900
+                              `
+                          }
+                        `}
                       >
 
-                        <Sparkles
-                          size={17}
-                          className="
-                            text-slate-600
-                            dark:text-slate-300
-                          "
-                        />
+                        <Icon size={17} />
 
                       </div>
 
 
-                      <div>
-
-                        <p
-                          className="
-                            text-xs
-                            font-medium
-                            text-slate-400
-                          "
-                        >
-                          Available balance
-                        </p>
-
-                        <p
-                          className="
-                            text-sm
-                            font-bold
-
-                            text-slate-900
-
-                            dark:text-white
-                          "
-                        >
-                          {user.credits} credits
-                        </p>
-
-                      </div>
+                      <span
+                        className="
+                          text-sm
+                          font-semibold
+                        "
+                      >
+                        {item.name}
+                      </span>
 
                     </div>
 
 
                     <ChevronRight
-                      size={17}
-                      className="text-slate-400"
+                      size={16}
+                      className="
+                        shrink-0
+                        text-slate-400
+                      "
                     />
 
                   </Link>
+                );
+              })}
+
+            </nav>
 
 
-                  {/* Logout */}
+            {/* =================================================
+                LOGGED OUT
+            ================================================= */}
 
-                  <button
-                    type="button"
-                    onClick={handleLogout}
+            {!loading && !user && (
+              <div
+                className="
+                  mt-2
+
+                  border-t
+                  border-slate-200
+
+                  pt-2
+
+                  dark:border-slate-800
+                "
+              >
+
+                <Link
+                  to="/login"
+                  className="
+                    flex
+                    w-full
+
+                    items-center
+                    justify-center
+                    gap-2
+
+                    rounded-xl
+
+                    bg-slate-950
+
+                    px-4
+                    py-3
+
+                    text-sm
+                    font-semibold
+                    text-white
+
+                    shadow-sm
+
+                    transition
+
+                    hover:shadow-md
+
+                    dark:bg-white
+                    dark:text-slate-950
+                  "
+                >
+
+                  <LogIn size={17} />
+
+                  Login
+
+                </Link>
+
+              </div>
+            )}
+
+
+            {/* =================================================
+                LOGGED IN
+            ================================================= */}
+
+            {!loading && user && (
+              <div
+                className="
+                  mt-2
+
+                  space-y-2
+
+                  border-t
+                  border-slate-200
+
+                  pt-2
+
+                  dark:border-slate-800
+                "
+              >
+
+                {/* USER */}
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    gap-3
+
+                    rounded-xl
+
+                    bg-slate-50
+
+                    p-3
+
+                    dark:bg-slate-900
+                  "
+                >
+
+                  <div
                     className="
                       flex
-                      w-full
+
+                      h-10
+                      w-10
+                      shrink-0
 
                       items-center
                       justify-center
-                      gap-2
 
                       rounded-xl
 
-                      border
-                      border-slate-200
+                      bg-white
 
-                      px-4
-                      py-3
+                      shadow-sm
 
-                      text-sm
-                      font-semibold
+                      dark:bg-slate-800
+                    "
+                  >
+                    <User size={17} />
+                  </div>
 
-                      text-slate-600
 
-                      transition
+                  <div className="min-w-0">
 
-                      hover:border-red-200
-                      hover:bg-red-50
-                      hover:text-red-600
+                    <p
+                      className="
+                        text-[10px]
+                        font-semibold
+                        uppercase
+                        tracking-wider
 
-                      dark:border-slate-800
-                      dark:text-slate-300
+                        text-slate-400
+                      "
+                    >
+                      Signed in as
+                    </p>
 
-                      dark:hover:border-red-900
-                      dark:hover:bg-red-950/30
-                      dark:hover:text-red-400
+                    <p
+                      className="
+                        truncate
+
+                        text-sm
+                        font-semibold
+
+                        text-slate-800
+
+                        dark:text-slate-100
+                      "
+                    >
+                      {user.email}
+                    </p>
+
+                  </div>
+
+                </div>
+
+
+                {/* CREDITS */}
+
+                <Link
+                  to="/recharge"
+                  className="
+                    flex
+
+                    items-center
+                    justify-between
+
+                    rounded-xl
+
+                    border
+                    border-slate-200
+
+                    bg-white
+
+                    p-3
+
+                    transition
+
+                    hover:bg-slate-50
+
+                    dark:border-slate-800
+                    dark:bg-slate-900
+                    dark:hover:bg-slate-800
+                  "
+                >
+
+                  <div
+                    className="
+                      flex
+                      items-center
+                      gap-3
                     "
                   >
 
-                    <LogOut size={17} />
+                    <div
+                      className="
+                        flex
 
-                    Logout
+                        h-10
+                        w-10
+                        shrink-0
 
-                  </button>
+                        items-center
+                        justify-center
 
-                </div>
-              )}
+                        rounded-xl
 
-            </div>
+                        bg-slate-100
+
+                        dark:bg-slate-800
+                      "
+                    >
+
+                      <Sparkles
+                        size={17}
+                        className="
+                          text-slate-600
+                          dark:text-slate-300
+                        "
+                      />
+
+                    </div>
+
+
+                    <div>
+
+                      <p
+                        className="
+                          text-xs
+                          font-medium
+                          text-slate-400
+                        "
+                      >
+                        Available balance
+                      </p>
+
+                      <p
+                        className="
+                          text-sm
+                          font-bold
+
+                          text-slate-900
+
+                          dark:text-white
+                        "
+                      >
+                        {user.credits} credits
+                      </p>
+
+                    </div>
+
+                  </div>
+
+
+                  <ChevronRight
+                    size={17}
+                    className="
+                      shrink-0
+                      text-slate-400
+                    "
+                  />
+
+                </Link>
+
+
+                {/* LOGOUT */}
+
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="
+                    flex
+                    w-full
+
+                    items-center
+                    justify-center
+                    gap-2
+
+                    rounded-xl
+
+                    border
+                    border-slate-200
+
+                    px-4
+                    py-3
+
+                    text-sm
+                    font-semibold
+
+                    text-slate-600
+
+                    transition
+
+                    hover:border-red-200
+                    hover:bg-red-50
+                    hover:text-red-600
+
+                    dark:border-slate-800
+                    dark:text-slate-300
+
+                    dark:hover:border-red-900
+                    dark:hover:bg-red-950/30
+                    dark:hover:text-red-400
+                  "
+                >
+
+                  <LogOut size={17} />
+
+                  Logout
+
+                </button>
+
+              </div>
+            )}
 
           </div>
 
@@ -1484,3 +1515,4 @@ function Navbar() {
 }
 
 export default Navbar;
+

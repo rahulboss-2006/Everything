@@ -6,14 +6,37 @@ import {
 
 import useTheme from "../hooks/useTheme";
 
+
 export default function ThemeToggle() {
   const {
     theme,
     setTheme,
   } = useTheme();
 
+
   return (
-    <div className="hidden items-center gap-1 rounded-xl border border-slate-200 p-1 dark:border-slate-800 sm:flex">
+    <div
+      className="
+        flex
+        shrink-0
+        items-center
+        gap-1
+
+        rounded-xl
+
+        border
+        border-slate-200
+
+        bg-white
+
+        p-1
+
+        dark:border-slate-800
+        dark:bg-slate-900
+      "
+    >
+
+      {/* SYSTEM */}
 
       <ThemeButton
         active={theme === "system"}
@@ -22,12 +45,18 @@ export default function ThemeToggle() {
         title="System"
       />
 
+
+      {/* LIGHT */}
+
       <ThemeButton
         active={theme === "light"}
         onClick={() => setTheme("light")}
         icon={<Sun size={15} />}
         title="Light"
       />
+
+
+      {/* DARK */}
 
       <ThemeButton
         active={theme === "dark"}
@@ -39,6 +68,11 @@ export default function ThemeToggle() {
     </div>
   );
 }
+
+
+/* =========================================================
+   THEME BUTTON
+========================================================= */
 
 function ThemeButton({
   active,
@@ -53,13 +87,48 @@ function ThemeButton({
       title={title}
       aria-label={`${title} theme`}
       aria-pressed={active}
-      className={`rounded-lg p-2 transition ${
-        active
-          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-950"
-          : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-      }`}
+
+      className={`
+        flex
+        h-8
+        w-8
+        shrink-0
+
+        items-center
+        justify-center
+
+        rounded-lg
+
+        transition-all
+        duration-200
+
+        active:scale-95
+
+        ${
+          active
+            ? `
+              bg-slate-900
+              text-white
+              shadow-sm
+
+              dark:bg-white
+              dark:text-slate-950
+            `
+            : `
+              text-slate-500
+
+              hover:bg-slate-100
+              hover:text-slate-900
+
+              dark:text-slate-400
+              dark:hover:bg-slate-800
+              dark:hover:text-white
+            `
+        }
+      `}
     >
       {icon}
     </button>
   );
 }
+
