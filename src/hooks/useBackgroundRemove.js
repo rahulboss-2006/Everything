@@ -1,4 +1,4 @@
-﻿import {
+import {
   useRef,
   useState,
   useEffect,
@@ -35,8 +35,14 @@ async function getBackgroundRemovalModule() {
   }
 
   if (!backgroundRemovalModulePromise) {
-    backgroundRemovalModulePromise =
-      import("@imgly/background-removal");
+    // Share one import across calls, but allow a retry if the chunk fails
+    // to download on a slow or unstable connection.
+    backgroundRemovalModulePromise = import("@imgly/background-removal").catch(
+      (error) => {
+        backgroundRemovalModulePromise = null;
+        throw error;
+      }
+    );
   }
 
   return backgroundRemovalModulePromise;
@@ -48,8 +54,8 @@ async function getBackgroundRemovalModule() {
  * =========================================================
  */
 
-const AI_MAX_SIZE_CPU = 768;
-const AI_MAX_SIZE_WEAK = 640;
+const AI_MAX_SIZE_CPU = 640;
+const AI_MAX_SIZE_WEAK = 512;
 
 let globalWorkingConfig = null;
 
@@ -151,9 +157,9 @@ function getCpuConfig() {
   return {
     device: "cpu",
 
-    model: weak
-      ? "isnet_quint8"
-      : "isnet_fp16",
+    // Use the smaller quantized model on every CPU device. It reduces the
+    // first model download for low-bandwidth users and is suitable for CPU.
+    model: "isnet_quint8",
 
     proxyToWorker: true,
 
