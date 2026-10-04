@@ -33,13 +33,7 @@ export default function ResizeDock({
     <div
       className="
         pointer-events-none
-        absolute inset-x-0 bottom-0
-        z-50
-        flex justify-center
-        px-1
-        pb-[max(0.15rem,env(safe-area-inset-bottom))]
-        sm:px-3
-        sm:pb-3
+        absolute bottom-3 z-50 left-[40.6%] w-[calc(100%-1rem)] max-w-2xl -translate-x-1/2 md:bottom-4 max-md:left-2 max-md:right-2 max-md:w-auto max-md:max-w-none max-md:translate-x-0 max-[480px]:bottom-2 max-[480px]:left-2 max-[480px]:right-2
       "
     >
       <div
@@ -634,3 +628,4 @@ export default function ResizeDock({
     </div>
   );
 }
+
