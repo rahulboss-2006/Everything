@@ -240,7 +240,7 @@ function EditorControls({
             disabled={editorControlsDisabled}
             className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl bg-white px-1.5 py-2.5 text-xs text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-3 sm:text-sm dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
           >
-            <RotateCcw size={17} className="shrink-0" />
+            <RotateCcw size={10} className="shrink-0" />
             <span className="truncate">Rotate</span>
           </button>
 

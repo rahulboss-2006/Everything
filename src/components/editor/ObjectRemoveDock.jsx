@@ -1,14 +1,15 @@
+
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, X, Loader2, GripHorizontal } from "lucide-react";
 
-// Elements that must keep their normal behaviour instead of starting a drag.
+// Elements that should keep their normal behaviour.
 const NO_DRAG_SELECTOR =
   'button, input, select, textarea, label, a, [role="slider"], [data-no-drag]';
 
 const EDGE = 8;
 
-function clampRange(value, min, max) {
+function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
@@ -22,71 +23,130 @@ const ObjectRemoveDock = ({
   objectApplying,
   anchor, // { left, width, top }
 }) => {
-  /*
-    All hooks MUST stay above the early return below, otherwise React
-    throws "Rendered more hooks than during the previous render" when
-    objectMode toggles.
-  */
-
   const dockRef = useRef(null);
   const dragRef = useRef(null);
+  const rafRef = useRef(null);
 
-  // Offset from the default position (just below the canvas).
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
 
-  // The default position depends on the window size, so snap back on resize.
+  /*
+   * Reset the dock when the viewport changes.
+   * This keeps the default position correct on:
+   * - desktop resize
+   * - mobile orientation change
+   * - browser resize
+   */
   useEffect(() => {
-    function handleResize() {
+    const handleResize = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+
+      dragRef.current = null;
+      setDragging(false);
       setOffset({ x: 0, y: 0 });
-    }
+    };
 
     window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
 
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
   }, []);
 
-  // Global listeners only while a drag is active.
+  /*
+   * Cleanup animation frame on unmount.
+   */
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
+
+  /*
+   * Global pointer listeners while dragging.
+   *
+   * requestAnimationFrame prevents React from rendering on every
+   * pointermove event, which makes the movement much smoother.
+   */
   useEffect(() => {
     if (!dragging) return undefined;
 
-    function handleMove(event) {
+    const handleMove = (event) => {
       const drag = dragRef.current;
       if (!drag) return;
 
-      const dx = clampRange(
-        event.clientX - drag.startX,
-        drag.minDx,
-        drag.maxDx
-      );
+      drag.latestX = event.clientX;
+      drag.latestY = event.clientY;
 
-      const dy = clampRange(
-        event.clientY - drag.startY,
-        drag.minDy,
-        drag.maxDy
-      );
+      if (rafRef.current) return;
 
-      setOffset({ x: drag.originX + dx, y: drag.originY + dy });
-    }
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
 
-    function handleUp() {
+        const currentDrag = dragRef.current;
+        if (!currentDrag) return;
+
+        const dx = currentDrag.latestX - currentDrag.startX;
+        const dy = currentDrag.latestY - currentDrag.startY;
+
+        const nextX = clamp(
+          currentDrag.originX + dx,
+          currentDrag.minX,
+          currentDrag.maxX
+        );
+
+        const nextY = clamp(
+          currentDrag.originY + dy,
+          currentDrag.minY,
+          currentDrag.maxY
+        );
+
+        setOffset({
+          x: nextX,
+          y: nextY,
+        });
+      });
+    };
+
+    const handleUp = () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+
       dragRef.current = null;
       setDragging(false);
-    }
+    };
 
     const previousUserSelect = document.body.style.userSelect;
-    document.body.style.userSelect = "none";
+    const previousCursor = document.body.style.cursor;
 
-    window.addEventListener("pointermove", handleMove);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+
+    window.addEventListener("pointermove", handleMove, { passive: true });
     window.addEventListener("pointerup", handleUp);
     window.addEventListener("pointercancel", handleUp);
 
     return () => {
       document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
 
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleUp);
+
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [dragging]);
 
@@ -94,36 +154,79 @@ const ObjectRemoveDock = ({
     return null;
   }
 
-  const dockWidth = Math.max(280, Math.min(anchor.width - 16, 672));
+  /*
+   * Responsive width.
+   *
+   * Desktop: up to 672px
+   * Mobile: viewport minus 16px
+   */
+  const viewportWidth =
+    typeof window !== "undefined" ? window.innerWidth : anchor.width;
+
+  const dockWidth = Math.min(
+    672,
+    Math.max(240, viewportWidth - EDGE * 2)
+  );
 
   function handlePointerDown(event) {
     if (event.button !== 0) return;
-    if (event.target.closest?.(NO_DRAG_SELECTOR)) return;
+
+    if (event.target.closest?.(NO_DRAG_SELECTOR)) {
+      return;
+    }
 
     const dock = dockRef.current;
     if (!dock) return;
 
     event.preventDefault();
 
-    // Current on-screen box (already includes the current offset).
+    /*
+     * Capture the pointer so dragging remains smooth even when the
+     * pointer moves outside the dock.
+     */
+    try {
+      dock.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture is not available in some environments.
+    }
+
     const rect = dock.getBoundingClientRect();
+
+    /*
+     * Current offset is already reflected in rect.
+     *
+     * Calculate how much the dock is allowed to move from its
+     * current position while remaining inside the viewport.
+     */
+    const minX = EDGE - rect.left + offset.x;
+    const maxX = window.innerWidth - EDGE - rect.right + offset.x;
+
+    const minY = EDGE - rect.top + offset.y;
+    const maxY = window.innerHeight - EDGE - rect.bottom + offset.y;
 
     dragRef.current = {
       startX: event.clientX,
       startY: event.clientY,
+
       originX: offset.x,
       originY: offset.y,
-      minDx: EDGE - rect.left,
-      maxDx: window.innerWidth - EDGE - rect.right,
-      minDy: EDGE - rect.top,
-      maxDy: window.innerHeight - EDGE - rect.bottom,
+
+      minX,
+      maxX,
+      minY,
+      maxY,
+
+      latestX: event.clientX,
+      latestY: event.clientY,
     };
 
     setDragging(true);
   }
 
   function handleDoubleClick(event) {
-    if (event.target.closest?.(NO_DRAG_SELECTOR)) return;
+    if (event.target.closest?.(NO_DRAG_SELECTOR)) {
+      return;
+    }
 
     setOffset({ x: 0, y: 0 });
   }
@@ -131,29 +234,48 @@ const ObjectRemoveDock = ({
   return createPortal(
     <div
       ref={dockRef}
-      className={`fixed z-[150] ${
-        dragging ? "cursor-grabbing" : "cursor-grab"
-      }`}
+      className={[
+        "fixed z-[150]",
+        "select-none",
+        "touch-none",
+        dragging ? "cursor-grabbing" : "cursor-grab",
+      ].join(" ")}
       style={{
         left: anchor.left + anchor.width / 2,
         top: anchor.top,
         width: dockWidth,
-        // Centers the dock on the canvas (was `-translate-x-1/2`) and adds
-        // the drag offset. Inline so it works with any Tailwind version.
-        transform: `translate(calc(-50% + ${offset.x}px), ${offset.y}px)`,
+
+        /*
+         * GPU-friendly transform.
+         *
+         * translate3d() generally gives smoother movement than
+         * repeatedly changing left/top.
+         */
+        transform: `translate3d(
+          calc(-50% + ${offset.x}px),
+          ${offset.y}px,
+          0
+        )`,
+
+        /*
+         * Helps the browser optimize this element for dragging.
+         */
+        willChange: dragging ? "transform" : "auto",
+
+        /*
+         * Prevents mobile browsers from interpreting the drag
+         * as scrolling/zooming.
+         */
+        touchAction: "none",
       }}
       onPointerDown={handlePointerDown}
       onDoubleClick={handleDoubleClick}
     >
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 px-3 pb-3 pt-1.5 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-
-        {/* DRAG GRIP
-            Grab this bar (or any empty part of the dock) to move it.
-            Double-click to put it back. */}
-
+        {/* Drag grip */}
         <div
-          title="Drag to move  •  Double-click to reset position"
-          className="flex select-none items-center justify-center pb-1 text-slate-500 transition hover:text-slate-300"
+          title="Drag to move • Double-click to reset position"
+          className="flex select-none items-center justify-center pb-1 text-slate-500 transition-colors hover:text-slate-300"
         >
           <GripHorizontal size={18} />
         </div>
@@ -210,6 +332,7 @@ const ObjectRemoveDock = ({
             ) : (
               <Check size={15} />
             )}
+
             Apply
           </button>
         </div>

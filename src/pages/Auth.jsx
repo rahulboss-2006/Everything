@@ -344,13 +344,7 @@ export default function Auth() {
   return (
     <div className="min-h-screen bg-white text-slate-900 dark:bg-slate-950 dark:text-white">
 
-      {/* =====================================
-          THEME TOGGLE
-      ===================================== */}
-
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
+      
 
 
       {/* =====================================
@@ -382,7 +376,7 @@ export default function Auth() {
           >
             <ArrowLeft size={16} />
 
-            Back to home
+            Back
           </button>
 
         </div>
@@ -776,4 +770,3 @@ export default function Auth() {
     </div>
   );
 }
-
