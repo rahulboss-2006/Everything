@@ -1,4 +1,9 @@
-import { useRef, useState, useEffect } from "react";
+import {
+  useRef,
+  useState,
+  useEffect,
+} from "react";
+
 import {
   segmentForeground,
   applySegmentationMask,
@@ -12,54 +17,55 @@ import {
 
 /*
  * =========================================================
- * BACKGROUND REMOVAL PERFORMANCE SETTINGS
+ * PERFORMANCE
  * =========================================================
  *
- * AI does NOT need to process the original 4K/8K image.
+ * Upload:
  *
- * Example:
- *
- * 6000 x 4000 original
- *        ↓
- * ~1024px AI image
- *        ↓
- * AI segmentation
- *        ↓
+ * original
+ *   ↓
+ * small AI copy
+ *   ↓
+ * GPU / ISNet
+ *   ↓
  * mask
- *        ↓
- * original 6000 x 4000 image
- *        ↓
- * apply mask
+ *   ↓
+ * original image
+ *   ↓
+ * transparent result
+ *   ↓
+ * CACHE
  *
- * This keeps the final output at the original resolution
- * while dramatically reducing AI inference work.
+ * Remove button:
+ *
+ * cached result
+ *   ↓
+ * instant apply
+ *
+ * This means the expensive work happens BEFORE
+ * the user presses Remove.
  */
 
 const AI_MAX_SIZE = 1024;
-
-/*
- * For very weak devices use a smaller AI image.
- *
- * 768 is still enough for most normal product/person images
- * while being considerably lighter on low-end devices.
- */
 const AI_MAX_SIZE_WEAK = 768;
 
 /*
  * =========================================================
- * DEVICE DETECTION
+ * DEVICE
  * =========================================================
  */
 
-function getDeviceMemory() {
+function getMemory() {
   try {
-    return Number(navigator.deviceMemory || 0);
+    return Number(
+      navigator.deviceMemory || 0
+    );
   } catch {
     return 0;
   }
 }
 
-function getCpuCores() {
+function getCores() {
   try {
     return Number(
       navigator.hardwareConcurrency || 4
@@ -70,8 +76,8 @@ function getCpuCores() {
 }
 
 function isWeakDevice() {
-  const memory = getDeviceMemory();
-  const cores = getCpuCores();
+  const memory = getMemory();
+  const cores = getCores();
 
   if (memory > 0 && memory <= 4) {
     return true;
@@ -84,22 +90,7 @@ function isWeakDevice() {
   return false;
 }
 
-/*
- * =========================================================
- * WEBGPU DETECTION
- * =========================================================
- *
- * IMG.LY supports:
- *
- * device: "gpu"
- *
- * for WebGPU-capable browsers.
- *
- * We only request GPU mode when navigator.gpu exists.
- * IMG.LY itself performs the final capability check.
- */
-
-function canUseWebGPU() {
+function hasWebGPU() {
   try {
     return (
       typeof navigator !== "undefined" &&
@@ -112,50 +103,51 @@ function canUseWebGPU() {
 
 /*
  * =========================================================
- * MODEL SELECTION
+ * CONFIG
  * =========================================================
  *
  * GPU:
- *   isnet
+ *   isnet + GPU
  *
- * CPU normal:
- *   isnet_fp16
+ * CPU:
+ *   weak -> quint8
+ *   normal -> fp16
  *
- * Weak CPU:
- *   isnet_quint8
+ * IMG.LY specifically added GPU execution with:
  *
- * The AI input is already reduced to ~1024px,
- * so we can use the better model on capable devices.
+ * device: "gpu"
+ *
+ * and the isnet model for WebGPU. 
  */
 
-function getBackgroundConfig() {
+function getConfig() {
+  const gpu = hasWebGPU();
   const weak = isWeakDevice();
-  const gpu = canUseWebGPU();
 
   if (gpu) {
     return {
-      model: "isnet",
       device: "gpu",
+      model: "isnet",
       weak,
     };
   }
 
   return {
+    device: "cpu",
     model: weak
       ? "isnet_quint8"
       : "isnet_fp16",
-    device: "cpu",
     weak,
   };
 }
 
 /*
  * =========================================================
- * AI IMAGE SIZE
+ * AI SIZE
  * =========================================================
  */
 
-function getAiMaxSize() {
+function getAiSize() {
   return isWeakDevice()
     ? AI_MAX_SIZE_WEAK
     : AI_MAX_SIZE;
@@ -163,30 +155,43 @@ function getAiMaxSize() {
 
 /*
  * =========================================================
- * CREATE SMALL AI INPUT
+ * IMAGE KEY
  * =========================================================
  *
- * This is one of the most important optimizations.
- *
- * We do NOT send the original 4K/8K image through AI
- * inference.
- *
- * Only a small working copy is used for segmentation.
+ * Used to prevent the same image from being processed twice.
+ */
+
+function getFileKey(file) {
+  if (!file) {
+    return "";
+  }
+
+  return [
+    file.name || "",
+    file.size || 0,
+    file.lastModified || 0,
+    file.type || "",
+  ].join("|");
+}
+
+/*
+ * =========================================================
+ * CREATE SMALL AI INPUT
+ * =========================================================
  */
 
 async function createAiInput(
-  sourceFile,
+  source,
   maxSize
 ) {
-  if (!sourceFile) {
+  if (!source) {
     throw new Error(
-      "No image was provided for background removal."
+      "No image available."
     );
   }
 
   /*
-   * createImageBitmap is much faster than creating
-   * a full-size HTMLImageElement on many browsers.
+   * Fast path.
    */
   if (
     typeof createImageBitmap ===
@@ -195,41 +200,34 @@ async function createAiInput(
     let bitmap = null;
 
     try {
-      /*
-       * Let the browser decode the source and resize
-       * during bitmap creation where supported.
-       *
-       * First determine dimensions.
-       */
-      const originalBitmap =
+      bitmap =
         await createImageBitmap(
-          sourceFile,
-          {
-            imageOrientation:
-              "from-image",
-          }
+          source
         );
 
-      const sourceWidth =
-        originalBitmap.width;
+      const width =
+        bitmap.width;
 
-      const sourceHeight =
-        originalBitmap.height;
+      const height =
+        bitmap.height;
 
-      const scale = Math.min(
-        1,
-        maxSize /
-          Math.max(
-            sourceWidth,
-            sourceHeight
-          )
-      );
+      const largest =
+        Math.max(
+          width,
+          height
+        );
+
+      const scale =
+        Math.min(
+          1,
+          maxSize / largest
+        );
 
       const targetWidth =
         Math.max(
           1,
           Math.round(
-            sourceWidth * scale
+            width * scale
           )
         );
 
@@ -237,74 +235,10 @@ async function createAiInput(
         Math.max(
           1,
           Math.round(
-            sourceHeight * scale
+            height * scale
           )
         );
 
-      /*
-       * If image is already small enough,
-       * use the decoded bitmap directly.
-       */
-      if (scale >= 1) {
-        const canvas =
-          document.createElement(
-            "canvas"
-          );
-
-        canvas.width =
-          sourceWidth;
-
-        canvas.height =
-          sourceHeight;
-
-        const ctx =
-          canvas.getContext("2d", {
-            alpha: true,
-            willReadFrequently: false,
-          });
-
-        if (!ctx) {
-          originalBitmap.close();
-
-          throw new Error(
-            "Could not create canvas context."
-          );
-        }
-
-        ctx.drawImage(
-          originalBitmap,
-          0,
-          0
-        );
-
-        originalBitmap.close();
-
-        const blob =
-          await new Promise(
-            (resolve, reject) => {
-              canvas.toBlob(
-                (result) => {
-                  if (result) {
-                    resolve(result);
-                  } else {
-                    reject(
-                      new Error(
-                        "Could not create AI image."
-                      )
-                    );
-                  }
-                },
-                "image/png"
-              );
-            }
-          );
-
-        return blob;
-      }
-
-      /*
-       * Resize during canvas rendering.
-       */
       const canvas =
         document.createElement(
           "canvas"
@@ -317,22 +251,22 @@ async function createAiInput(
         targetHeight;
 
       const ctx =
-        canvas.getContext("2d", {
-          alpha: true,
-          willReadFrequently: false,
-        });
+        canvas.getContext(
+          "2d",
+          {
+            alpha: true,
+            willReadFrequently: false,
+          }
+        );
 
       if (!ctx) {
-        originalBitmap.close();
+        bitmap.close();
 
         throw new Error(
-          "Could not create canvas context."
+          "Canvas is not available."
         );
       }
 
-      /*
-       * High-quality browser resize.
-       */
       ctx.imageSmoothingEnabled =
         true;
 
@@ -340,18 +274,21 @@ async function createAiInput(
         "high";
 
       ctx.drawImage(
-        originalBitmap,
+        bitmap,
         0,
         0,
         targetWidth,
         targetHeight
       );
 
-      originalBitmap.close();
+      bitmap.close();
 
       const blob =
         await new Promise(
-          (resolve, reject) => {
+          (
+            resolve,
+            reject
+          ) => {
             canvas.toBlob(
               (result) => {
                 if (result) {
@@ -371,50 +308,57 @@ async function createAiInput(
 
       return blob;
     } catch (error) {
+      if (bitmap) {
+        try {
+          bitmap.close();
+        } catch {
+          // ignore
+        }
+      }
+
       console.warn(
-        "[Background Remove] createImageBitmap failed, using image fallback:",
+        "[BG] AI resize fallback:",
         error
       );
     }
   }
 
   /*
-   * =======================================================
-   * FALLBACK IMAGE DECODER
-   * =======================================================
+   * Fallback.
    */
 
   const image =
-    await loadImage(sourceFile);
+    await loadImage(source);
 
   if (!image) {
     throw new Error(
-      "Could not decode the source image."
+      "Could not load source image."
     );
   }
 
-  const sourceWidth =
+  const width =
     image.naturalWidth ||
     image.width;
 
-  const sourceHeight =
+  const height =
     image.naturalHeight ||
     image.height;
 
-  const scale = Math.min(
-    1,
-    maxSize /
-      Math.max(
-        sourceWidth,
-        sourceHeight
-      )
-  );
+  const scale =
+    Math.min(
+      1,
+      maxSize /
+        Math.max(
+          width,
+          height
+        )
+    );
 
   const targetWidth =
     Math.max(
       1,
       Math.round(
-        sourceWidth * scale
+        width * scale
       )
     );
 
@@ -422,7 +366,7 @@ async function createAiInput(
     Math.max(
       1,
       Math.round(
-        sourceHeight * scale
+        height * scale
       )
     );
 
@@ -438,14 +382,16 @@ async function createAiInput(
     targetHeight;
 
   const ctx =
-    canvas.getContext("2d", {
-      alpha: true,
-      willReadFrequently: false,
-    });
+    canvas.getContext(
+      "2d",
+      {
+        alpha: true,
+      }
+    );
 
   if (!ctx) {
     throw new Error(
-      "Could not create canvas context."
+      "Canvas context unavailable."
     );
   }
 
@@ -463,182 +409,27 @@ async function createAiInput(
     targetHeight
   );
 
-  const blob =
-    await new Promise(
-      (resolve, reject) => {
-        canvas.toBlob(
-          (result) => {
-            if (result) {
-              resolve(result);
-            } else {
-              reject(
-                new Error(
-                  "Could not create AI image."
-                )
-              );
-            }
-          },
-          "image/png"
-        );
-      }
-    );
-
-  return blob;
-}
-
-/*
- * =========================================================
- * MASK CLEANUP
- * =========================================================
- *
- * The AI mask contains alpha information.
- *
- * We remove extremely tiny alpha values that can create
- * faint transparent background pixels / dirty edges.
- *
- * IMPORTANT:
- *
- * We do NOT aggressively threshold the mask.
- *
- * Hair, fur and soft edges need intermediate alpha.
- */
-
-async function cleanSegmentationMask(
-  maskBlob
-) {
-  if (!maskBlob) {
-    throw new Error(
-      "Segmentation mask is empty."
-    );
-  }
-
-  if (
-    typeof createImageBitmap !==
-    "function"
-  ) {
-    return maskBlob;
-  }
-
-  let bitmap = null;
-
-  try {
-    bitmap =
-      await createImageBitmap(
-        maskBlob
+  return await new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(
+              new Error(
+                "Could not create AI image."
+              )
+            );
+          }
+        },
+        "image/png"
       );
-
-    const width =
-      bitmap.width;
-
-    const height =
-      bitmap.height;
-
-    const canvas =
-      document.createElement(
-        "canvas"
-      );
-
-    canvas.width = width;
-    canvas.height = height;
-
-    const ctx =
-      canvas.getContext(
-        "2d",
-        {
-          alpha: true,
-          willReadFrequently: true,
-        }
-      );
-
-    if (!ctx) {
-      bitmap.close();
-
-      return maskBlob;
     }
-
-    ctx.drawImage(
-      bitmap,
-      0,
-      0
-    );
-
-    bitmap.close();
-
-    const imageData =
-      ctx.getImageData(
-        0,
-        0,
-        width,
-        height
-      );
-
-    const data =
-      imageData.data;
-
-    /*
-     * Very small alpha values are usually unwanted
-     * background residue.
-     *
-     * Preserve soft edges between 8 and 247.
-     */
-    for (
-      let i = 0;
-      i < data.length;
-      i += 4
-    ) {
-      const alpha =
-        data[i + 3];
-
-      if (alpha <= 8) {
-        data[i + 3] = 0;
-      } else if (alpha >= 247) {
-        data[i + 3] = 255;
-      }
-    }
-
-    ctx.putImageData(
-      imageData,
-      0,
-      0
-    );
-
-    const cleaned =
-      await new Promise(
-        (resolve, reject) => {
-          canvas.toBlob(
-            (result) => {
-              if (result) {
-                resolve(result);
-              } else {
-                reject(
-                  new Error(
-                    "Could not clean segmentation mask."
-                  )
-                );
-              }
-            },
-            "image/png"
-          );
-        }
-      );
-
-    return cleaned;
-  } catch (error) {
-    console.warn(
-      "[Background Remove] mask cleanup skipped:",
-      error
-    );
-
-    if (bitmap) {
-      try {
-        bitmap.close();
-      } catch {
-        // Ignore
-      }
-    }
-
-    return maskBlob;
-  }
+  );
 }
 
 /*
@@ -660,6 +451,12 @@ export default function useBackgroundRemove({
   objectDrawingRef,
   layers,
 }) {
+  /*
+   * -------------------------------------------------------
+   * PROGRESS
+   * -------------------------------------------------------
+   */
+
   const progressFrameRef =
     useRef(null);
 
@@ -672,6 +469,34 @@ export default function useBackgroundRemove({
   const operationFinishedRef =
     useRef(false);
 
+  /*
+   * -------------------------------------------------------
+   * PRE-COMPUTATION CACHE
+   * -------------------------------------------------------
+   *
+   * The important part.
+   *
+   * Each uploaded image gets:
+   *
+   * key -> Promise<Blob>
+   *
+   * The promise is shared between:
+   *
+   * background preprocessing
+   * and Remove button
+   */
+
+  const preparedCacheRef =
+    useRef(
+      new Map()
+    );
+
+  const preparingKeyRef =
+    useRef("");
+
+  const cancelledKeyRef =
+    useRef("");
+
   const [backgroundProgress, setBackgroundProgress] =
     useState(0);
 
@@ -679,8 +504,20 @@ export default function useBackgroundRemove({
     useState("");
 
   /*
+   * -------------------------------------------------------
+   * READY STATE
+   * -------------------------------------------------------
+   */
+
+  const [backgroundReady, setBackgroundReady] =
+    useState(false);
+
+  const [backgroundPreparing, setBackgroundPreparing] =
+    useState(false);
+
+  /*
    * =======================================================
-   * PROGRESS ANIMATION
+   * PROGRESS ENGINE
    * =======================================================
    */
 
@@ -706,10 +543,6 @@ export default function useBackgroundRemove({
     progressTargetRef.current =
       safe;
 
-    animateProgress();
-  };
-
-  const animateProgress = () => {
     if (
       progressFrameRef.current
     ) {
@@ -717,13 +550,6 @@ export default function useBackgroundRemove({
     }
 
     const frame = () => {
-      const current =
-        displayedProgressRef.current;
-
-      /*
-       * When the entire operation has really finished,
-       * immediately show 100.
-       */
       if (
         operationFinishedRef.current
       ) {
@@ -739,6 +565,9 @@ export default function useBackgroundRemove({
 
         return;
       }
+
+      const current =
+        displayedProgressRef.current;
 
       const target =
         progressTargetRef.current;
@@ -762,21 +591,16 @@ export default function useBackgroundRemove({
         return;
       }
 
-      /*
-       * Fast smooth progress.
-       *
-       * Never artificially waits at 99.
-       */
       const step =
         Math.max(
-          0.7,
-          difference * 0.28
+          0.8,
+          difference * 0.25
         );
 
       const next =
         Math.min(
-          current + step,
-          target
+          target,
+          current + step
         );
 
       displayedProgressRef.current =
@@ -800,39 +624,8 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * CLEANUP
-   * =======================================================
-   */
-
-  useEffect(() => {
-    return () => {
-      if (
-        progressFrameRef.current
-      ) {
-        cancelAnimationFrame(
-          progressFrameRef.current
-        );
-
-        progressFrameRef.current =
-          null;
-      }
-    };
-  }, []);
-
-  /*
-   * =======================================================
    * REAL IMG.LY PROGRESS
    * =======================================================
-   *
-   * IMG.LY currently reports processing stages rather than
-   * a continuously increasing AI inference percentage.
-   *
-   * decode
-   * inference
-   * mask
-   * encode
-   *
-   * So we map those real stages to useful UI ranges.
    */
 
   const handleRealProgress = (
@@ -847,16 +640,11 @@ export default function useBackgroundRemove({
     if (
       key === "compute:decode"
     ) {
-      /*
-       * Model/resource loading and image decode.
-       */
-      if (
+      setProgressTarget(
         current <= 0
-      ) {
-        setProgressTarget(3);
-      } else {
-        setProgressTarget(12);
-      }
+          ? 3
+          : 15
+      );
 
       return;
     }
@@ -864,10 +652,9 @@ export default function useBackgroundRemove({
     if (
       key === "compute:inference"
     ) {
-      /*
-       * Segmentation starts.
-       */
-      setProgressTarget(55);
+      setProgressTarget(
+        58
+      );
 
       return;
     }
@@ -875,10 +662,9 @@ export default function useBackgroundRemove({
     if (
       key === "compute:mask"
     ) {
-      /*
-       * AI mask generated.
-       */
-      setProgressTarget(78);
+      setProgressTarget(
+        76
+      );
 
       return;
     }
@@ -886,26 +672,22 @@ export default function useBackgroundRemove({
     if (
       key === "compute:encode"
     ) {
-      /*
-       * Mask/output encoding.
-       */
       if (
         Number(current) >=
         Number(total)
       ) {
-        setProgressTarget(88);
+        setProgressTarget(
+          88
+        );
       } else {
-        setProgressTarget(84);
+        setProgressTarget(
+          83
+        );
       }
 
       return;
     }
 
-    /*
-     * Unknown event.
-     *
-     * Keep UI alive but don't fake a huge jump.
-     */
     setProgressTarget(
       Math.min(
         90,
@@ -917,7 +699,472 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * BACKGROUND REMOVE
+   * PREPARE ONE IMAGE
+   * =======================================================
+   *
+   * This is the expensive operation.
+   *
+   * It happens automatically when the image arrives.
+   */
+
+  const prepareBackgroundRemoval =
+    async (
+      file,
+      key
+    ) => {
+      if (
+        !file ||
+        !key
+      ) {
+        return null;
+      }
+
+      /*
+       * Existing completed cache.
+       */
+
+      const cached =
+        preparedCacheRef.current.get(
+          key
+        );
+
+      if (
+        cached?.blob
+      ) {
+        return cached.blob;
+      }
+
+      /*
+       * Existing running operation.
+       *
+       * Reuse it instead of starting another AI job.
+       */
+
+      if (
+        cached?.promise
+      ) {
+        return cached.promise;
+      }
+
+      const config =
+        getConfig();
+
+      const aiSize =
+        getAiSize();
+
+      console.log(
+        "[BG] PREPARE START",
+        {
+          model:
+            config.model,
+          device:
+            config.device,
+          aiSize,
+          fileSize:
+            file.size,
+          fileType:
+            file.type,
+        }
+      );
+
+      setBackgroundPreparing(
+        true
+      );
+
+      setBackgroundReady(
+        false
+      );
+
+      setBackgroundError(
+        ""
+      );
+
+      /*
+       * Don't let old operation modify the new image.
+       */
+
+      preparingKeyRef.current =
+        key;
+
+      const promise =
+        (async () => {
+          /*
+           * ---------------------------------------------
+           * SMALL AI INPUT
+           * ---------------------------------------------
+           */
+
+          setProgressTarget(
+            5
+          );
+
+          const aiInput =
+            await createAiInput(
+              file,
+              aiSize
+            );
+
+          if (
+            preparingKeyRef.current !==
+            key
+          ) {
+            throw new Error(
+              "Background preparation cancelled."
+            );
+          }
+
+          setProgressTarget(
+            18
+          );
+
+          /*
+           * ---------------------------------------------
+           * AI SEGMENTATION
+           * ---------------------------------------------
+           */
+
+          console.log(
+            "[BG] AI segmentation..."
+          );
+
+          const mask =
+            await segmentForeground(
+              aiInput,
+              {
+                device:
+                  config.device,
+
+                model:
+                  config.model,
+
+                proxyToWorker:
+                  true,
+
+                output: {
+                  format:
+                    "image/png",
+
+                  quality: 1,
+                },
+
+                progress: (
+                  progressKey,
+                  current,
+                  total
+                ) => {
+                  if (
+                    preparingKeyRef.current !==
+                    key
+                  ) {
+                    return;
+                  }
+
+                  handleRealProgress(
+                    progressKey,
+                    current,
+                    total
+                  );
+                },
+              }
+            );
+
+          if (
+            preparingKeyRef.current !==
+            key
+          ) {
+            throw new Error(
+              "Background preparation cancelled."
+            );
+          }
+
+          if (!mask) {
+            throw new Error(
+              "AI returned an empty background mask."
+            );
+          }
+
+          setProgressTarget(
+            78
+          );
+
+          /*
+           * ---------------------------------------------
+           * APPLY MASK TO ORIGINAL
+           * ---------------------------------------------
+           *
+           * IMPORTANT:
+           *
+           * This is also done NOW, not when button
+           * is pressed.
+           *
+           * Therefore the final result itself is cached.
+           */
+
+          console.log(
+            "[BG] Building final transparent image..."
+          );
+
+          const finalBlob =
+            await applySegmentationMask(
+              file,
+              mask,
+              {
+                device:
+                  config.device,
+
+                model:
+                  config.model,
+
+                output: {
+                  format:
+                    "image/png",
+
+                  quality: 1,
+                },
+              }
+            );
+
+          if (
+            preparingKeyRef.current !==
+            key
+          ) {
+            throw new Error(
+              "Background preparation cancelled."
+            );
+          }
+
+          if (!finalBlob) {
+            throw new Error(
+              "Could not create transparent image."
+            );
+          }
+
+          setProgressTarget(
+            95
+          );
+
+          /*
+           * Cache FINAL result.
+           *
+           * Not just the mask.
+           */
+
+          preparedCacheRef.current.set(
+            key,
+            {
+              blob:
+                finalBlob,
+              ready:
+                true,
+            }
+          );
+
+          setBackgroundReady(
+            true
+          );
+
+          setBackgroundPreparing(
+            false
+          );
+
+          /*
+           * Don't force 100 here if the UI is not currently
+           * showing the remove operation.
+           */
+          setProgressTarget(
+            99
+          );
+
+          console.log(
+            "[BG] PREPARE READY"
+          );
+
+          return finalBlob;
+        })();
+
+      /*
+       * Cache running promise immediately.
+       */
+
+      preparedCacheRef.current.set(
+        key,
+        {
+          promise,
+          ready: false,
+        }
+      );
+
+      try {
+        const blob =
+          await promise;
+
+        /*
+         * Replace promise cache with final blob.
+         */
+
+        preparedCacheRef.current.set(
+          key,
+          {
+            blob,
+            ready: true,
+          }
+        );
+
+        return blob;
+      } catch (error) {
+        /*
+         * Remove failed cache.
+         */
+
+        const current =
+          preparedCacheRef.current.get(
+            key
+          );
+
+        if (
+          current?.promise ===
+          promise
+        ) {
+          preparedCacheRef.current.delete(
+            key
+          );
+        }
+
+        if (
+          error?.message !==
+          "Background preparation cancelled."
+        ) {
+          console.error(
+            "[BG] PREPARE FAILED:",
+            error
+          );
+
+          setBackgroundError(
+            error?.message ||
+              "Background preparation failed."
+          );
+        }
+
+        setBackgroundPreparing(
+          false
+        );
+
+        throw error;
+      }
+    };
+
+  /*
+   * =======================================================
+   * AUTOMATIC PREPARATION
+   * =======================================================
+   *
+   * THIS RUNS WHENEVER A NEW WORKING FILE ARRIVES.
+   *
+   * User does NOT need to press Remove first.
+   */
+
+  useEffect(() => {
+    if (!workingFile) {
+      setBackgroundReady(
+        false
+      );
+
+      setBackgroundPreparing(
+        false
+      );
+
+      return;
+    }
+
+    const key =
+      getFileKey(
+        workingFile
+      );
+
+    if (!key) {
+      return;
+    }
+
+    /*
+     * New image.
+     */
+
+    cancelledKeyRef.current =
+      preparingKeyRef.current;
+
+    /*
+     * Reset UI state for new image.
+     */
+
+    setBackgroundError(
+      ""
+    );
+
+    setBackgroundReady(
+      false
+    );
+
+    setBackgroundPreparing(
+      true
+    );
+
+    progressTargetRef.current =
+      0;
+
+    displayedProgressRef.current =
+      0;
+
+    operationFinishedRef.current =
+      false;
+
+    setBackgroundProgress(
+      0
+    );
+
+    /*
+     * Start immediately.
+     *
+     * Don't await here because this is intentionally
+     * background preprocessing.
+     */
+
+    prepareBackgroundRemoval(
+      workingFile,
+      key
+    ).catch(
+      (error) => {
+        if (
+          error?.message !==
+          "Background preparation cancelled."
+        ) {
+          console.error(
+            "[BG] automatic preparation:",
+            error
+          );
+        }
+      }
+    );
+
+    /*
+     * Cleanup only marks old work as stale.
+     */
+
+    return () => {
+      if (
+        preparingKeyRef.current ===
+        key
+      ) {
+        cancelledKeyRef.current =
+          key;
+      }
+    };
+  }, [
+    workingFile,
+  ]);
+
+  /*
+   * =======================================================
+   * REMOVE BUTTON
    * =======================================================
    */
 
@@ -929,13 +1176,16 @@ export default function useBackgroundRemove({
       return;
     }
 
-    try {
-      /*
-       * ---------------------------------------------------
-       * START
-       * ---------------------------------------------------
-       */
+    const key =
+      getFileKey(
+        workingFile
+      );
 
+    if (!key) {
+      return;
+    }
+
+    try {
       setRemovingBackground(
         true
       );
@@ -945,37 +1195,9 @@ export default function useBackgroundRemove({
       );
 
       /*
-       * Reset progress state.
+       * Reset visual position exactly like old hook.
        */
-      progressTargetRef.current =
-        0;
 
-      displayedProgressRef.current =
-        0;
-
-      operationFinishedRef.current =
-        false;
-
-      setBackgroundProgress(
-        0
-      );
-
-      if (
-        progressFrameRef.current
-      ) {
-        cancelAnimationFrame(
-          progressFrameRef.current
-        );
-
-        progressFrameRef.current =
-          null;
-      }
-
-      animateProgress();
-
-      /*
-       * Keep existing editor behavior.
-       */
       setImageOffset({
         x: 0,
         y: 0,
@@ -984,219 +1206,81 @@ export default function useBackgroundRemove({
       resetImageDrag();
 
       /*
-       * ---------------------------------------------------
-       * DEVICE / MODEL
-       * ---------------------------------------------------
+       * ---------------------------------------------
+       * CHECK CACHE
+       * ---------------------------------------------
        */
 
-      const backgroundConfig =
-        getBackgroundConfig();
+      let cached =
+        preparedCacheRef.current.get(
+          key
+        );
 
-      const aiMaxSize =
-        getAiMaxSize();
-
-      console.log(
-        "[Background Remove] configuration:",
-        {
-          model:
-            backgroundConfig.model,
-          device:
-            backgroundConfig.device,
-          weakDevice:
-            backgroundConfig.weak,
-          aiMaxSize,
-        }
-      );
+      let result =
+        cached?.blob || null;
 
       /*
-       * ---------------------------------------------------
-       * CREATE SMALL AI INPUT
-       * ---------------------------------------------------
+       * ---------------------------------------------
+       * IF READY:
        *
-       * The original image remains untouched.
+       * THIS IS THE FAST PATH.
        *
-       * Only this smaller image is used by AI.
+       * No AI.
+       * No segmentation.
+       * No mask generation.
+       *
+       * Only load cached transparent result.
+       * ---------------------------------------------
        */
 
-      setProgressTarget(5);
-
-      const aiInput =
-        await createAiInput(
-          workingFile,
-          aiMaxSize
+      if (result) {
+        console.log(
+          "[BG] REMOVE: cached result -> FAST PATH"
         );
 
-      if (!aiInput) {
-        throw new Error(
-          "Could not create the AI input image."
+        setBackgroundProgress(
+          96
         );
+      } else {
+        /*
+         * -------------------------------------------
+         * NOT READY YET
+         * -------------------------------------------
+         *
+         * User clicked before background preparation
+         * finished.
+         *
+         * Reuse the exact same promise.
+         */
+
+        console.log(
+          "[BG] REMOVE: waiting for background preparation..."
+        );
+
+        setBackgroundProgress(
+          Math.max(
+            20,
+            backgroundProgress
+          )
+        );
+
+        result =
+          await prepareBackgroundRemoval(
+            workingFile,
+            key
+          );
       }
-
-      setProgressTarget(15);
-
-      /*
-       * ---------------------------------------------------
-       * SEGMENT FOREGROUND
-       * ---------------------------------------------------
-       *
-       * IMPORTANT:
-       *
-       * We use segmentForeground instead of
-       * removeBackground.
-       *
-       * This means the AI generates only the mask.
-       *
-       * The original image is NOT downscaled for final output.
-       */
-
-      console.log(
-        "[Background Remove] starting segmentation..."
-      );
-
-      const mask =
-        await segmentForeground(
-          aiInput,
-          {
-            /*
-             * GPU when WebGPU is available.
-             * CPU otherwise.
-             */
-            device:
-              backgroundConfig.device,
-
-            /*
-             * Use the selected model.
-             */
-            model:
-              backgroundConfig.model,
-
-            /*
-             * WebGPU can run through a worker.
-             * For CPU, current IMG.LY runtime does not
-             * actually proxy WASM/CPU calculations.
-             */
-            proxyToWorker: true,
-
-            /*
-             * Mask itself only needs PNG.
-             */
-            output: {
-              format:
-                "image/png",
-              quality: 1,
-            },
-
-            progress: (
-              key,
-              current,
-              total
-            ) => {
-              handleRealProgress(
-                key,
-                current,
-                total
-              );
-            },
-          }
-        );
-
-      if (!mask) {
-        throw new Error(
-          "AI segmentation returned an empty mask."
-        );
-      }
-
-      /*
-       * Segmentation is actually finished here.
-       */
-      setProgressTarget(82);
-
-      console.log(
-        "[Background Remove] segmentation finished."
-      );
-
-      /*
-       * ---------------------------------------------------
-       * CLEAN MASK
-       * ---------------------------------------------------
-       */
-
-      const cleanedMask =
-        await cleanSegmentationMask(
-          mask
-        );
-
-      if (!cleanedMask) {
-        throw new Error(
-          "Could not prepare the segmentation mask."
-        );
-      }
-
-      setProgressTarget(87);
-
-      /*
-       * ---------------------------------------------------
-       * APPLY MASK TO ORIGINAL
-       * ---------------------------------------------------
-       *
-       * THIS is the key part.
-       *
-       * The original full-resolution image is used here.
-       *
-       * IMG.LY automatically resizes the mask to the
-       * original image dimensions when required.
-       */
-
-      console.log(
-        "[Background Remove] applying mask to original image..."
-      );
-
-      const result =
-        await applySegmentationMask(
-          workingFile,
-          cleanedMask,
-          {
-            /*
-             * Final output should remain PNG because
-             * the editor expects transparent PNG.
-             */
-            output: {
-              format:
-                "image/png",
-              quality: 1,
-            },
-
-            /*
-             * We don't need another AI pass here.
-             */
-            proxyToWorker: true,
-
-            /*
-             * Keep config valid for IMG.LY.
-             */
-            device:
-              backgroundConfig.device,
-
-            model:
-              backgroundConfig.model,
-          }
-        );
 
       if (!result) {
         throw new Error(
-          "Could not apply the AI background mask."
+          "Background removal result is unavailable."
         );
       }
 
       /*
-       * At this point the actual transparent image exists.
-       */
-      setProgressTarget(94);
-
-      /*
-       * ---------------------------------------------------
-       * CREATE EDITOR PNG FILE
-       * ---------------------------------------------------
+       * ---------------------------------------------
+       * CREATE EDITOR FILE
+       * ---------------------------------------------
        */
 
       const newFile =
@@ -1210,16 +1294,18 @@ export default function useBackgroundRemove({
 
       if (!newFile) {
         throw new Error(
-          "Could not create the transparent PNG file."
+          "Could not create transparent PNG."
         );
       }
 
-      setProgressTarget(97);
+      setBackgroundProgress(
+        98
+      );
 
       /*
-       * ---------------------------------------------------
+       * ---------------------------------------------
        * LOAD FINAL IMAGE
-       * ---------------------------------------------------
+       * ---------------------------------------------
        */
 
       const newImage =
@@ -1229,14 +1315,14 @@ export default function useBackgroundRemove({
 
       if (!newImage) {
         throw new Error(
-          "The generated transparent image could not be loaded."
+          "Transparent image could not be loaded."
         );
       }
 
       /*
-       * ---------------------------------------------------
+       * ---------------------------------------------
        * REGISTER LAYER
-       * ---------------------------------------------------
+       * ---------------------------------------------
        */
 
       layers.addToolLayer({
@@ -1251,9 +1337,9 @@ export default function useBackgroundRemove({
       });
 
       /*
-       * ---------------------------------------------------
+       * ---------------------------------------------
        * APPLY RESULT
-       * ---------------------------------------------------
+       * ---------------------------------------------
        */
 
       setWorkingFile(
@@ -1279,20 +1365,9 @@ export default function useBackgroundRemove({
       );
 
       /*
-       * ---------------------------------------------------
-       * REAL FINISH
-       * ---------------------------------------------------
-       *
-       * We only show 100 AFTER:
-       *
-       * 1. AI finished
-       * 2. mask was cleaned
-       * 3. mask applied to original
-       * 4. PNG created
-       * 5. final image loaded
-       * 6. editor state updated
-       *
-       * Therefore there is no fake 99% waiting.
+       * ---------------------------------------------
+       * COMPLETE
+       * ---------------------------------------------
        */
 
       operationFinishedRef.current =
@@ -1308,23 +1383,20 @@ export default function useBackgroundRemove({
         100
       );
 
-      if (
-        progressFrameRef.current
-      ) {
-        cancelAnimationFrame(
-          progressFrameRef.current
-        );
+      setBackgroundReady(
+        false
+      );
 
-        progressFrameRef.current =
-          null;
-      }
+      setBackgroundPreparing(
+        false
+      );
 
       console.log(
-        "[Background Remove] completed successfully."
+        "[BG] REMOVE COMPLETE"
       );
     } catch (error) {
       console.error(
-        "[Background Remove] failed:",
+        "[BG] REMOVE FAILED:",
         error
       );
 
@@ -1333,9 +1405,6 @@ export default function useBackgroundRemove({
           "Background removal failed."
       );
 
-      /*
-       * Stop progress animation.
-       */
       operationFinishedRef.current =
         true;
 
@@ -1358,6 +1427,37 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
+   * CLEANUP
+   * =======================================================
+   */
+
+  useEffect(() => {
+    return () => {
+      if (
+        progressFrameRef.current
+      ) {
+        cancelAnimationFrame(
+          progressFrameRef.current
+        );
+
+        progressFrameRef.current =
+          null;
+      }
+
+      /*
+       * Do not abort the actual browser AI promise here.
+       *
+       * We simply mark it stale so its result cannot
+       * affect a newer image.
+       */
+
+      preparingKeyRef.current =
+        "";
+    };
+  }, []);
+
+  /*
+   * =======================================================
    * RETURN
    * =======================================================
    */
@@ -1365,6 +1465,18 @@ export default function useBackgroundRemove({
   return {
     backgroundProgress,
     backgroundError,
+
+    /*
+     * Existing API.
+     */
     handleBackgroundRemove,
+
+    /*
+     * New states.
+     *
+     * Existing UI can ignore these safely.
+     */
+    backgroundReady,
+    backgroundPreparing,
   };
 }
