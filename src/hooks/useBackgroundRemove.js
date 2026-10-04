@@ -13,19 +13,12 @@ import {
 
 /*
  * =========================================================
- * IMG.LY MODULE
+ * BROWSER-ONLY MODULES
  * =========================================================
- *
- * IMPORTANT:
- * Do NOT statically import @imgly/background-removal.
- *
- * The package is browser-only and its internal runtime /
- * worker code can access browser globals.
- *
- * We therefore load it only after the browser is ready.
  */
 
 let backgroundRemovalModulePromise = null;
+let ortModulePromise = null;
 
 async function getBackgroundRemovalModule() {
   if (
@@ -45,29 +38,28 @@ async function getBackgroundRemovalModule() {
   return backgroundRemovalModulePromise;
 }
 
+async function getOrtModule() {
+  if (
+    typeof window === "undefined" ||
+    typeof document === "undefined"
+  ) {
+    throw new Error(
+      "ONNX runtime is only available in the browser."
+    );
+  }
+
+  if (!ortModulePromise) {
+    ortModulePromise =
+      import("onnxruntime-web");
+  }
+
+  return ortModulePromise;
+}
+
 /*
  * =========================================================
- * BACKGROUND REMOVAL ENGINE
+ * CONSTANTS
  * =========================================================
- *
- * Current stable mode:
- *
- * CPU/WASM
- *   ↓
- * isnet_fp16
- *
- * GPU is intentionally disabled for now because the browser
- * is exposing navigator.gpu but ONNX WebGPU session creation
- * is failing in this deployment.
- *
- * Once CPU/WASM is confirmed working, GPU can be re-enabled
- * safely with an actual runtime test.
- *
- * Progress:
- *
- * 1% → 2% → ... → 100%
- *
- * No seconds.
  */
 
 const AI_MAX_SIZE_CPU = 768;
@@ -80,10 +72,11 @@ const AI_MAX_SIZE_WEAK = 640;
  */
 
 let globalWorkingConfig = null;
+let runtimeConfigured = false;
 
 /*
  * =========================================================
- * SAFE BROWSER CHECK
+ * BROWSER
  * =========================================================
  */
 
@@ -130,10 +123,6 @@ function getCores() {
 }
 
 function isWeakDevice() {
-  if (!isBrowser()) {
-    return false;
-  }
-
   const memory =
     getMemory();
 
@@ -159,19 +148,80 @@ function isWeakDevice() {
 
 /*
  * =========================================================
- * CONFIG
+ * FORCE SAFE WASM RUNTIME
  * =========================================================
  *
- * CPU is intentionally forced for stability.
+ * GitHub Pages is not guaranteed to be crossOriginIsolated.
  *
- * Current IMG.LY models:
+ * Therefore:
  *
- * isnet
- * isnet_fp16
- * isnet_quint8
+ * numThreads = 1
  *
- * isnet_fp16 is the normal CPU model.
- * isnet_quint8 is smaller for weak devices.
+ * This avoids:
+ *
+ * "env.wasm.numThreads is set to 16"
+ *
+ * followed by:
+ *
+ * "Falling back to single-threading."
+ */
+
+async function configureOrtRuntime() {
+  if (
+    runtimeConfigured ||
+    !isBrowser()
+  ) {
+    return;
+  }
+
+  try {
+    const ort =
+      await getOrtModule();
+
+    if (
+      ort?.env?.wasm
+    ) {
+      ort.env.wasm.numThreads = 1;
+
+      /*
+       * Keep WASM execution local.
+       */
+
+      if (
+        "proxy" in ort.env.wasm
+      ) {
+        ort.env.wasm.proxy = false;
+      }
+    }
+
+    runtimeConfigured = true;
+
+    console.log(
+      "[BG] WASM RUNTIME READY",
+      {
+        numThreads:
+          ort?.env?.wasm?.numThreads ?? 1,
+      }
+    );
+  } catch (error) {
+    /*
+     * Do not fail background removal only because
+     * explicit runtime configuration is unavailable.
+     */
+
+    console.warn(
+      "[BG] WASM runtime configuration skipped:",
+      error
+    );
+
+    runtimeConfigured = true;
+  }
+}
+
+/*
+ * =========================================================
+ * CONFIG
+ * =========================================================
  */
 
 function getCpuConfig() {
@@ -192,13 +242,9 @@ function getCpuConfig() {
 }
 
 function getAiSize(config) {
-  if (
-    config?.weak
-  ) {
-    return AI_MAX_SIZE_WEAK;
-  }
-
-  return AI_MAX_SIZE_CPU;
+  return config?.weak
+    ? AI_MAX_SIZE_WEAK
+    : AI_MAX_SIZE_CPU;
 }
 
 /*
@@ -222,7 +268,7 @@ function getFileKey(file) {
 
 /*
  * =========================================================
- * AI INPUT
+ * CREATE AI INPUT
  * =========================================================
  */
 
@@ -241,10 +287,6 @@ async function createAiInput(
       "Image processing requires a browser environment."
     );
   }
-
-  /*
-   * Fast browser path.
-   */
 
   if (
     typeof createImageBitmap ===
@@ -270,10 +312,6 @@ async function createAiInput(
           height
         );
 
-      /*
-       * No resize required.
-       */
-
       if (
         width <= maxSize &&
         height <= maxSize
@@ -284,8 +322,7 @@ async function createAiInput(
       }
 
       const scale =
-        maxSize /
-        largest;
+        maxSize / largest;
 
       const targetWidth =
         Math.max(
@@ -384,10 +421,6 @@ async function createAiInput(
     }
   }
 
-  /*
-   * Canvas fallback.
-   */
-
   const image =
     await loadImage(
       source
@@ -416,8 +449,7 @@ async function createAiInput(
   const scale =
     Math.min(
       1,
-      maxSize /
-        largest
+      maxSize / largest
     );
 
   const targetWidth =
@@ -556,10 +588,6 @@ async function scaleTransparentResult(
     image.naturalHeight ||
     image.height;
 
-  /*
-   * Already original size.
-   */
-
   if (
     originalWidth ===
       resultWidth &&
@@ -641,7 +669,7 @@ async function scaleTransparentResult(
 
 /*
  * =========================================================
- * PROGRESS HELPERS
+ * PROGRESS
  * =========================================================
  */
 
@@ -656,13 +684,13 @@ function getProgressFromEngine(
     total > 0
   ) {
     const ratio =
-      current / total;
-
-    /*
-     * Resource download stage.
-     *
-     * Keep it inside 5-30%.
-     */
+      Math.max(
+        0,
+        Math.min(
+          1,
+          current / total
+        )
+      );
 
     if (
       key === "fetch" ||
@@ -675,10 +703,6 @@ function getProgressFromEngine(
       );
     }
   }
-
-  /*
-   * Generic stage mapping.
-   */
 
   const normalized =
     String(
@@ -745,12 +769,6 @@ export default function useBackgroundRemove({
   objectDrawingRef,
   layers,
 }) {
-  /*
-   * =======================================================
-   * CACHE
-   * =======================================================
-   */
-
   const preparedCacheRef =
     useRef(
       new Map()
@@ -758,12 +776,6 @@ export default function useBackgroundRemove({
 
   const preparingKeyRef =
     useRef("");
-
-  /*
-   * =======================================================
-   * PROGRESS
-   * =======================================================
-   */
 
   const progressTimerRef =
     useRef(null);
@@ -773,6 +785,17 @@ export default function useBackgroundRemove({
 
   const progressValueRef =
     useRef(0);
+
+  /*
+   * Prevent processing the result produced by our own
+   * background-removal operation.
+   */
+
+  const skipNextWorkingFilePreparationRef =
+    useRef(false);
+
+  const lastProcessedSourceKeyRef =
+    useRef("");
 
   const [backgroundProgress, setBackgroundProgress] =
     useState(0);
@@ -856,7 +879,7 @@ export default function useBackgroundRemove({
               nextValue
             );
           },
-          45
+          30
         );
     }
   }
@@ -920,10 +943,6 @@ export default function useBackgroundRemove({
         return null;
       }
 
-      /*
-       * CACHE
-       */
-
       const cached =
         preparedCacheRef.current.get(
           key
@@ -936,10 +955,6 @@ export default function useBackgroundRemove({
       ) {
         return cached;
       }
-
-      /*
-       * EXISTING PROMISE
-       */
 
       if (
         cached?.promise
@@ -966,20 +981,17 @@ export default function useBackgroundRemove({
 
       const promise =
         (async () => {
-          /*
-           * =================================================
-           * STEP 1
-           * Load library only in browser
-           * =================================================
-           */
-
           console.log(
             "[BG] LOADING ENGINE..."
           );
 
-          setProgressTarget(
-            5
-          );
+          setProgressTarget(5);
+
+          /*
+           * Configure ONNX BEFORE IMG.LY starts inference.
+           */
+
+          await configureOrtRuntime();
 
           const {
             removeBackground,
@@ -995,13 +1007,6 @@ export default function useBackgroundRemove({
             );
           }
 
-          /*
-           * =================================================
-           * STEP 2
-           * CPU CONFIG
-           * =================================================
-           */
-
           const config =
             globalWorkingConfig ||
             getCpuConfig();
@@ -1014,22 +1019,12 @@ export default function useBackgroundRemove({
             {
               device:
                 config.device,
-
               model:
                 config.model,
             }
           );
 
-          setProgressTarget(
-            10
-          );
-
-          /*
-           * =================================================
-           * STEP 3
-           * CREATE SMALL AI INPUT
-           * =================================================
-           */
+          setProgressTarget(10);
 
           const aiSize =
             getAiSize(
@@ -1051,26 +1046,15 @@ export default function useBackgroundRemove({
             );
           }
 
-          setProgressTarget(
-            18
-          );
-
-          /*
-           * =================================================
-           * STEP 4
-           * INFERENCE
-           * =================================================
-           */
+          setProgressTarget(18);
 
           console.log(
             "[BG] AI INFERENCE START",
             {
               device:
                 config.device,
-
               model:
                 config.model,
-
               aiSize,
             }
           );
@@ -1082,21 +1066,11 @@ export default function useBackgroundRemove({
               await removeBackground(
                 aiInput,
                 {
-                  /*
-                   * CPU/WASM ONLY
-                   */
-
                   device:
                     "cpu",
 
                   model:
                     config.model,
-
-                  /*
-                   * Worker is disabled here because we want
-                   * the simplest and most reliable browser
-                   * execution path first.
-                   */
 
                   proxyToWorker:
                     false,
@@ -1104,8 +1078,8 @@ export default function useBackgroundRemove({
                   output: {
                     format:
                       "image/png",
-
-                    quality: 1,
+                    quality:
+                      1,
                   },
 
                   progress: (
@@ -1168,16 +1142,7 @@ export default function useBackgroundRemove({
             "[BG] AI INFERENCE COMPLETE"
           );
 
-          setProgressTarget(
-            95
-          );
-
-          /*
-           * =================================================
-           * STEP 5
-           * RESTORE ORIGINAL SIZE
-           * =================================================
-           */
+          setProgressTarget(95);
 
           const finalBlob =
             await scaleTransparentResult(
@@ -1185,24 +1150,7 @@ export default function useBackgroundRemove({
               file
             );
 
-          if (
-            !finalBlob
-          ) {
-            throw new Error(
-              "Could not create final transparent image."
-            );
-          }
-
-          setProgressTarget(
-            97
-          );
-
-          /*
-           * =================================================
-           * STEP 6
-           * CREATE PNG FILE
-           * =================================================
-           */
+          setProgressTarget(97);
 
           const finalFile =
             makePngFile(
@@ -1213,43 +1161,24 @@ export default function useBackgroundRemove({
               "no-background"
             );
 
-          if (
-            !finalFile
-          ) {
+          if (!finalFile) {
             throw new Error(
               "Could not create transparent PNG."
             );
           }
 
-          setProgressTarget(
-            98
-          );
-
-          /*
-           * =================================================
-           * STEP 7
-           * LOAD FINAL IMAGE
-           * =================================================
-           */
+          setProgressTarget(98);
 
           const finalImage =
             await loadImage(
               finalFile
             );
 
-          if (
-            !finalImage
-          ) {
+          if (!finalImage) {
             throw new Error(
               "Transparent image could not be loaded."
             );
           }
-
-          /*
-           * =================================================
-           * CACHE RESULT
-           * =================================================
-           */
 
           const result = {
             blob:
@@ -1270,6 +1199,9 @@ export default function useBackgroundRemove({
             result
           );
 
+          lastProcessedSourceKeyRef.current =
+            key;
+
           completeProgress();
 
           setBackgroundReady(
@@ -1285,10 +1217,8 @@ export default function useBackgroundRemove({
             {
               device:
                 config.device,
-
               model:
                 config.model,
-
               aiSize,
             }
           );
@@ -1296,16 +1226,12 @@ export default function useBackgroundRemove({
           return result;
         })();
 
-      /*
-       * Store promise immediately so Remove button does not
-       * start a second AI inference.
-       */
-
       preparedCacheRef.current.set(
         key,
         {
           promise,
-          ready: false,
+          ready:
+            false,
         }
       );
 
@@ -1361,13 +1287,9 @@ export default function useBackgroundRemove({
     if (!workingFile) {
       stopProgressAnimation();
 
-      setBackgroundReady(
-        false
-      );
+      setBackgroundReady(false);
 
-      setBackgroundPreparing(
-        false
-      );
+      setBackgroundPreparing(false);
 
       resetProgress(0);
 
@@ -1383,16 +1305,40 @@ export default function useBackgroundRemove({
       return;
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * After Background Removal succeeds, setWorkingFile()
+     * changes workingFile to the newly-created PNG.
+     *
+     * That new PNG must NOT automatically start another
+     * background-removal inference.
+     */
+
+    if (
+      skipNextWorkingFilePreparationRef.current
+    ) {
+      skipNextWorkingFilePreparationRef.current =
+        false;
+
+      preparingKeyRef.current =
+        "";
+
+      stopProgressAnimation();
+
+      setBackgroundReady(false);
+
+      setBackgroundPreparing(false);
+
+      resetProgress(100);
+
+      return;
+    }
+
     preparingKeyRef.current =
       key;
 
-    setBackgroundError(
-      ""
-    );
-
-    /*
-     * CACHE HIT
-     */
+    setBackgroundError("");
 
     const cached =
       preparedCacheRef.current.get(
@@ -1404,26 +1350,36 @@ export default function useBackgroundRemove({
       cached?.file &&
       cached?.image
     ) {
-      setBackgroundReady(
-        true
-      );
+      setBackgroundReady(true);
 
-      setBackgroundPreparing(
-        false
-      );
+      setBackgroundPreparing(false);
 
       completeProgress();
 
       return;
     }
 
-    setBackgroundReady(
-      false
-    );
+    /*
+     * If this exact source was already processed, do not
+     * run inference again.
+     */
 
-    setBackgroundPreparing(
-      true
-    );
+    if (
+      lastProcessedSourceKeyRef.current ===
+      key
+    ) {
+      setBackgroundReady(false);
+
+      setBackgroundPreparing(false);
+
+      completeProgress();
+
+      return;
+    }
+
+    setBackgroundReady(false);
+
+    setBackgroundPreparing(true);
 
     resetProgress(1);
 
@@ -1487,9 +1443,7 @@ export default function useBackgroundRemove({
         true
       );
 
-      setBackgroundError(
-        ""
-      );
+      setBackgroundError("");
 
       setImageOffset({
         x: 0,
@@ -1497,10 +1451,6 @@ export default function useBackgroundRemove({
       });
 
       resetImageDrag();
-
-      /*
-       * CACHE HIT
-       */
 
       const cached =
         preparedCacheRef.current.get(
@@ -1546,12 +1496,6 @@ export default function useBackgroundRemove({
       const newImage =
         result.image;
 
-      /*
-       * ===================================================
-       * LAYER
-       * ===================================================
-       */
-
       layers.addToolLayer({
         type:
           "background",
@@ -1570,10 +1514,12 @@ export default function useBackgroundRemove({
       });
 
       /*
-       * ===================================================
-       * APPLY RESULT
-       * ===================================================
+       * Tell the workingFile effect not to process
+       * the newly-created transparent PNG again.
        */
+
+      skipNextWorkingFilePreparationRef.current =
+        true;
 
       setWorkingFile(
         newFile
@@ -1599,13 +1545,9 @@ export default function useBackgroundRemove({
 
       completeProgress();
 
-      setBackgroundReady(
-        false
-      );
+      setBackgroundReady(false);
 
-      setBackgroundPreparing(
-        false
-      );
+      setBackgroundPreparing(false);
 
       console.log(
         "[BG] REMOVE COMPLETE"
@@ -1658,12 +1600,6 @@ export default function useBackgroundRemove({
     backgroundReady,
 
     backgroundPreparing,
-
-    /*
-     * Compatibility with existing UI.
-     *
-     * This is percentage now, NOT seconds.
-     */
 
     backgroundElapsedSeconds:
       backgroundProgress,
