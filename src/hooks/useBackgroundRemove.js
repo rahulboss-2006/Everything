@@ -1,3 +1,4 @@
+
 import {
   useRef,
   useState,
@@ -18,44 +19,19 @@ import {
 
 /*
  * =========================================================
- * FAST BACKGROUND REMOVAL ENGINE
+ * BACKGROUND REMOVAL ENGINE
  * =========================================================
  *
- * Flow:
+ * GPU:
+ *   Try WebGPU first.
  *
- * APP START
- *    ↓
- * MODEL WARM-UP
- *
- * IMAGE UPLOAD
- *    ↓
- * SMALL AI INPUT
- *    ↓
- * AI INFERENCE
- *    ↓
- * TRANSPARENT RESULT
- *    ↓
- * ORIGINAL SIZE RESTORE
- *    ↓
- * PNG CACHE
- *
- * REMOVE CLICK
- *    ↓
- * CACHE HIT
- *    ↓
- * FAST APPLY
+ * If WebGPU session creation fails:
+ *   Automatically fall back to CPU/WASM.
  *
  * Progress:
- *
- * 1% → 2% → 3% → ... → 100%
+ *   1% → 2% → ... → 100%
  *
  * No seconds counter.
- */
-
-/*
- * =========================================================
- * SPEED SETTINGS
- * =========================================================
  */
 
 const AI_MAX_SIZE_GPU = 768;
@@ -64,25 +40,45 @@ const AI_MAX_SIZE_WEAK = 640;
 
 /*
  * =========================================================
- * GLOBAL MODEL WARM-UP
+ * GLOBAL MODEL STATE
  * =========================================================
  */
 
 let globalWarmupPromise = null;
 let globalWarmupConfigKey = "";
+let globalWorkingConfig = null;
+
+/*
+ * =========================================================
+ * SAFE BROWSER CHECKS
+ * =========================================================
+ */
+
+function isBrowser() {
+  return (
+    typeof window !== "undefined" &&
+    typeof document !== "undefined" &&
+    typeof navigator !== "undefined"
+  );
+}
 
 function hasWebGPU() {
+  if (!isBrowser()) {
+    return false;
+  }
+
   try {
-    return (
-      typeof navigator !== "undefined" &&
-      !!navigator.gpu
-    );
+    return !!navigator.gpu;
   } catch {
     return false;
   }
 }
 
 function getMemory() {
+  if (!isBrowser()) {
+    return 0;
+  }
+
   try {
     return Number(
       navigator.deviceMemory || 0
@@ -93,6 +89,10 @@ function getMemory() {
 }
 
 function getCores() {
+  if (!isBrowser()) {
+    return 4;
+  }
+
   try {
     return Number(
       navigator.hardwareConcurrency || 4
@@ -103,12 +103,15 @@ function getCores() {
 }
 
 function isWeakDevice() {
-  if (hasWebGPU()) {
+  if (!isBrowser()) {
     return false;
   }
 
-  const memory = getMemory();
-  const cores = getCores();
+  const memory =
+    getMemory();
+
+  const cores =
+    getCores();
 
   if (
     memory > 0 &&
@@ -127,27 +130,49 @@ function isWeakDevice() {
   return false;
 }
 
-function getConfig() {
-  const gpu = hasWebGPU();
-  const weak = isWeakDevice();
+/*
+ * =========================================================
+ * CONFIG
+ * =========================================================
+ */
 
-  if (gpu) {
-    return {
-      device: "gpu",
-      model: "isnet",
-      proxyToWorker: true,
-      weak: false,
-    };
-  }
+function getCpuConfig() {
+  const weak =
+    isWeakDevice();
 
   return {
     device: "cpu",
+
     model: weak
       ? "isnet_quint8"
       : "isnet_fp16",
+
     proxyToWorker: false,
+
     weak,
   };
+}
+
+function getGpuConfig() {
+  return {
+    device: "gpu",
+
+    model: "isnet",
+
+    proxyToWorker: true,
+
+    weak: false,
+  };
+}
+
+function getPreferredConfig() {
+  if (
+    hasWebGPU()
+  ) {
+    return getGpuConfig();
+  }
+
+  return getCpuConfig();
 }
 
 function getConfigKey(config) {
@@ -158,100 +183,250 @@ function getConfigKey(config) {
   ].join("|");
 }
 
+/*
+ * =========================================================
+ * MODEL WARM-UP
+ * =========================================================
+ *
+ * IMPORTANT:
+ *
+ * WebGPU may exist as navigator.gpu but still fail to create
+ * an ONNX session.
+ *
+ * Therefore:
+ *
+ * GPU attempt
+ *    ↓ fail
+ * CPU/WASM fallback
+ */
+
 async function warmupModel(
-  config = getConfig()
+  preferredConfig =
+    getPreferredConfig()
 ) {
-  const key =
-    getConfigKey(config);
+  if (!isBrowser()) {
+    throw new Error(
+      "Background removal is only available in the browser."
+    );
+  }
+
+  /*
+   * If a working configuration has already been discovered,
+   * reuse it.
+   */
 
   if (
     globalWarmupPromise &&
-    globalWarmupConfigKey === key
+    globalWarmupConfigKey
   ) {
     return globalWarmupPromise;
   }
 
-  globalWarmupConfigKey = key;
+  const firstConfig =
+    preferredConfig;
 
-  console.log(
-    "[BG] GLOBAL MODEL WARMUP START",
-    {
-      device: config.device,
-      model: config.model,
-    }
-  );
+  const firstKey =
+    getConfigKey(
+      firstConfig
+    );
+
+  /*
+   * -------------------------------------------------------
+   * GPU ATTEMPT
+   * -------------------------------------------------------
+   */
+
+  globalWarmupConfigKey =
+    firstKey;
 
   globalWarmupPromise =
-    preload({
-      device: config.device,
-
-      model: config.model,
-
-      proxyToWorker:
-        config.proxyToWorker,
-
-      output: {
-        format: "image/png",
-        quality: 1,
-      },
-    })
-      .then((result) => {
+    (async () => {
+      try {
         console.log(
-          "[BG] GLOBAL MODEL READY",
+          "[BG] MODEL WARMUP START",
           {
             device:
-              config.device,
+              firstConfig.device,
+
             model:
-              config.model,
+              firstConfig.model,
           }
         );
 
-        return result;
-      })
-      .catch((error) => {
-        globalWarmupPromise = null;
-        globalWarmupConfigKey = "";
+        await preload({
+          device:
+            firstConfig.device,
 
-        console.error(
-          "[BG] GLOBAL MODEL WARMUP FAILED:",
-          error
+          model:
+            firstConfig.model,
+
+          proxyToWorker:
+            firstConfig.proxyToWorker,
+
+          output: {
+            format:
+              "image/png",
+
+            quality: 1,
+          },
+        });
+
+        /*
+         * GPU/CPU successfully initialized.
+         */
+
+        globalWorkingConfig =
+          firstConfig;
+
+        console.log(
+          "[BG] MODEL READY",
+          {
+            device:
+              firstConfig.device,
+
+            model:
+              firstConfig.model,
+          }
         );
 
-        throw error;
-      });
+        return firstConfig;
+      } catch (firstError) {
+        console.error(
+          "[BG] PRIMARY MODEL FAILED:",
+          firstError
+        );
 
-  return globalWarmupPromise;
+        /*
+         * ---------------------------------------------------
+         * GPU → CPU FALLBACK
+         * ---------------------------------------------------
+         */
+
+        if (
+          firstConfig.device !==
+          "gpu"
+        ) {
+          throw firstError;
+        }
+
+        const cpuConfig =
+          getCpuConfig();
+
+        const cpuKey =
+          getConfigKey(
+            cpuConfig
+          );
+
+        globalWarmupConfigKey =
+          cpuKey;
+
+        console.warn(
+          "[BG] WEBGPU FAILED - FALLING BACK TO CPU/WASM",
+          {
+            model:
+              cpuConfig.model,
+          }
+        );
+
+        try {
+          await preload({
+            device:
+              cpuConfig.device,
+
+            model:
+              cpuConfig.model,
+
+            proxyToWorker:
+              cpuConfig.proxyToWorker,
+
+            output: {
+              format:
+                "image/png",
+
+              quality: 1,
+            },
+          });
+
+          globalWorkingConfig =
+            cpuConfig;
+
+          console.log(
+            "[BG] CPU/WASM MODEL READY",
+            {
+              device:
+                cpuConfig.device,
+
+              model:
+                cpuConfig.model,
+            }
+          );
+
+          return cpuConfig;
+        } catch (cpuError) {
+          console.error(
+            "[BG] CPU/WASM FALLBACK FAILED:",
+            cpuError
+          );
+
+          throw cpuError;
+        }
+      }
+    })();
+
+  try {
+    return await globalWarmupPromise;
+  } catch (error) {
+    globalWarmupPromise =
+      null;
+
+    globalWarmupConfigKey =
+      "";
+
+    globalWorkingConfig =
+      null;
+
+    throw error;
+  }
 }
 
 /*
  * =========================================================
- * START GLOBAL WARM-UP
+ * SAFE GLOBAL WARM-UP
  * =========================================================
+ *
+ * Never execute browser work while the module is being
+ * evaluated outside the browser.
  */
 
 if (
-  typeof window !== "undefined"
+  typeof window !== "undefined" &&
+  typeof document !== "undefined"
 ) {
-  const start = () => {
-    warmupModel().catch(() => {
-      // Preparation will retry later.
-    });
-  };
+  const startWarmup =
+    () => {
+      warmupModel().catch(
+        () => {
+          /*
+           * Actual preparation will retry.
+           */
+        }
+      );
+    };
 
   if (
     typeof window.requestIdleCallback ===
     "function"
   ) {
     window.requestIdleCallback(
-      start,
+      startWarmup,
       {
         timeout: 1200,
       }
     );
   } else {
     window.setTimeout(
-      start,
-      250
+      startWarmup,
+      500
     );
   }
 }
@@ -264,12 +439,15 @@ if (
 
 function getAiSize(config) {
   if (
-    config?.device === "gpu"
+    config?.device ===
+    "gpu"
   ) {
     return AI_MAX_SIZE_GPU;
   }
 
-  if (config?.weak) {
+  if (
+    config?.weak
+  ) {
     return AI_MAX_SIZE_WEAK;
   }
 
@@ -297,7 +475,7 @@ function getFileKey(file) {
 
 /*
  * =========================================================
- * CREATE SMALL AI INPUT
+ * AI INPUT
  * =========================================================
  */
 
@@ -311,9 +489,18 @@ async function createAiInput(
     );
   }
 
+  if (
+    !isBrowser()
+  ) {
+    throw new Error(
+      "Image processing requires a browser environment."
+    );
+  }
+
   /*
    * Browser fast path.
    */
+
   if (
     typeof createImageBitmap ===
     "function"
@@ -341,6 +528,7 @@ async function createAiInput(
       /*
        * No resize required.
        */
+
       if (
         width <= maxSize &&
         height <= maxSize
@@ -351,7 +539,8 @@ async function createAiInput(
       }
 
       const scale =
-        maxSize / largest;
+        maxSize /
+        largest;
 
       const targetWidth =
         Math.max(
@@ -421,7 +610,9 @@ async function createAiInput(
           canvas.toBlob(
             (blob) => {
               if (blob) {
-                resolve(blob);
+                resolve(
+                  blob
+                );
               } else {
                 reject(
                   new Error(
@@ -482,7 +673,8 @@ async function createAiInput(
   const scale =
     Math.min(
       1,
-      maxSize / largest
+      maxSize /
+        largest
     );
 
   const targetWidth =
@@ -548,7 +740,9 @@ async function createAiInput(
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            resolve(blob);
+            resolve(
+              blob
+            );
           } else {
             reject(
               new Error(
@@ -565,7 +759,7 @@ async function createAiInput(
 
 /*
  * =========================================================
- * ORIGINAL DIMENSION RESTORE
+ * RESTORE ORIGINAL SIZE
  * =========================================================
  */
 
@@ -684,7 +878,9 @@ async function scaleTransparentResult(
       canvas.toBlob(
         (result) => {
           if (result) {
-            resolve(result);
+            resolve(
+              result
+            );
           } else {
             reject(
               new Error(
@@ -761,23 +957,8 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * SMOOTH PERCENT PROGRESS
+   * PROGRESS FUNCTIONS
    * =======================================================
-   *
-   * The actual engine can sometimes jump:
-   *
-   * 10 → 50 → 90
-   *
-   * Instead of making the UI jump, we smoothly move:
-   *
-   * 10 → 11 → 12 → ... → 50
-   *
-   * This keeps the progress visually natural.
-   *
-   * IMPORTANT:
-   * We never fake 100%.
-   *
-   * 100% is only set after the complete result is ready.
    */
 
   function stopProgressAnimation() {
@@ -831,20 +1012,17 @@ export default function useBackgroundRemove({
               return;
             }
 
-            /*
-             * Move only 1% at a time.
-             */
-            const next =
+            const nextValue =
               Math.min(
                 target,
                 current + 1
               );
 
             progressValueRef.current =
-              next;
+              nextValue;
 
             setBackgroundProgress(
-              next
+              nextValue
             );
           },
           45
@@ -895,7 +1073,7 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * PREPARE BACKGROUND
+   * PREPARE BACKGROUND REMOVAL
    * =======================================================
    */
 
@@ -938,14 +1116,6 @@ export default function useBackgroundRemove({
         return cached.promise;
       }
 
-      const config =
-        getConfig();
-
-      const aiSize =
-        getAiSize(
-          config
-        );
-
       preparingKeyRef.current =
         key;
 
@@ -963,31 +1133,11 @@ export default function useBackgroundRemove({
 
       resetProgress(1);
 
-      console.log(
-        "[BG] PREPARE START",
-        {
-          device:
-            config.device,
-
-          model:
-            config.model,
-
-          aiSize,
-
-          fileSize:
-            file.size,
-
-          fileType:
-            file.type,
-        }
-      );
-
       const promise =
         (async () => {
           /*
            * =================================================
-           * STEP 1
-           * MODEL
+           * STEP 1 — MODEL
            * =================================================
            */
 
@@ -995,11 +1145,23 @@ export default function useBackgroundRemove({
             "[BG] WAITING FOR MODEL..."
           );
 
-          setProgressTarget(5);
-
-          await warmupModel(
-            config
+          setProgressTarget(
+            5
           );
+
+          /*
+           * Use already-discovered working config if
+           * available. Otherwise perform GPU → CPU fallback.
+           */
+
+          const config =
+            globalWorkingConfig ||
+            getPreferredConfig();
+
+          const readyConfig =
+            await warmupModel(
+              config
+            );
 
           if (
             preparingKeyRef.current !==
@@ -1010,14 +1172,31 @@ export default function useBackgroundRemove({
             );
           }
 
+          console.log(
+            "[BG] USING ENGINE",
+            {
+              device:
+                readyConfig.device,
+
+              model:
+                readyConfig.model,
+            }
+          );
+
+          setProgressTarget(
+            12
+          );
+
           /*
            * =================================================
-           * STEP 2
-           * CREATE AI INPUT
+           * STEP 2 — AI INPUT
            * =================================================
            */
 
-          setProgressTarget(12);
+          const aiSize =
+            getAiSize(
+              readyConfig
+            );
 
           const aiInput =
             await createAiInput(
@@ -1034,12 +1213,13 @@ export default function useBackgroundRemove({
             );
           }
 
-          setProgressTarget(18);
+          setProgressTarget(
+            18
+          );
 
           /*
            * =================================================
-           * STEP 3
-           * AI INFERENCE
+           * STEP 3 — AI
            * =================================================
            */
 
@@ -1047,84 +1227,180 @@ export default function useBackgroundRemove({
             "[BG] AI INFERENCE START",
             {
               device:
-                config.device,
+                readyConfig.device,
 
               model:
-                config.model,
+                readyConfig.model,
 
               aiSize,
             }
           );
 
-          const transparentPreview =
-            await removeBackground(
-              aiInput,
-              {
-                device:
-                  config.device,
+          let transparentPreview;
 
-                model:
-                  config.model,
+          try {
+            transparentPreview =
+              await removeBackground(
+                aiInput,
+                {
+                  device:
+                    readyConfig.device,
 
-                proxyToWorker:
-                  config.proxyToWorker,
+                  model:
+                    readyConfig.model,
 
-                output: {
-                  format:
-                    "image/png",
+                  proxyToWorker:
+                    readyConfig.proxyToWorker,
 
-                  quality: 1,
-                },
+                  output: {
+                    format:
+                      "image/png",
 
-                progress: (
-                  progressKey
-                ) => {
-                  if (
-                    preparingKeyRef.current !==
-                    key
-                  ) {
-                    return;
-                  }
+                    quality: 1,
+                  },
 
-                  /*
-                   * Real engine stages.
-                   *
-                   * We use ranges instead of jumping
-                   * directly to the final number.
-                   */
+                  progress: (
+                    progressKey
+                  ) => {
+                    if (
+                      preparingKeyRef.current !==
+                      key
+                    ) {
+                      return;
+                    }
 
-                  if (
-                    progressKey ===
-                    "compute:decode"
-                  ) {
-                    setProgressTarget(
-                      25
-                    );
-                  } else if (
-                    progressKey ===
-                    "compute:inference"
-                  ) {
-                    setProgressTarget(
-                      65
-                    );
-                  } else if (
-                    progressKey ===
-                    "compute:mask"
-                  ) {
-                    setProgressTarget(
-                      82
-                    );
-                  } else if (
-                    progressKey ===
-                    "compute:encode"
-                  ) {
-                    setProgressTarget(
-                      94
-                    );
-                  }
-                },
-              }
+                    if (
+                      progressKey ===
+                      "compute:decode"
+                    ) {
+                      setProgressTarget(
+                        25
+                      );
+                    } else if (
+                      progressKey ===
+                      "compute:inference"
+                    ) {
+                      setProgressTarget(
+                        65
+                      );
+                    } else if (
+                      progressKey ===
+                      "compute:mask"
+                    ) {
+                      setProgressTarget(
+                        82
+                      );
+                    } else if (
+                      progressKey ===
+                      "compute:encode"
+                    ) {
+                      setProgressTarget(
+                        94
+                      );
+                    }
+                  },
+                }
+              );
+          } catch (aiError) {
+            /*
+             * ------------------------------------------------
+             * EXTRA GPU FALLBACK
+             * ------------------------------------------------
+             *
+             * If the GPU session fails here even though
+             * preload succeeded, retry the same image with
+             * CPU/WASM.
+             */
+
+            if (
+              readyConfig.device !==
+              "gpu"
+            ) {
+              throw aiError;
+            }
+
+            console.warn(
+              "[BG] GPU INFERENCE FAILED - RETRYING CPU/WASM",
+              aiError
             );
+
+            const cpuConfig =
+              getCpuConfig();
+
+            await warmupModel(
+              cpuConfig
+            );
+
+            globalWorkingConfig =
+              cpuConfig;
+
+            setProgressTarget(
+              20
+            );
+
+            transparentPreview =
+              await removeBackground(
+                aiInput,
+                {
+                  device:
+                    cpuConfig.device,
+
+                  model:
+                    cpuConfig.model,
+
+                  proxyToWorker:
+                    cpuConfig.proxyToWorker,
+
+                  output: {
+                    format:
+                      "image/png",
+
+                    quality: 1,
+                  },
+
+                  progress: (
+                    progressKey
+                  ) => {
+                    if (
+                      preparingKeyRef.current !==
+                      key
+                    ) {
+                      return;
+                    }
+
+                    if (
+                      progressKey ===
+                      "compute:decode"
+                    ) {
+                      setProgressTarget(
+                        25
+                      );
+                    } else if (
+                      progressKey ===
+                      "compute:inference"
+                    ) {
+                      setProgressTarget(
+                        65
+                      );
+                    } else if (
+                      progressKey ===
+                      "compute:mask"
+                    ) {
+                      setProgressTarget(
+                        82
+                      );
+                    } else if (
+                      progressKey ===
+                      "compute:encode"
+                    ) {
+                      setProgressTarget(
+                        94
+                      );
+                    }
+                  },
+                }
+              );
+          }
 
           if (
             preparingKeyRef.current !==
@@ -1147,21 +1423,13 @@ export default function useBackgroundRemove({
             "[BG] AI INFERENCE COMPLETE"
           );
 
-          /*
-           * AI finished.
-           *
-           * Keep UI below 100 while final PNG is
-           * being prepared.
-           */
-
           setProgressTarget(
             95
           );
 
           /*
            * =================================================
-           * STEP 4
-           * RESTORE ORIGINAL SIZE
+           * STEP 4 — RESTORE SIZE
            * =================================================
            */
 
@@ -1185,8 +1453,7 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * STEP 5
-           * CREATE FILE
+           * STEP 5 — PNG FILE
            * =================================================
            */
 
@@ -1213,8 +1480,7 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * STEP 6
-           * LOAD IMAGE
+           * STEP 6 — IMAGE
            * =================================================
            */
 
@@ -1256,10 +1522,6 @@ export default function useBackgroundRemove({
             result
           );
 
-          /*
-           * ONLY NOW = 100%
-           */
-
           completeProgress();
 
           setBackgroundReady(
@@ -1274,10 +1536,10 @@ export default function useBackgroundRemove({
             "[BG] READY",
             {
               device:
-                config.device,
+                globalWorkingConfig?.device,
 
               model:
-                config.model,
+                globalWorkingConfig?.model,
 
               aiSize,
             }
@@ -1372,10 +1634,6 @@ export default function useBackgroundRemove({
       return;
     }
 
-    /*
-     * Current image becomes active.
-     */
-
     preparingKeyRef.current =
       key;
 
@@ -1384,7 +1642,7 @@ export default function useBackgroundRemove({
     );
 
     /*
-     * Cache already ready.
+     * Cache hit.
      */
 
     const cached =
@@ -1409,10 +1667,6 @@ export default function useBackgroundRemove({
 
       return;
     }
-
-    /*
-     * Start preparation.
-     */
 
     setBackgroundReady(
       false
@@ -1442,10 +1696,6 @@ export default function useBackgroundRemove({
     );
 
     return () => {
-      /*
-       * Make old image stale.
-       */
-
       if (
         preparingKeyRef.current ===
         key
@@ -1500,9 +1750,7 @@ export default function useBackgroundRemove({
       resetImageDrag();
 
       /*
-       * ===================================================
-       * CACHE HIT
-       * ===================================================
+       * Cache hit.
        */
 
       let cached =
@@ -1523,13 +1771,6 @@ export default function useBackgroundRemove({
           "[BG] REMOVE -> INSTANT CACHE HIT"
         );
       } else {
-        /*
-         * User clicked before preparation finished.
-         *
-         * Wait for the existing preparation.
-         * No second AI inference.
-         */
-
         console.log(
           "[BG] REMOVE -> WAITING FOR PREPARATION"
         );
@@ -1550,12 +1791,6 @@ export default function useBackgroundRemove({
         );
       }
 
-      /*
-       * ===================================================
-       * APPLY CACHED RESULT
-       * ===================================================
-       */
-
       const newFile =
         result.file;
 
@@ -1564,7 +1799,7 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * REGISTER LAYER
+       * LAYER
        * ===================================================
        */
 
@@ -1613,12 +1848,6 @@ export default function useBackgroundRemove({
         "Background removed"
       );
 
-      /*
-       * ===================================================
-       * COMPLETE
-       * ===================================================
-       */
-
       completeProgress();
 
       setBackgroundReady(
@@ -1630,7 +1859,7 @@ export default function useBackgroundRemove({
       );
 
       console.log(
-        "[BG] REMOVE COMPLETE - CACHE APPLY"
+        "[BG] REMOVE COMPLETE"
       );
     } catch (error) {
       console.error(
@@ -1668,24 +1897,6 @@ export default function useBackgroundRemove({
    * =======================================================
    * RETURN
    * =======================================================
-   *
-   * backgroundElapsedSeconds is kept as an alias for
-   * compatibility with existing UI code.
-   *
-   * IMPORTANT:
-   * It now contains PERCENTAGE, not seconds.
-   *
-   * So old UI using:
-   *
-   * backgroundElapsedSeconds
-   *
-   * will receive:
-   *
-   * 1, 2, 3 ... 100
-   *
-   * instead of:
-   *
-   * 1s, 2s, 3s...
    */
 
   return {
@@ -1699,7 +1910,16 @@ export default function useBackgroundRemove({
 
     backgroundPreparing,
 
+    /*
+     * Compatibility:
+     *
+     * Existing UI may still read this old property.
+     *
+     * It now returns percentage, NOT seconds.
+     */
+
     backgroundElapsedSeconds:
       backgroundProgress,
   };
 }
+
