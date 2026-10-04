@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import {
   Upload,
@@ -7,7 +7,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-import ImageEditor from "./editor/ImageEditor";
+const ImageEditor = lazy(() => import("./editor/ImageEditor"));
 
 
 /* =========================================================
@@ -520,15 +520,13 @@ export default function DropZone({
         file &&
         extension !== "pdf" && (
 
-          <ImageEditor
-            file={file}
-
-            onClose={() =>
-              setShowImageEditor(false)
-            }
-
-            onComplete={handleEditorComplete}
-          />
+          <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-6 text-center text-sm text-white" role="status">Loading image editor…</div>}>
+            <ImageEditor
+              file={file}
+              onClose={() => setShowImageEditor(false)}
+              onComplete={handleEditorComplete}
+            />
+          </Suspense>
 
         )}
 

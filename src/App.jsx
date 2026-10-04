@@ -2,6 +2,8 @@ import {
   useEffect,
   useMemo,
   useState,
+  lazy,
+  Suspense,
 } from "react";
 
 import {
@@ -43,14 +45,15 @@ import Footer from "./components/Footer";
 import DropZone from "./components/DropZone";
 
 import Home from "./pages/Home";
-import About from "./pages/About";
-import Features from "./pages/Features";
-import Contact from "./pages/Contact";
-import Auth from "./pages/Auth";
-import Recharge from "./pages/Recharge";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import AdminPanel from "./admin/AdminPanel";
+// Keep the homepage in the initial bundle. Load secondary pages only when visited.
+const About = lazy(() => import("./pages/About"));
+const Features = lazy(() => import("./pages/Features"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Recharge = lazy(() => import("./pages/Recharge"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AdminPanel = lazy(() => import("./admin/AdminPanel"));
 import {
   useAuth,
 } from "./context/AuthContext";
@@ -87,6 +90,7 @@ function App() {
   return (
     <BrowserRouter basename="/Everything">
 
+      <Suspense fallback={<div className="min-h-[50vh] px-4 py-16 text-center text-sm text-slate-500" role="status">Loading page…</div>}>
       <Routes>
 
         {/* HOME */}
@@ -269,6 +273,7 @@ function App() {
         />
 
       </Routes>
+      </Suspense>
 
     </BrowserRouter>
   );
