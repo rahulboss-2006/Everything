@@ -43,7 +43,7 @@ export default function EditorCanvas({
 
   removingBackground,
   backgroundProgress,
-
+  backgroundElapsedSeconds,
   objectApplying,
   aiProgress,
   aiProgressLabel,
@@ -391,7 +391,10 @@ export default function EditorCanvas({
                         </div>
 
                         <div className="ai-progress-percent">
-                          {Math.round(backgroundProgress)}%
+                          {Math.max(
+                            1,
+                            Number(backgroundElapsedSeconds) || 1
+                          )}s
                         </div>
 
                         <div className="ai-progress-track">
@@ -399,15 +402,18 @@ export default function EditorCanvas({
                             className="ai-progress-fill"
                             style={{
                               width: `${Math.min(
-                                100,
-                                Math.max(0, backgroundProgress)
+                                95,
+                                Math.max(
+                                  8,
+                                  (Number(backgroundElapsedSeconds) || 1) * 8
+                                )
                               )}%`,
                             }}
                           />
                         </div>
 
                         <div className="ai-progress-text">
-                          {aiProgressLabel}
+                          Preparing AI removal...
                         </div>
                       </div>
                     </div>

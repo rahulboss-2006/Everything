@@ -18,60 +18,85 @@ import {
 
 /*
  * =========================================================
- * FAST BACKGROUND REMOVAL
+ * FAST BACKGROUND REMOVAL ENGINE
  * =========================================================
  *
- * New architecture:
+ * Architecture:
+ *
+ * APP START
+ *    ↓
+ * AI MODEL WARM-UP
  *
  * IMAGE UPLOAD
- *      ↓
- * GPU / model preload
- *      ↓
- * small AI image
- *      ↓
- * direct removeBackground()
- *      ↓
- * transparent result CACHE
+ *    ↓
+ * resize small
+ *    ↓
+ * AI inference
+ *    ↓
+ * transparent result
+ *    ↓
+ * final PNG
+ *    ↓
+ * File + Image cached
  *
- * REMOVE BUTTON
- *      ↓
- * cached result
- *      ↓
+ * REMOVE CLICK
+ *    ↓
+ * cache hit
+ *    ↓
  * instant apply
  *
  * IMPORTANT:
  *
- * We intentionally DO NOT use:
- *
- * segmentForeground()
- *        ↓
- * applySegmentationMask()
- *
- * anymore.
- *
- * Direct removeBackground() is faster because IMG.LY can
- * run inference and apply alpha in the same pipeline.
+ * We never run AI again on Remove click if preparation
+ * already completed.
  */
 
 /*
  * =========================================================
- * AI SIZE
+ * SPEED SETTINGS
  * =========================================================
  *
- * 1024 = better edge quality
- * 768  = fallback for weak devices
+ * 768 is intentionally used instead of 1024.
  *
- * GPU devices use 1024.
+ * 1024 -> ~1,048,576 pixels
+ * 768  ->   589,824 pixels
+ *
+ * That is roughly 44% fewer pixels for inference.
+ *
+ * It keeps substantially better edges than extremely small
+ * 512px processing while being much faster than 1024px.
  */
 
-const AI_MAX_SIZE = 1024;
-const AI_MAX_SIZE_WEAK = 768;
+const AI_MAX_SIZE_GPU = 768;
+const AI_MAX_SIZE_CPU = 768;
+const AI_MAX_SIZE_WEAK = 640;
 
 /*
  * =========================================================
- * DEVICE DETECTION
+ * GLOBAL MODEL WARM-UP
  * =========================================================
+ *
+ * The important improvement:
+ *
+ * Model initialization does NOT wait for image upload.
+ *
+ * The browser starts preparing the AI engine while the user
+ * is using the editor.
  */
+
+let globalWarmupPromise = null;
+let globalWarmupConfigKey = "";
+
+function hasWebGPU() {
+  try {
+    return (
+      typeof navigator !== "undefined" &&
+      !!navigator.gpu
+    );
+  } catch {
+    return false;
+  }
+}
 
 function getMemory() {
   try {
@@ -94,21 +119,15 @@ function getCores() {
 }
 
 function isWeakDevice() {
-  const memory = getMemory();
-  const cores = getCores();
-
   /*
-   * Do NOT consider GPU devices weak only because
-   * they have 4 CPU cores.
-   *
-   * WebGPU can still be extremely fast.
+   * If WebGPU exists, prefer GPU.
    */
-
-  if (
-    hasWebGPU()
-  ) {
+  if (hasWebGPU()) {
     return false;
   }
+
+  const memory = getMemory();
+  const cores = getCores();
 
   if (
     memory > 0 &&
@@ -118,6 +137,7 @@ function isWeakDevice() {
   }
 
   if (
+    cores > 0 &&
     cores <= 4
   ) {
     return true;
@@ -126,36 +146,9 @@ function isWeakDevice() {
   return false;
 }
 
-function hasWebGPU() {
-  try {
-    return (
-      typeof navigator !==
-        "undefined" &&
-      !!navigator.gpu
-    );
-  } catch {
-    return false;
-  }
-}
-
-/*
- * =========================================================
- * CONFIG
- * =========================================================
- */
-
 function getConfig() {
-  const gpu =
-    hasWebGPU();
-
-  const weak =
-    isWeakDevice();
-
-  /*
-   * GPU
-   *
-   * IMG.LY recommends isnet for WebGPU.
-   */
+  const gpu = hasWebGPU();
+  const weak = isWeakDevice();
 
   if (gpu) {
     return {
@@ -165,10 +158,6 @@ function getConfig() {
       weak: false,
     };
   }
-
-  /*
-   * CPU fallback.
-   */
 
   return {
     device: "cpu",
@@ -180,25 +169,136 @@ function getConfig() {
   };
 }
 
+function getConfigKey(config) {
+  return [
+    config.device,
+    config.model,
+    config.proxyToWorker,
+  ].join("|");
+}
+
+async function warmupModel(config = getConfig()) {
+  const key = getConfigKey(config);
+
+  /*
+   * Same model already warming/ready.
+   */
+  if (
+    globalWarmupPromise &&
+    globalWarmupConfigKey === key
+  ) {
+    return globalWarmupPromise;
+  }
+
+  globalWarmupConfigKey = key;
+
+  console.log(
+    "[BG] GLOBAL MODEL WARMUP START",
+    {
+      device: config.device,
+      model: config.model,
+    }
+  );
+
+  globalWarmupPromise = preload({
+    device: config.device,
+
+    model: config.model,
+
+    proxyToWorker:
+      config.proxyToWorker,
+
+    output: {
+      format: "image/png",
+      quality: 1,
+    },
+  })
+    .then((result) => {
+      console.log(
+        "[BG] GLOBAL MODEL READY",
+        {
+          device: config.device,
+          model: config.model,
+        }
+      );
+
+      return result;
+    })
+    .catch((error) => {
+      /*
+       * Allow retry if warm-up failed.
+       */
+      globalWarmupPromise = null;
+      globalWarmupConfigKey = "";
+
+      console.error(
+        "[BG] GLOBAL MODEL WARMUP FAILED:",
+        error
+      );
+
+      throw error;
+    });
+
+  return globalWarmupPromise;
+}
+
+/*
+ * =========================================================
+ * START GLOBAL WARM-UP
+ * =========================================================
+ *
+ * We don't block React rendering.
+ */
+
+if (
+  typeof window !== "undefined"
+) {
+  const start = () => {
+    warmupModel().catch(() => {
+      /*
+       * Actual image preparation will retry.
+       */
+    });
+  };
+
+  if (
+    typeof window.requestIdleCallback ===
+    "function"
+  ) {
+    window.requestIdleCallback(
+      start,
+      {
+        timeout: 1200,
+      }
+    );
+  } else {
+    window.setTimeout(
+      start,
+      250
+    );
+  }
+}
+
 /*
  * =========================================================
  * AI SIZE
  * =========================================================
  */
 
-function getAiSize(
-  config
-) {
+function getAiSize(config) {
   if (
-    config?.device ===
-    "gpu"
+    config?.device === "gpu"
   ) {
-    return AI_MAX_SIZE;
+    return AI_MAX_SIZE_GPU;
   }
 
-  return config?.weak
-    ? AI_MAX_SIZE_WEAK
-    : AI_MAX_SIZE;
+  if (
+    config?.weak
+  ) {
+    return AI_MAX_SIZE_WEAK;
+  }
+
+  return AI_MAX_SIZE_CPU;
 }
 
 /*
@@ -237,9 +337,8 @@ async function createAiInput(
   }
 
   /*
-   * Fast browser path.
+   * Browser fast path.
    */
-
   if (
     typeof createImageBitmap ===
     "function"
@@ -264,12 +363,20 @@ async function createAiInput(
           height
         );
 
+      /*
+       * No resize required.
+       */
+      if (
+        width <= maxSize &&
+        height <= maxSize
+      ) {
+        bitmap.close();
+
+        return source;
+      }
+
       const scale =
-        Math.min(
-          1,
-          maxSize /
-            largest
-        );
+        maxSize / largest;
 
       const targetWidth =
         Math.max(
@@ -286,20 +393,6 @@ async function createAiInput(
             height * scale
           )
         );
-
-      /*
-       * If image is already small enough,
-       * avoid unnecessary resizing.
-       */
-
-      if (
-        width <= maxSize &&
-        height <= maxSize
-      ) {
-        bitmap.close();
-
-        return source;
-      }
 
       const canvas =
         document.createElement(
@@ -346,10 +439,8 @@ async function createAiInput(
       bitmap.close();
 
       /*
-       * PNG keeps transparency and gives
-       * predictable AI input.
+       * PNG gives predictable alpha/input behavior.
        */
-
       return await new Promise(
         (
           resolve,
@@ -358,9 +449,7 @@ async function createAiInput(
           canvas.toBlob(
             (blob) => {
               if (blob) {
-                resolve(
-                  blob
-                );
+                resolve(blob);
               } else {
                 reject(
                   new Error(
@@ -383,7 +472,7 @@ async function createAiInput(
       }
 
       console.warn(
-        "[BG] AI resize fallback:",
+        "[BG] createAiInput fallback:",
         error
       );
     }
@@ -392,7 +481,6 @@ async function createAiInput(
   /*
    * Canvas fallback.
    */
-
   const image =
     await loadImage(
       source
@@ -421,8 +509,7 @@ async function createAiInput(
   const scale =
     Math.min(
       1,
-      maxSize /
-        largest
+      maxSize / largest
     );
 
   const targetWidth =
@@ -488,9 +575,7 @@ async function createAiInput(
       canvas.toBlob(
         (blob) => {
           if (blob) {
-            resolve(
-              blob
-            );
+            resolve(blob);
           } else {
             reject(
               new Error(
@@ -507,15 +592,12 @@ async function createAiInput(
 
 /*
  * =========================================================
- * KEEP ORIGINAL DIMENSIONS
+ * ORIGINAL DIMENSION RESTORE
  * =========================================================
  *
- * AI works on a smaller image for speed.
+ * This happens during background preparation.
  *
- * Then we scale the transparent result back to the
- * original dimensions.
- *
- * This keeps the editor canvas dimensions consistent.
+ * Therefore Remove click doesn't wait for it.
  */
 
 async function scaleTransparentResult(
@@ -541,10 +623,6 @@ async function scaleTransparentResult(
       "Could not load transparent result."
     );
   }
-
-  /*
-   * Get original dimensions.
-   */
 
   const original =
     await loadImage(
@@ -572,10 +650,6 @@ async function scaleTransparentResult(
   const resultHeight =
     image.naturalHeight ||
     image.height;
-
-  /*
-   * Already same dimensions.
-   */
 
   if (
     originalWidth ===
@@ -641,9 +715,7 @@ async function scaleTransparentResult(
       canvas.toBlob(
         (result) => {
           if (result) {
-            resolve(
-              result
-            );
+            resolve(result);
           } else {
             reject(
               new Error(
@@ -693,18 +765,8 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * PREPARATION TIMER
+   * TIMER
    * =======================================================
-   *
-   * This is NOT AI percentage.
-   *
-   * It simply tells the user:
-   *
-   * 1s
-   * 2s
-   * 3s
-   *
-   * while preparation is happening.
    */
 
   const elapsedTimerRef =
@@ -730,7 +792,7 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * TIMER
+   * TIMER FUNCTIONS
    * =======================================================
    */
 
@@ -757,11 +819,8 @@ export default function useBackgroundRemove({
       started;
 
     /*
-     * IMPORTANT:
-     *
-     * Start from 1.
+     * Always begin at 1.
      */
-
     setBackgroundElapsedSeconds(
       1
     );
@@ -791,7 +850,7 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * PREPARE
+   * PREPARE BACKGROUND
    * =======================================================
    */
 
@@ -808,24 +867,24 @@ export default function useBackgroundRemove({
       }
 
       /*
-       * Completed cache.
+       * Cache hit.
        */
-
       const cached =
         preparedCacheRef.current.get(
           key
         );
 
       if (
-        cached?.blob
+        cached?.blob &&
+        cached?.file &&
+        cached?.image
       ) {
-        return cached.blob;
+        return cached;
       }
 
       /*
-       * Already running.
+       * Existing promise.
        */
-
       if (
         cached?.promise
       ) {
@@ -858,9 +917,10 @@ export default function useBackgroundRemove({
       startElapsedTimer();
 
       /*
-       * Start visual loading at 1.
+       * Internal progress only.
+       *
+       * User-facing UI uses seconds.
        */
-
       setBackgroundProgress(
         1
       );
@@ -870,11 +930,15 @@ export default function useBackgroundRemove({
         {
           device:
             config.device,
+
           model:
             config.model,
+
           aiSize,
+
           fileSize:
             file.size,
+
           fileType:
             file.type,
         }
@@ -885,36 +949,20 @@ export default function useBackgroundRemove({
           /*
            * =================================================
            * STEP 1
-           * MODEL WARM-UP
+           * MODEL
            * =================================================
            *
-           * This is important.
-           *
-           * The model is initialized BEFORE Remove is
-           * clicked.
+           * If global warmup already finished, this is
+           * basically instant.
            */
 
           console.log(
-            "[BG] Warming AI model..."
+            "[BG] WAITING FOR MODEL..."
           );
 
-          await preload({
-            device:
-              config.device,
-
-            model:
-              config.model,
-
-            proxyToWorker:
-              config.proxyToWorker,
-
-            output: {
-              format:
-                "image/png",
-
-              quality: 1,
-            },
-          });
+          await warmupModel(
+            config
+          );
 
           if (
             preparingKeyRef.current !==
@@ -950,22 +998,21 @@ export default function useBackgroundRemove({
           /*
            * =================================================
            * STEP 3
-           * DIRECT BACKGROUND REMOVAL
+           * DIRECT AI
            * =================================================
-           *
-           * NO:
-           *
-           * segmentForeground()
-           *
-           * NO:
-           *
-           * applySegmentationMask()
-           *
-           * This is the main speed improvement.
            */
 
           console.log(
-            "[BG] Direct GPU background removal..."
+            "[BG] AI INFERENCE START",
+            {
+              device:
+                config.device,
+
+              model:
+                config.model,
+
+              aiSize,
+            }
           );
 
           const transparentPreview =
@@ -989,15 +1036,11 @@ export default function useBackgroundRemove({
                 },
 
                 progress: (
-                  progressKey,
-                  current,
-                  total
+                  progressKey
                 ) => {
                   /*
-                   * We intentionally do NOT expose this
-                   * as the user's main progress percentage.
-                   *
-                   * The user sees elapsed seconds instead.
+                   * Keep this completely separate from
+                   * the user-facing seconds counter.
                    */
 
                   if (
@@ -1012,44 +1055,29 @@ export default function useBackgroundRemove({
                     "compute:decode"
                   ) {
                     setBackgroundProgress(
-                      10
+                      15
                     );
-                  }
-
-                  if (
+                  } else if (
                     progressKey ===
                     "compute:inference"
                   ) {
                     setBackgroundProgress(
-                      40
+                      50
                     );
-                  }
-
-                  if (
+                  } else if (
                     progressKey ===
                     "compute:mask"
                   ) {
                     setBackgroundProgress(
                       75
                     );
-                  }
-
-                  if (
+                  } else if (
                     progressKey ===
                     "compute:encode"
                   ) {
-                    if (
-                      Number(
-                        current
-                      ) >=
-                      Number(
-                        total
-                      )
-                    ) {
-                      setBackgroundProgress(
-                        95
-                      );
-                    }
+                    setBackgroundProgress(
+                      90
+                    );
                   }
                 },
               }
@@ -1072,11 +1100,17 @@ export default function useBackgroundRemove({
             );
           }
 
+          console.log(
+            "[BG] AI INFERENCE COMPLETE"
+          );
+
           /*
            * =================================================
            * STEP 4
-           * RESTORE ORIGINAL DIMENSIONS
+           * RESTORE ORIGINAL SIZE
            * =================================================
+           *
+           * Still happens BEFORE Remove click.
            */
 
           const finalBlob =
@@ -1084,15 +1118,6 @@ export default function useBackgroundRemove({
               transparentPreview,
               file
             );
-
-          if (
-            preparingKeyRef.current !==
-            key
-          ) {
-            throw new Error(
-              "Background preparation cancelled."
-            );
-          }
 
           if (
             !finalBlob
@@ -1104,18 +1129,73 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * CACHE FINAL RESULT
+           * STEP 5
+           * CREATE FILE NOW
            * =================================================
            */
 
+          const finalFile =
+            makePngFile(
+              finalBlob,
+              getBaseName(
+                file
+              ),
+              "no-background"
+            );
+
+          if (
+            !finalFile
+          ) {
+            throw new Error(
+              "Could not create transparent PNG."
+            );
+          }
+
+          /*
+           * =================================================
+           * STEP 6
+           * LOAD IMAGE NOW
+           * =================================================
+           *
+           * This removes another delay from Remove click.
+           */
+
+          const finalImage =
+            await loadImage(
+              finalFile
+            );
+
+          if (
+            !finalImage
+          ) {
+            throw new Error(
+              "Transparent image could not be loaded."
+            );
+          }
+
+          /*
+           * =================================================
+           * FINAL CACHE
+           * =================================================
+           */
+
+          const result = {
+            blob:
+              finalBlob,
+
+            file:
+              finalFile,
+
+            image:
+              finalImage,
+
+            ready:
+              true,
+          };
+
           preparedCacheRef.current.set(
             key,
-            {
-              blob:
-                finalBlob,
-              ready:
-                true,
-            }
+            result
           );
 
           setBackgroundProgress(
@@ -1132,30 +1212,36 @@ export default function useBackgroundRemove({
 
           stopElapsedTimer();
 
+          const seconds =
+            Math.max(
+              1,
+              Math.round(
+                (
+                  performance.now() -
+                  elapsedStartRef.current
+                ) /
+                  1000
+              )
+            );
+
           console.log(
             "[BG] READY",
             {
-              seconds:
-                Math.max(
-                  1,
-                  Math.round(
-                    (
-                      performance.now() -
-                      elapsedStartRef.current
-                    ) /
-                      1000
-                  )
-                ),
+              seconds,
+              device:
+                config.device,
+              model:
+                config.model,
+              aiSize,
             }
           );
 
-          return finalBlob;
+          return result;
         })();
 
       /*
-       * Save running promise immediately.
+       * Store promise immediately.
        */
-
       preparedCacheRef.current.set(
         key,
         {
@@ -1165,18 +1251,7 @@ export default function useBackgroundRemove({
       );
 
       try {
-        const blob =
-          await promise;
-
-        preparedCacheRef.current.set(
-          key,
-          {
-            blob,
-            ready: true,
-          }
-        );
-
-        return blob;
+        return await promise;
       } catch (error) {
         const current =
           preparedCacheRef.current.get(
@@ -1256,9 +1331,8 @@ export default function useBackgroundRemove({
     }
 
     /*
-     * Mark previous image stale.
+     * Current image becomes active.
      */
-
     preparingKeyRef.current =
       key;
 
@@ -1266,6 +1340,41 @@ export default function useBackgroundRemove({
       ""
     );
 
+    /*
+     * Cache already ready.
+     */
+    const cached =
+      preparedCacheRef.current.get(
+        key
+      );
+
+    if (
+      cached?.ready &&
+      cached?.file &&
+      cached?.image
+    ) {
+      setBackgroundReady(
+        true
+      );
+
+      setBackgroundPreparing(
+        false
+      );
+
+      setBackgroundProgress(
+        100
+      );
+
+      setBackgroundElapsedSeconds(
+        0
+      );
+
+      return;
+    }
+
+    /*
+     * Start from 1.
+     */
     setBackgroundReady(
       false
     );
@@ -1273,10 +1382,6 @@ export default function useBackgroundRemove({
     setBackgroundPreparing(
       true
     );
-
-    /*
-     * START AT 1.
-     */
 
     setBackgroundProgress(
       1
@@ -1289,7 +1394,6 @@ export default function useBackgroundRemove({
     /*
      * Start immediately.
      */
-
     prepareBackgroundRemoval(
       workingFile,
       key
@@ -1309,11 +1413,8 @@ export default function useBackgroundRemove({
 
     return () => {
       /*
-       * Don't cancel the shared promise.
-       *
-       * Just make old result stale.
+       * Make old image stale.
        */
-
       if (
         preparingKeyRef.current ===
         key
@@ -1360,10 +1461,6 @@ export default function useBackgroundRemove({
         ""
       );
 
-      /*
-       * Keep existing editor behavior.
-       */
-
       setImageOffset({
         x: 0,
         y: 0,
@@ -1373,8 +1470,10 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * FAST CACHE CHECK
+       * CACHE HIT
        * ===================================================
+       *
+       * This is now the intended normal path.
        */
 
       let cached =
@@ -1383,32 +1482,25 @@ export default function useBackgroundRemove({
         );
 
       let result =
-        cached?.blob ||
-        null;
+        cached?.ready
+          ? cached
+          : null;
 
-      /*
-       * ===================================================
-       * READY = INSTANT PATH
-       * ===================================================
-       */
-
-      if (result) {
+      if (
+        result?.file &&
+        result?.image
+      ) {
         console.log(
-          "[BG] REMOVE -> CACHE HIT"
+          "[BG] REMOVE -> INSTANT CACHE HIT"
         );
       } else {
         /*
-         * User clicked before preprocessing finished.
+         * User clicked before preparation finished.
          *
-         * IMPORTANT:
-         *
-         * We DO NOT start another AI operation.
-         *
-         * We simply wait for the existing promise.
+         * Do NOT run a second inference.
          */
-
         console.log(
-          "[BG] REMOVE -> WAITING FOR EXISTING PREPARATION"
+          "[BG] REMOVE -> WAITING FOR PREPARATION"
         );
 
         result =
@@ -1418,7 +1510,10 @@ export default function useBackgroundRemove({
           );
       }
 
-      if (!result) {
+      if (
+        !result?.file ||
+        !result?.image
+      ) {
         throw new Error(
           "Background removal result is unavailable."
         );
@@ -1426,41 +1521,29 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * CREATE PNG FILE
+       * IMPORTANT
        * ===================================================
+       *
+       * File + Image were already prepared.
+       *
+       * No:
+       *
+       * makePngFile()
+       *
+       * loadImage()
+       *
+       * resize
+       *
+       * AI inference
+       *
+       * happens here.
        */
 
       const newFile =
-        makePngFile(
-          result,
-          getBaseName(
-            workingFile
-          ),
-          "no-background"
-        );
-
-      if (!newFile) {
-        throw new Error(
-          "Could not create transparent PNG."
-        );
-      }
-
-      /*
-       * ===================================================
-       * LOAD IMAGE
-       * ===================================================
-       */
+        result.file;
 
       const newImage =
-        await loadImage(
-          newFile
-        );
-
-      if (!newImage) {
-        throw new Error(
-          "Transparent image could not be loaded."
-        );
-      }
+        result.image;
 
       /*
        * ===================================================
@@ -1534,7 +1617,7 @@ export default function useBackgroundRemove({
       stopElapsedTimer();
 
       console.log(
-        "[BG] REMOVE COMPLETE"
+        "[BG] REMOVE COMPLETE - CACHE APPLY"
       );
     } catch (error) {
       console.error(
@@ -1565,12 +1648,6 @@ export default function useBackgroundRemove({
 
       preparingKeyRef.current =
         "";
-
-      /*
-       * Keep cache alive during component lifetime.
-       *
-       * Browser AI promise is intentionally not aborted.
-       */
     };
   }, []);
 
@@ -1581,27 +1658,16 @@ export default function useBackgroundRemove({
    */
 
   return {
-    /*
-     * Existing API
-     */
     backgroundProgress,
 
     backgroundError,
 
     handleBackgroundRemove,
 
-    /*
-     * New fast-state API
-     */
     backgroundReady,
 
     backgroundPreparing,
 
-    /*
-     * Actual elapsed preparation time.
-     *
-     * Starts from 1.
-     */
     backgroundElapsedSeconds,
   };
 }
