@@ -13,7 +13,15 @@
    - Keep the original image untouched outside the mask.
 ========================================================= */
 
-import * as ort from "onnxruntime-web";
+let ortModulePromise = null;
+
+async function getOrt() {
+  if (!ortModulePromise) {
+    ortModulePromise = import("onnxruntime-web");
+  }
+
+  return ortModulePromise;
+}
 
 import { clamp } from "./canvasHelpers";
 
@@ -91,10 +99,12 @@ function getMiGanMaxDimension() {
  */
 let wasmConfigured = false;
 
-function configureWasm() {
+async function configureWasm() {
   if (wasmConfigured) {
     return;
   }
+
+  const ort = await getOrt();
 
   /*
    * Weak/non-isolated browsers:
@@ -136,7 +146,8 @@ let miGanSessionPromise = null;
 export async function getMiGanSession(
   onProgress
 ) {
-  configureWasm();
+  const ort = await getOrt();
+  await configureWasm();
 
   if (miGanSessionPromise) {
     onProgress?.(
@@ -1190,6 +1201,7 @@ export async function runLocalAIObjectRemoval(
   maskCanvas,
   onProgress
 ) {
+  const ort = await getOrt();
   /*
    * Load/reuse model session.
    */
@@ -1414,3 +1426,8 @@ export async function runLocalAIObjectRemoval(
 
   return finalCanvas;
 }
+
+
+
+
+

@@ -3,10 +3,15 @@
    AI OBJECT REMOVAL / MI-GAN INPAINTING
 ========================================================= */
 
-import * as ort from "onnxruntime-web";
+let ortModulePromise = null;
 
-ort.env.wasm.numThreads = 1;
-ort.env.wasm.simd = true;
+async function getOrt() {
+  if (!ortModulePromise) {
+    ortModulePromise = import("onnxruntime-web");
+  }
+
+  return ortModulePromise;
+}
 
 
 /* =========================================================
@@ -810,6 +815,7 @@ export async function runLocalAIObjectRemoval({
   getMiGanSession,
   onProgress,
 }) {
+  const ort = await getOrt();
   if (!baseCanvas) {
     throw new Error(
       "Base image is missing."
@@ -1105,5 +1111,8 @@ export function hasAIObjectSelection(
 
   return false;
 }
+
+
+
 
 
