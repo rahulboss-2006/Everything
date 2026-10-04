@@ -21,50 +21,41 @@ import {
  * FAST BACKGROUND REMOVAL ENGINE
  * =========================================================
  *
- * Architecture:
+ * Flow:
  *
  * APP START
  *    ↓
- * AI MODEL WARM-UP
+ * MODEL WARM-UP
  *
  * IMAGE UPLOAD
  *    ↓
- * resize small
+ * SMALL AI INPUT
  *    ↓
- * AI inference
+ * AI INFERENCE
  *    ↓
- * transparent result
+ * TRANSPARENT RESULT
  *    ↓
- * final PNG
+ * ORIGINAL SIZE RESTORE
  *    ↓
- * File + Image cached
+ * PNG CACHE
  *
  * REMOVE CLICK
  *    ↓
- * cache hit
+ * CACHE HIT
  *    ↓
- * instant apply
+ * FAST APPLY
  *
- * IMPORTANT:
+ * Progress:
  *
- * We never run AI again on Remove click if preparation
- * already completed.
+ * 1% → 2% → 3% → ... → 100%
+ *
+ * No seconds counter.
  */
 
 /*
  * =========================================================
  * SPEED SETTINGS
  * =========================================================
- *
- * 768 is intentionally used instead of 1024.
- *
- * 1024 -> ~1,048,576 pixels
- * 768  ->   589,824 pixels
- *
- * That is roughly 44% fewer pixels for inference.
- *
- * It keeps substantially better edges than extremely small
- * 512px processing while being much faster than 1024px.
  */
 
 const AI_MAX_SIZE_GPU = 768;
@@ -75,13 +66,6 @@ const AI_MAX_SIZE_WEAK = 640;
  * =========================================================
  * GLOBAL MODEL WARM-UP
  * =========================================================
- *
- * The important improvement:
- *
- * Model initialization does NOT wait for image upload.
- *
- * The browser starts preparing the AI engine while the user
- * is using the editor.
  */
 
 let globalWarmupPromise = null;
@@ -119,9 +103,6 @@ function getCores() {
 }
 
 function isWeakDevice() {
-  /*
-   * If WebGPU exists, prefer GPU.
-   */
   if (hasWebGPU()) {
     return false;
   }
@@ -177,12 +158,12 @@ function getConfigKey(config) {
   ].join("|");
 }
 
-async function warmupModel(config = getConfig()) {
-  const key = getConfigKey(config);
+async function warmupModel(
+  config = getConfig()
+) {
+  const key =
+    getConfigKey(config);
 
-  /*
-   * Same model already warming/ready.
-   */
   if (
     globalWarmupPromise &&
     globalWarmupConfigKey === key
@@ -200,44 +181,44 @@ async function warmupModel(config = getConfig()) {
     }
   );
 
-  globalWarmupPromise = preload({
-    device: config.device,
+  globalWarmupPromise =
+    preload({
+      device: config.device,
 
-    model: config.model,
+      model: config.model,
 
-    proxyToWorker:
-      config.proxyToWorker,
+      proxyToWorker:
+        config.proxyToWorker,
 
-    output: {
-      format: "image/png",
-      quality: 1,
-    },
-  })
-    .then((result) => {
-      console.log(
-        "[BG] GLOBAL MODEL READY",
-        {
-          device: config.device,
-          model: config.model,
-        }
-      );
-
-      return result;
+      output: {
+        format: "image/png",
+        quality: 1,
+      },
     })
-    .catch((error) => {
-      /*
-       * Allow retry if warm-up failed.
-       */
-      globalWarmupPromise = null;
-      globalWarmupConfigKey = "";
+      .then((result) => {
+        console.log(
+          "[BG] GLOBAL MODEL READY",
+          {
+            device:
+              config.device,
+            model:
+              config.model,
+          }
+        );
 
-      console.error(
-        "[BG] GLOBAL MODEL WARMUP FAILED:",
-        error
-      );
+        return result;
+      })
+      .catch((error) => {
+        globalWarmupPromise = null;
+        globalWarmupConfigKey = "";
 
-      throw error;
-    });
+        console.error(
+          "[BG] GLOBAL MODEL WARMUP FAILED:",
+          error
+        );
+
+        throw error;
+      });
 
   return globalWarmupPromise;
 }
@@ -246,8 +227,6 @@ async function warmupModel(config = getConfig()) {
  * =========================================================
  * START GLOBAL WARM-UP
  * =========================================================
- *
- * We don't block React rendering.
  */
 
 if (
@@ -255,9 +234,7 @@ if (
 ) {
   const start = () => {
     warmupModel().catch(() => {
-      /*
-       * Actual image preparation will retry.
-       */
+      // Preparation will retry later.
     });
   };
 
@@ -292,9 +269,7 @@ function getAiSize(config) {
     return AI_MAX_SIZE_GPU;
   }
 
-  if (
-    config?.weak
-  ) {
+  if (config?.weak) {
     return AI_MAX_SIZE_WEAK;
   }
 
@@ -438,9 +413,6 @@ async function createAiInput(
 
       bitmap.close();
 
-      /*
-       * PNG gives predictable alpha/input behavior.
-       */
       return await new Promise(
         (
           resolve,
@@ -481,6 +453,7 @@ async function createAiInput(
   /*
    * Canvas fallback.
    */
+
   const image =
     await loadImage(
       source
@@ -594,10 +567,6 @@ async function createAiInput(
  * =========================================================
  * ORIGINAL DIMENSION RESTORE
  * =========================================================
- *
- * This happens during background preparation.
- *
- * Therefore Remove click doesn't wait for it.
  */
 
 async function scaleTransparentResult(
@@ -765,18 +734,18 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * TIMER
+   * PROGRESS
    * =======================================================
    */
 
-  const elapsedTimerRef =
+  const progressTimerRef =
     useRef(null);
 
-  const elapsedStartRef =
-    useRef(0);
+  const progressTargetRef =
+    useRef(1);
 
-  const [backgroundElapsedSeconds, setBackgroundElapsedSeconds] =
-    useState(0);
+  const progressValueRef =
+    useRef(1);
 
   const [backgroundProgress, setBackgroundProgress] =
     useState(0);
@@ -792,60 +761,136 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * TIMER FUNCTIONS
+   * SMOOTH PERCENT PROGRESS
    * =======================================================
+   *
+   * The actual engine can sometimes jump:
+   *
+   * 10 → 50 → 90
+   *
+   * Instead of making the UI jump, we smoothly move:
+   *
+   * 10 → 11 → 12 → ... → 50
+   *
+   * This keeps the progress visually natural.
+   *
+   * IMPORTANT:
+   * We never fake 100%.
+   *
+   * 100% is only set after the complete result is ready.
    */
 
-  function stopElapsedTimer() {
+  function stopProgressAnimation() {
     if (
-      elapsedTimerRef.current
+      progressTimerRef.current
     ) {
       clearInterval(
-        elapsedTimerRef.current
+        progressTimerRef.current
       );
 
-      elapsedTimerRef.current =
+      progressTimerRef.current =
         null;
     }
   }
 
-  function startElapsedTimer() {
-    stopElapsedTimer();
-
-    const started =
-      performance.now();
-
-    elapsedStartRef.current =
-      started;
-
-    /*
-     * Always begin at 1.
-     */
-    setBackgroundElapsedSeconds(
-      1
-    );
-
-    elapsedTimerRef.current =
-      setInterval(
-        () => {
-          const elapsed =
-            Math.max(
-              1,
-              Math.floor(
-                (
-                  performance.now() -
-                  started
-                ) /
-                  1000
-              ) + 1
-            );
-
-          setBackgroundElapsedSeconds(
-            elapsed
-          );
-        },
-        250
+  function setProgressTarget(
+    value
+  ) {
+    const next =
+      Math.max(
+        1,
+        Math.min(
+          99,
+          Math.round(
+            Number(value) || 1
+          )
+        )
       );
+
+    progressTargetRef.current =
+      Math.max(
+        progressTargetRef.current,
+        next
+      );
+
+    if (
+      !progressTimerRef.current
+    ) {
+      progressTimerRef.current =
+        setInterval(
+          () => {
+            const current =
+              progressValueRef.current;
+
+            const target =
+              progressTargetRef.current;
+
+            if (
+              current >= target
+            ) {
+              return;
+            }
+
+            /*
+             * Move only 1% at a time.
+             */
+            const next =
+              Math.min(
+                target,
+                current + 1
+              );
+
+            progressValueRef.current =
+              next;
+
+            setBackgroundProgress(
+              next
+            );
+          },
+          45
+        );
+    }
+  }
+
+  function resetProgress(
+    value = 1
+  ) {
+    stopProgressAnimation();
+
+    const next =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            Number(value) || 0
+          )
+        )
+      );
+
+    progressValueRef.current =
+      next;
+
+    progressTargetRef.current =
+      next;
+
+    setBackgroundProgress(
+      next
+    );
+  }
+
+  function completeProgress() {
+    stopProgressAnimation();
+
+    progressValueRef.current =
+      100;
+
+    progressTargetRef.current =
+      100;
+
+    setBackgroundProgress(
+      100
+    );
   }
 
   /*
@@ -869,6 +914,7 @@ export default function useBackgroundRemove({
       /*
        * Cache hit.
        */
+
       const cached =
         preparedCacheRef.current.get(
           key
@@ -885,6 +931,7 @@ export default function useBackgroundRemove({
       /*
        * Existing promise.
        */
+
       if (
         cached?.promise
       ) {
@@ -914,16 +961,7 @@ export default function useBackgroundRemove({
         ""
       );
 
-      startElapsedTimer();
-
-      /*
-       * Internal progress only.
-       *
-       * User-facing UI uses seconds.
-       */
-      setBackgroundProgress(
-        1
-      );
+      resetProgress(1);
 
       console.log(
         "[BG] PREPARE START",
@@ -951,14 +989,13 @@ export default function useBackgroundRemove({
            * STEP 1
            * MODEL
            * =================================================
-           *
-           * If global warmup already finished, this is
-           * basically instant.
            */
 
           console.log(
             "[BG] WAITING FOR MODEL..."
           );
+
+          setProgressTarget(5);
 
           await warmupModel(
             config
@@ -976,9 +1013,11 @@ export default function useBackgroundRemove({
           /*
            * =================================================
            * STEP 2
-           * SMALL AI INPUT
+           * CREATE AI INPUT
            * =================================================
            */
+
+          setProgressTarget(12);
 
           const aiInput =
             await createAiInput(
@@ -995,10 +1034,12 @@ export default function useBackgroundRemove({
             );
           }
 
+          setProgressTarget(18);
+
           /*
            * =================================================
            * STEP 3
-           * DIRECT AI
+           * AI INFERENCE
            * =================================================
            */
 
@@ -1038,11 +1079,6 @@ export default function useBackgroundRemove({
                 progress: (
                   progressKey
                 ) => {
-                  /*
-                   * Keep this completely separate from
-                   * the user-facing seconds counter.
-                   */
-
                   if (
                     preparingKeyRef.current !==
                     key
@@ -1050,33 +1086,40 @@ export default function useBackgroundRemove({
                     return;
                   }
 
+                  /*
+                   * Real engine stages.
+                   *
+                   * We use ranges instead of jumping
+                   * directly to the final number.
+                   */
+
                   if (
                     progressKey ===
                     "compute:decode"
                   ) {
-                    setBackgroundProgress(
-                      15
+                    setProgressTarget(
+                      25
                     );
                   } else if (
                     progressKey ===
                     "compute:inference"
                   ) {
-                    setBackgroundProgress(
-                      50
+                    setProgressTarget(
+                      65
                     );
                   } else if (
                     progressKey ===
                     "compute:mask"
                   ) {
-                    setBackgroundProgress(
-                      75
+                    setProgressTarget(
+                      82
                     );
                   } else if (
                     progressKey ===
                     "compute:encode"
                   ) {
-                    setBackgroundProgress(
-                      90
+                    setProgressTarget(
+                      94
                     );
                   }
                 },
@@ -1105,12 +1148,21 @@ export default function useBackgroundRemove({
           );
 
           /*
+           * AI finished.
+           *
+           * Keep UI below 100 while final PNG is
+           * being prepared.
+           */
+
+          setProgressTarget(
+            95
+          );
+
+          /*
            * =================================================
            * STEP 4
            * RESTORE ORIGINAL SIZE
            * =================================================
-           *
-           * Still happens BEFORE Remove click.
            */
 
           const finalBlob =
@@ -1127,10 +1179,14 @@ export default function useBackgroundRemove({
             );
           }
 
+          setProgressTarget(
+            97
+          );
+
           /*
            * =================================================
            * STEP 5
-           * CREATE FILE NOW
+           * CREATE FILE
            * =================================================
            */
 
@@ -1151,13 +1207,15 @@ export default function useBackgroundRemove({
             );
           }
 
+          setProgressTarget(
+            98
+          );
+
           /*
            * =================================================
            * STEP 6
-           * LOAD IMAGE NOW
+           * LOAD IMAGE
            * =================================================
-           *
-           * This removes another delay from Remove click.
            */
 
           const finalImage =
@@ -1198,9 +1256,11 @@ export default function useBackgroundRemove({
             result
           );
 
-          setBackgroundProgress(
-            100
-          );
+          /*
+           * ONLY NOW = 100%
+           */
+
+          completeProgress();
 
           setBackgroundReady(
             true
@@ -1210,28 +1270,15 @@ export default function useBackgroundRemove({
             false
           );
 
-          stopElapsedTimer();
-
-          const seconds =
-            Math.max(
-              1,
-              Math.round(
-                (
-                  performance.now() -
-                  elapsedStartRef.current
-                ) /
-                  1000
-              )
-            );
-
           console.log(
             "[BG] READY",
             {
-              seconds,
               device:
                 config.device,
+
               model:
                 config.model,
+
               aiSize,
             }
           );
@@ -1242,6 +1289,7 @@ export default function useBackgroundRemove({
       /*
        * Store promise immediately.
        */
+
       preparedCacheRef.current.set(
         key,
         {
@@ -1271,7 +1319,7 @@ export default function useBackgroundRemove({
           false
         );
 
-        stopElapsedTimer();
+        stopProgressAnimation();
 
         if (
           error?.message !==
@@ -1300,7 +1348,7 @@ export default function useBackgroundRemove({
 
   useEffect(() => {
     if (!workingFile) {
-      stopElapsedTimer();
+      stopProgressAnimation();
 
       setBackgroundReady(
         false
@@ -1310,13 +1358,7 @@ export default function useBackgroundRemove({
         false
       );
 
-      setBackgroundElapsedSeconds(
-        0
-      );
-
-      setBackgroundProgress(
-        0
-      );
+      resetProgress(0);
 
       return;
     }
@@ -1333,6 +1375,7 @@ export default function useBackgroundRemove({
     /*
      * Current image becomes active.
      */
+
     preparingKeyRef.current =
       key;
 
@@ -1343,6 +1386,7 @@ export default function useBackgroundRemove({
     /*
      * Cache already ready.
      */
+
     const cached =
       preparedCacheRef.current.get(
         key
@@ -1361,20 +1405,15 @@ export default function useBackgroundRemove({
         false
       );
 
-      setBackgroundProgress(
-        100
-      );
-
-      setBackgroundElapsedSeconds(
-        0
-      );
+      completeProgress();
 
       return;
     }
 
     /*
-     * Start from 1.
+     * Start preparation.
      */
+
     setBackgroundReady(
       false
     );
@@ -1383,17 +1422,8 @@ export default function useBackgroundRemove({
       true
     );
 
-    setBackgroundProgress(
-      1
-    );
+    resetProgress(1);
 
-    setBackgroundElapsedSeconds(
-      1
-    );
-
-    /*
-     * Start immediately.
-     */
     prepareBackgroundRemoval(
       workingFile,
       key
@@ -1415,6 +1445,7 @@ export default function useBackgroundRemove({
       /*
        * Make old image stale.
        */
+
       if (
         preparingKeyRef.current ===
         key
@@ -1423,7 +1454,7 @@ export default function useBackgroundRemove({
           "";
       }
 
-      stopElapsedTimer();
+      stopProgressAnimation();
     };
   }, [
     workingFile,
@@ -1472,8 +1503,6 @@ export default function useBackgroundRemove({
        * ===================================================
        * CACHE HIT
        * ===================================================
-       *
-       * This is now the intended normal path.
        */
 
       let cached =
@@ -1497,8 +1526,10 @@ export default function useBackgroundRemove({
         /*
          * User clicked before preparation finished.
          *
-         * Do NOT run a second inference.
+         * Wait for the existing preparation.
+         * No second AI inference.
          */
+
         console.log(
           "[BG] REMOVE -> WAITING FOR PREPARATION"
         );
@@ -1521,22 +1552,8 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * IMPORTANT
+       * APPLY CACHED RESULT
        * ===================================================
-       *
-       * File + Image were already prepared.
-       *
-       * No:
-       *
-       * makePngFile()
-       *
-       * loadImage()
-       *
-       * resize
-       *
-       * AI inference
-       *
-       * happens here.
        */
 
       const newFile =
@@ -1602,9 +1619,7 @@ export default function useBackgroundRemove({
        * ===================================================
        */
 
-      setBackgroundProgress(
-        100
-      );
+      completeProgress();
 
       setBackgroundReady(
         false
@@ -1613,8 +1628,6 @@ export default function useBackgroundRemove({
       setBackgroundPreparing(
         false
       );
-
-      stopElapsedTimer();
 
       console.log(
         "[BG] REMOVE COMPLETE - CACHE APPLY"
@@ -1644,7 +1657,7 @@ export default function useBackgroundRemove({
 
   useEffect(() => {
     return () => {
-      stopElapsedTimer();
+      stopProgressAnimation();
 
       preparingKeyRef.current =
         "";
@@ -1655,6 +1668,24 @@ export default function useBackgroundRemove({
    * =======================================================
    * RETURN
    * =======================================================
+   *
+   * backgroundElapsedSeconds is kept as an alias for
+   * compatibility with existing UI code.
+   *
+   * IMPORTANT:
+   * It now contains PERCENTAGE, not seconds.
+   *
+   * So old UI using:
+   *
+   * backgroundElapsedSeconds
+   *
+   * will receive:
+   *
+   * 1, 2, 3 ... 100
+   *
+   * instead of:
+   *
+   * 1s, 2s, 3s...
    */
 
   return {
@@ -1668,6 +1699,7 @@ export default function useBackgroundRemove({
 
     backgroundPreparing,
 
-    backgroundElapsedSeconds,
+    backgroundElapsedSeconds:
+      backgroundProgress,
   };
 }
