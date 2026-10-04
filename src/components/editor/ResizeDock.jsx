@@ -574,7 +574,7 @@ export default function ResizeDock({
                   sm:text-xs
                 "
               >
-                <X size={15} />
+                <X size={10} />
                 Cancel
               </button>
 
@@ -609,14 +609,14 @@ export default function ResizeDock({
                 {applying ? (
                   <>
                     <Loader2
-                      size={15}
+                      size={10}
                       className="animate-spin"
                     />
                     Resizing...
                   </>
                 ) : (
                   <>
-                    <Check size={15} />
+                    <Check size={8} />
                     Apply Resize
                   </>
                 )}

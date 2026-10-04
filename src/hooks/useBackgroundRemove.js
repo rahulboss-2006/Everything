@@ -6,6 +6,51 @@ import {
   makePngFile,
 } from "../utils/editorTools/canvasHelpers";
 
+/*
+ * Detect relatively weak devices.
+ *
+ * The goal is NOT to change the UI.
+ * It only chooses a lighter AI model so low-end phones/laptops
+ * don't spend an excessive amount of time doing inference.
+ */
+function isWeakDevice() {
+  try {
+    const cores = Number(navigator.hardwareConcurrency || 4);
+    const memory = Number(navigator.deviceMemory || 0);
+
+    /*
+     * deviceMemory is not available in every browser.
+     * When unavailable, CPU cores are still useful.
+     */
+    if (memory > 0 && memory <= 4) {
+      return true;
+    }
+
+    if (cores <= 4) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/*
+ * Choose the model automatically.
+ *
+ * Weak device:
+ *   isnet_quint8 -> much lighter
+ *
+ * Normal/strong device:
+ *   isnet_fp16 -> better quality/performance balance
+ */
+function getBackgroundModel() {
+  return isWeakDevice()
+    ? "isnet_quint8"
+    : "isnet_fp16";
+}
+
 export default function useBackgroundRemove({
   workingFile,
   removingBackground,
@@ -19,28 +64,15 @@ export default function useBackgroundRemove({
   objectDrawingRef,
   layers,
 }) {
-  /*
-   * REAL progress reported by @imgly.
-   *
-   * This is the source of truth.
-   */
   const backgroundRealProgressRef = useRef(0);
 
-  /*
-   * Progress currently displayed by the UI.
-   */
   const backgroundDisplayedProgressRef = useRef(0);
 
-  /*
-   * requestAnimationFrame handle.
-   */
   const backgroundProgressFrameRef = useRef(null);
 
-  /*
-   * Prevent progress from reaching 100 until
-   * the complete background-removal operation finishes.
-   */
   const backgroundProcessingFinishedRef = useRef(false);
+
+  const backgroundProgressTargetRef = useRef(0);
 
   const [backgroundProgress, setBackgroundProgress] =
     useState(0);
@@ -49,11 +81,11 @@ export default function useBackgroundRemove({
     useState("");
 
   /*
-   * Smoothly follow REAL progress.
+   * Smooth progress animation.
    *
-   * IMPORTANT:
-   * The displayed progress can NEVER go above
-   * the real progress reported by the AI engine.
+   * Important:
+   * The UI never reaches 100% before the complete
+   * background-removal pipeline is actually finished.
    */
   const animateBackgroundProgress = () => {
     if (backgroundProgressFrameRef.current) {
@@ -61,31 +93,23 @@ export default function useBackgroundRemove({
     }
 
     const animate = () => {
-      const realProgress =
-        backgroundRealProgressRef.current;
-
       const current =
         backgroundDisplayedProgressRef.current;
 
-      /*
-       * During actual processing:
-       *
-       * 0 -> 99 maximum.
-       *
-       * We never invent progress beyond what
-       * the AI engine has reported.
-       */
       const target =
         backgroundProcessingFinishedRef.current
           ? 100
-          : Math.min(99, realProgress);
+          : Math.min(
+              99,
+              Math.max(
+                backgroundProgressTargetRef.current,
+                backgroundRealProgressRef.current
+              )
+            );
 
       const difference = target - current;
 
-      /*
-       * Already reached target.
-       */
-      if (Math.abs(difference) <= 0.01) {
+      if (Math.abs(difference) <= 0.05) {
         backgroundDisplayedProgressRef.current =
           target;
 
@@ -93,34 +117,33 @@ export default function useBackgroundRemove({
 
         backgroundProgressFrameRef.current = null;
 
+        /*
+         * If processing is still running, keep following
+         * future progress callbacks.
+         */
+        if (
+          !backgroundProcessingFinishedRef.current &&
+          target < 99
+        ) {
+          return;
+        }
+
         return;
       }
 
       /*
-       * Follow the real progress smoothly.
-       *
-       * IMPORTANT:
-       * Never overshoot the target.
+       * Faster movement when the real progress jumps,
+       * but still smooth enough for the progress bar.
        */
-      const step =
-        Math.max(
-          0.15,
-          Math.abs(difference) * 0.16
-        );
+      const step = Math.max(
+        0.25,
+        Math.abs(difference) * 0.18
+      );
 
-      let next;
-
-      if (difference > 0) {
-        next = Math.min(
-          current + step,
-          target
-        );
-      } else {
-        next = Math.max(
-          current - step,
-          target
-        );
-      }
+      const next =
+        difference > 0
+          ? Math.min(current + step, target)
+          : Math.max(current - step, target);
 
       backgroundDisplayedProgressRef.current =
         next;
@@ -135,9 +158,6 @@ export default function useBackgroundRemove({
       requestAnimationFrame(animate);
   };
 
-  /*
-   * Cleanup.
-   */
   useEffect(() => {
     return () => {
       if (backgroundProgressFrameRef.current) {
@@ -149,6 +169,78 @@ export default function useBackgroundRemove({
       }
     };
   }, []);
+
+  /*
+   * Convert IMG.LY progress into useful UI stages.
+   *
+   * IMG.LY reports progress for:
+   * decode -> inference -> mask -> encode
+   *
+   * The callback is file/stage based, so we keep the
+   * displayed value stable during expensive inference.
+   */
+  const updateRealProgress = (
+    key,
+    current,
+    total
+  ) => {
+    if (!total || total <= 0) {
+      return;
+    }
+
+    const raw = Math.min(
+      100,
+      Math.max(0, (current / total) * 100)
+    );
+
+    let stageProgress = raw;
+
+    if (key === "compute:decode") {
+      /*
+       * Decode stage: 0 -> 12
+       */
+      stageProgress =
+        0 + raw * 0.12;
+    } else if (key === "compute:inference") {
+      /*
+       * AI inference: 12 -> 88
+       *
+       * This is normally the longest stage.
+       */
+      stageProgress =
+        12 + raw * 0.76;
+    } else if (key === "compute:mask") {
+      /*
+       * Mask creation: 88 -> 94
+       */
+      stageProgress =
+        88 + raw * 0.06;
+    } else if (key === "compute:encode") {
+      /*
+       * PNG/WebP encoding: 94 -> 99
+       */
+      stageProgress =
+        94 + raw * 0.05;
+    } else {
+      stageProgress = raw * 0.99;
+    }
+
+    stageProgress = Math.min(
+      99,
+      Math.max(
+        backgroundRealProgressRef.current,
+        stageProgress
+      )
+    );
+
+    backgroundRealProgressRef.current =
+      stageProgress;
+
+    backgroundProgressTargetRef.current =
+      stageProgress;
+
+    animateBackgroundProgress();
+  };
 
   async function handleBackgroundRemove() {
     if (!workingFile || removingBackground) {
@@ -166,12 +258,11 @@ export default function useBackgroundRemove({
 
       backgroundDisplayedProgressRef.current = 0;
 
+      backgroundProgressTargetRef.current = 0;
+
       backgroundProcessingFinishedRef.current =
         false;
 
-      /*
-       * Cancel old animation.
-       */
       if (backgroundProgressFrameRef.current) {
         cancelAnimationFrame(
           backgroundProgressFrameRef.current
@@ -180,9 +271,6 @@ export default function useBackgroundRemove({
         backgroundProgressFrameRef.current = null;
       }
 
-      /*
-       * Start UI animation.
-       */
       animateBackgroundProgress();
 
       setImageOffset({
@@ -193,88 +281,60 @@ export default function useBackgroundRemove({
       resetImageDrag();
 
       /*
-       * Read original file.
+       * Do NOT create another File by copying the complete
+       * ArrayBuffer.
+       *
+       * The original File/Blob can be passed directly to IMG.LY.
+       * This removes one unnecessary full-file memory copy.
        */
-      const buffer =
-        await workingFile.arrayBuffer();
-
-      const inputFile = new File(
-        [buffer],
-        workingFile.name || "image.png",
-        {
-          type:
-            workingFile.type ||
-            "image/png",
-          lastModified: Date.now(),
-        }
-      );
+      const inputFile = workingFile;
 
       /*
-       * ==========================================
-       * ACTUAL AI BACKGROUND REMOVAL
-       * ==========================================
+       * Automatically select the lighter model on weak devices.
        */
-      const result =
-        await removeBackground(inputFile, {
-          model: "isnet",
+      const model = getBackgroundModel();
+
+      /*
+       * IMG.LY runs the heavy inference in its worker path
+       * by default. Keep that enabled.
+       *
+       * WebGPU is intentionally NOT forced here because the
+       * current project must remain stable across browsers
+       * and GitHub Pages/Vercel/Netlify.
+       */
+      const result = await removeBackground(
+        inputFile,
+        {
+          model,
+
+          proxyToWorker: true,
 
           output: {
-            format: "image/png",
-            quality: 1,
+            /*
+             * WebP keeps the encoded intermediate result
+             * considerably smaller than PNG.
+             *
+             * makePngFile() below still produces the final
+             * transparent PNG file used by the editor.
+             */
+            format: "image/webp",
+            quality: 0.9,
           },
 
-          /*
-           * REAL progress from @imgly.
-           */
           progress: (
             key,
             current,
             total
           ) => {
-            if (
-              !total ||
-              total <= 0
-            ) {
-              return;
-            }
-
-            const rawPercent =
-              (current / total) * 100;
-
-            /*
-             * Keep actual progress between
-             * 0 and 99 during processing.
-             */
-            const safePercent =
-              Math.min(
-                99,
-                Math.max(
-                  0,
-                  rawPercent
-                )
-              );
-
-            /*
-             * Never move backwards.
-             */
-            if (
-              safePercent >
-              backgroundRealProgressRef.current
-            ) {
-              backgroundRealProgressRef.current =
-                safePercent;
-            }
-
-            /*
-             * UI follows actual progress.
-             */
-            animateBackgroundProgress();
+            updateRealProgress(
+              key,
+              current,
+              total
+            );
           },
-        });
+        }
+      );
 
-      /*
-       * removeBackground() has finished.
-       */
       if (!result) {
         throw new Error(
           "Background removal returned an empty result."
@@ -282,31 +342,32 @@ export default function useBackgroundRemove({
       }
 
       /*
-       * IMPORTANT:
+       * The actual AI work is finished.
        *
-       * Do NOT artificially set progress to 99 here.
-       *
-       * The UI remains at the last REAL progress
-       * while PNG conversion/loading happens.
+       * Move to 99 while the generated image is converted
+       * and loaded into the editor.
        */
+      backgroundRealProgressRef.current = Math.max(
+        backgroundRealProgressRef.current,
+        99
+      );
+
+      backgroundProgressTargetRef.current = 99;
 
       animateBackgroundProgress();
 
       /*
-       * Convert result to PNG.
+       * Convert the AI result into the editor's PNG file.
        */
-      const newFile =
-        makePngFile(
-          result,
-          getBaseName(workingFile),
-          "no-background"
-        );
+      const newFile = makePngFile(
+        result,
+        getBaseName(workingFile),
+        "no-background"
+      );
 
-      /*
-       * Load generated image.
-       */
-      const newImage =
-        await loadImage(newFile);
+      const newImage = await loadImage(
+        newFile
+      );
 
       if (!newImage) {
         throw new Error(
@@ -343,26 +404,19 @@ export default function useBackgroundRemove({
       );
 
       /*
-       * ==========================================
-       * ACTUAL OPERATION COMPLETELY FINISHED
-       * ==========================================
-       *
-       * ONLY NOW allow 100%.
+       * Only now allow 100%.
        */
       backgroundRealProgressRef.current = 100;
+
+      backgroundProgressTargetRef.current = 100;
 
       backgroundProcessingFinishedRef.current =
         true;
 
-      /*
-       * Continue animation from the actual
-       * current value to 100%.
-       */
       animateBackgroundProgress();
 
       /*
-       * Wait until visual progress actually
-       * reaches 100 before ending the loader.
+       * Wait only for the visual animation to finish.
        */
       await new Promise((resolve) => {
         const waitForCompletion = () => {
@@ -399,11 +453,21 @@ export default function useBackgroundRemove({
         error?.message ||
           "Background removal failed."
       );
-    } finally {
+
       /*
-       * Only hide loader after the actual
-       * operation + final progress animation.
+       * Stop progress animation on failure.
        */
+      backgroundProcessingFinishedRef.current =
+        false;
+
+      if (backgroundProgressFrameRef.current) {
+        cancelAnimationFrame(
+          backgroundProgressFrameRef.current
+        );
+
+        backgroundProgressFrameRef.current = null;
+      }
+    } finally {
       setRemovingBackground(false);
     }
   }
