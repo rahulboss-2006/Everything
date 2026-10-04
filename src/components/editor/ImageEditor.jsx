@@ -400,6 +400,9 @@ function ImageEditor({ file, onComplete, onClose }) {
                 applying={applying}
                 removingBackground={removingBackground}
                 backgroundProgress={background.backgroundProgress}
+                backgroundPreparing={background.backgroundPreparing}
+                backgroundReady={background.backgroundReady}
+                backgroundRemoved={background.backgroundRemoved}
                 objectApplying={objectApplying}
                 aiProgress={object.aiProgress}
                 aiProgressLabel={object.aiProgressLabel}
@@ -438,6 +441,9 @@ function ImageEditor({ file, onComplete, onClose }) {
                     startCrop={crop.startCrop}
                     startResize={resize.startResize}
                     removingBackground={removingBackground}
+                    backgroundPreparing={background.backgroundPreparing}
+                    backgroundReady={background.backgroundReady}
+                    backgroundRemoved={background.backgroundRemoved}
                     handleBackgroundRemove={background.handleBackgroundRemove}
                     handleObjectRemove={object.handleObjectRemove}
                     canvasRef={canvasRef}

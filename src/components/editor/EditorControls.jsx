@@ -29,8 +29,10 @@ function EditorControls({
   startResize,
 
   removingBackground,
+  backgroundPreparing,
+  backgroundReady,
+  backgroundRemoved,
   handleBackgroundRemove,
-
   handleObjectRemove,
 
   canvasRef,
@@ -137,7 +139,12 @@ function EditorControls({
           <button
             type="button"
             onClick={handleBackgroundRemove}
-            disabled={editorControlsDisabled}
+            disabled={
+              editorControlsDisabled ||
+              removingBackground ||
+              backgroundRemoved
+            }
+          
             className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-white px-2 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
           >
             {removingBackground ? (

@@ -311,6 +311,7 @@ export default function EditorCanvas({
                         setResizeWidth(
                           Math.max(1, Math.round(visualWidth / scale))
                         );
+
                         setResizeHeight(
                           Math.max(1, Math.round(visualHeight / scale))
                         );
@@ -333,6 +334,7 @@ export default function EditorCanvas({
                         setResizeWidth(
                           Math.max(1, Math.round(visualWidth / scale))
                         );
+
                         setResizeHeight(
                           Math.max(1, Math.round(visualHeight / scale))
                         );
@@ -393,19 +395,23 @@ export default function EditorCanvas({
                         <div className="ai-progress-percent">
                           {Math.max(
                             1,
-                            Number(backgroundElapsedSeconds) || 1
-                          )}s
+                            Math.min(
+                              100,
+                              Math.round(Number(backgroundProgress) || 1)
+                            )
+                          )}
+                          %
                         </div>
 
                         <div className="ai-progress-track">
                           <div
                             className="ai-progress-fill"
                             style={{
-                              width: `${Math.min(
-                                95,
-                                Math.max(
-                                  8,
-                                  (Number(backgroundElapsedSeconds) || 1) * 8
+                              width: `${Math.max(
+                                1,
+                                Math.min(
+                                  100,
+                                  Number(backgroundProgress) || 1
                                 )
                               )}%`,
                             }}
@@ -413,125 +419,145 @@ export default function EditorCanvas({
                         </div>
 
                         <div className="ai-progress-text">
-                          Preparing AI removal...
+                          {backgroundProgress < 20
+                            ? "Preparing AI mask..."
+                            : backgroundProgress < 60
+                              ? "Detecting foreground..."
+                              : backgroundProgress < 90
+                                ? "Refining edges..."
+                                : backgroundProgress < 100
+                                  ? "Finalizing mask..."
+                                  : "Background removed"}
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* AI OBJECT REMOVE LOADER */}
-              {aiObjectMode && objectApplying && (
-                <div className="ai-background-loader">
-                  <div className="ai-diagonal-scan" />
-                  <div className="ai-light-sweep" />
-                  <div className="ai-glow-layer" />
-                  <div className="ai-horizontal-scan" />
+                {/* AI OBJECT REMOVE LOADER */}
+                {aiObjectMode && objectApplying && (
+                  <div className="ai-background-loader">
+                    <div className="ai-diagonal-scan" />
+                    <div className="ai-light-sweep" />
+                    <div className="ai-glow-layer" />
+                    <div className="ai-horizontal-scan" />
 
-                  <div className="ai-progress-content">
-                    <div className="ai-progress-card">
-                      <div className="ai-progress-title">
-                        <span className="ai-progress-spinner" />
-                        <span>AI Object Removing...</span>
-                      </div>
+                    <div className="ai-progress-content">
+                      <div className="ai-progress-card">
+                        <div className="ai-progress-title">
+                          <span className="ai-progress-spinner" />
+                          <span>AI Object Removing...</span>
+                        </div>
 
-                      <div className="ai-progress-percent">
-                        {Math.round(backgroundProgress)}%
-                      </div>
+                        <div className="ai-progress-percent">
+                          {Math.round(
+                            Math.max(
+                              0,
+                              Math.min(100, Number(aiProgress) || 0)
+                            )
+                          )}
+                          %
+                        </div>
 
-                      <div className="ai-progress-track">
-                        <div
-                          className="ai-progress-fill"
-                          style={{
-                            width: `${Math.min(
-                              100,
-                              Math.max(0, backgroundProgress)
-                            )}%`,
-                          }}
-                        />
-                      </div>
+                        <div className="ai-progress-track">
+                          <div
+                            className="ai-progress-fill"
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                Math.max(0, Number(aiProgress) || 0)
+                              )}%`,
+                            }}
+                          />
+                        </div>
 
-                      <div className="ai-progress-text">
-                        {aiProgressLabel}
+                        <div className="ai-progress-text">
+                          {aiProgressLabel}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* CROP OVERLAY */}
-              {cropMode && image && (
-                <div
-                  className={`absolute inset-0 z-20 overflow-visible ${
-                    isCtrlDragging
-                      ? "cursor-grabbing"
-                      : isCtrlPressed
-                        ? "cursor-grab"
-                        : "cursor-default"
-                  }`}
-                  onPointerDown={handleCropPointerDown}
-                  onPointerMove={handleCropPointerMove}
-                  onPointerUp={handleCropPointerUp}
-                  onPointerCancel={handleCropPointerUp}
-                  style={{
-                    touchAction: "none",
-                  }}
-                >
+                {/* CROP OVERLAY */}
+                {cropMode && image && (
                   <div
-                    data-crop-box="true"
-                    className="absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.48)]"
+                    className={`absolute inset-0 z-20 overflow-visible ${
+                      isCtrlDragging
+                        ? "cursor-grabbing"
+                        : isCtrlPressed
+                          ? "cursor-grab"
+                          : "cursor-default"
+                    }`}
+                    onPointerDown={handleCropPointerDown}
+                    onPointerMove={handleCropPointerMove}
+                    onPointerUp={handleCropPointerUp}
+                    onPointerCancel={handleCropPointerUp}
                     style={{
-                      left: `${cropBox.x}%`,
-                      top: `${cropBox.y}%`,
-                      width: `${cropBox.width}%`,
-                      height: `${cropBox.height}%`,
                       touchAction: "none",
                     }}
                   >
-                    <div className="pointer-events-none absolute inset-0">
-                      <div className="absolute left-1/3 top-0 h-full w-px bg-white/30" />
-                      <div className="absolute left-2/3 top-0 h-full w-px bg-white/30" />
-                      <div className="absolute left-0 top-1/3 h-px w-full bg-white/30" />
-                      <div className="absolute left-0 top-2/3 h-px w-full bg-white/30" />
+                    <div
+                      data-crop-box="true"
+                      className="absolute border-2 border-white shadow-[0_0_0_9999px_rgba(0,0,0,0.48)]"
+                      style={{
+                        left: `${cropBox.x}%`,
+                        top: `${cropBox.y}%`,
+                        width: `${cropBox.width}%`,
+                        height: `${cropBox.height}%`,
+                        touchAction: "none",
+                      }}
+                    >
+                      <div className="pointer-events-none absolute inset-0">
+                        <div className="absolute left-1/3 top-0 h-full w-px bg-white/30" />
+                        <div className="absolute left-2/3 top-0 h-full w-px bg-white/30" />
+                        <div className="absolute left-0 top-1/3 h-px w-full bg-white/30" />
+                        <div className="absolute left-0 top-2/3 h-px w-full bg-white/30" />
+                      </div>
+
+                      <div
+                        data-handle="nw"
+                        className="absolute -left-1.5 -top-1.5 z-30 h-3.5 w-3.5 cursor-nwse-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
+                      />
+
+                      <div
+                        data-handle="ne"
+                        className="absolute -right-1.5 -top-1.5 z-30 h-3.5 w-3.5 cursor-nesw-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
+                      />
+
+                      <div
+                        data-handle="sw"
+                        className="absolute -bottom-1.5 -left-1.5 z-30 h-3.5 w-3.5 cursor-nesw-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
+                      />
+
+                      <div
+                        data-handle="se"
+                        className="absolute -bottom-1.5 -right-1.5 z-30 h-3.5 w-3.5 cursor-nwse-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
+                      />
+
+                      <div
+                        data-handle="n"
+                        className="absolute left-1/2 -top-1 z-30 h-2 w-10 -translate-x-1/2 cursor-ns-resize rounded-full bg-white shadow"
+                      />
+
+                      <div
+                        data-handle="s"
+                        className="absolute bottom-[-4px] left-1/2 z-30 h-2 w-10 -translate-x-1/2 cursor-ns-resize rounded-full bg-white shadow"
+                      />
+
+                      <div
+                        data-handle="w"
+                        className="absolute left-[-4px] top-1/2 z-30 h-10 w-2 -translate-y-1/2 cursor-ew-resize rounded-full bg-white shadow"
+                      />
+
+                      <div
+                        data-handle="e"
+                        className="absolute right-[-4px] top-1/2 z-30 h-10 w-2 -translate-y-1/2 cursor-ew-resize rounded-full bg-white shadow"
+                      />
                     </div>
-
-                    <div
-                      data-handle="nw"
-                      className="absolute -left-1.5 -top-1.5 z-30 h-3.5 w-3.5 cursor-nwse-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
-                    />
-                    <div
-                      data-handle="ne"
-                      className="absolute -right-1.5 -top-1.5 z-30 h-3.5 w-3.5 cursor-nesw-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
-                    />
-                    <div
-                      data-handle="sw"
-                      className="absolute -bottom-1.5 -left-1.5 z-30 h-3.5 w-3.5 cursor-nesw-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
-                    />
-                    <div
-                      data-handle="se"
-                      className="absolute -bottom-1.5 -right-1.5 z-30 h-3.5 w-3.5 cursor-nwse-resize rounded-sm bg-white shadow-[0_0_0_1px_rgba(0,0,0,.25)]"
-                    />
-
-                    <div
-                      data-handle="n"
-                      className="absolute left-1/2 -top-1 z-30 h-2 w-10 -translate-x-1/2 cursor-ns-resize rounded-full bg-white shadow"
-                    />
-                    <div
-                      data-handle="s"
-                      className="absolute bottom-[-4px] left-1/2 z-30 h-2 w-10 -translate-x-1/2 cursor-ns-resize rounded-full bg-white shadow"
-                    />
-                    <div
-                      data-handle="w"
-                      className="absolute left-[-4px] top-1/2 z-30 h-10 w-2 -translate-y-1/2 cursor-ew-resize rounded-full bg-white shadow"
-                    />
-                    <div
-                      data-handle="e"
-                      className="absolute right-[-4px] top-1/2 z-30 h-10 w-2 -translate-y-1/2 cursor-ew-resize rounded-full bg-white shadow"
-                    />
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>

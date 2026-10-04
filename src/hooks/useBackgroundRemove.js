@@ -1,4 +1,4 @@
-import {
+﻿import {
   useRef,
   useState,
   useEffect,
@@ -11,18 +11,15 @@ import {
   makePngFile,
 } from "../utils/editorTools/canvasHelpers";
 
+import {
+  getPreparedBackground,
+  savePreparedBackground,
+} from "../utils/editorTools/backgroundCache";
+
 /*
  * =========================================================
  * IMG.LY MODULE
  * =========================================================
- *
- * IMPORTANT:
- * Do NOT statically import @imgly/background-removal.
- *
- * The package is browser-only and its internal runtime /
- * worker code can access browser globals.
- *
- * We therefore load it only after the browser is ready.
  */
 
 let backgroundRemovalModulePromise = null;
@@ -47,43 +44,40 @@ async function getBackgroundRemovalModule() {
 
 /*
  * =========================================================
- * BACKGROUND REMOVAL ENGINE
+ * ENGINE CONFIG
  * =========================================================
- *
- * Current stable mode:
- *
- * CPU/WASM
- *   ↓
- * isnet_fp16
- *
- * GPU is intentionally disabled for now because the browser
- * is exposing navigator.gpu but ONNX WebGPU session creation
- * is failing in this deployment.
- *
- * Once CPU/WASM is confirmed working, GPU can be re-enabled
- * safely with an actual runtime test.
- *
- * Progress:
- *
- * 1% → 2% → ... → 100%
- *
- * No seconds.
  */
 
 const AI_MAX_SIZE_CPU = 768;
 const AI_MAX_SIZE_WEAK = 640;
 
-/*
- * =========================================================
- * GLOBAL STATE
- * =========================================================
- */
-
 let globalWorkingConfig = null;
 
 /*
  * =========================================================
- * SAFE BROWSER CHECK
+ * VISIBLE PROGRESS
+ * =========================================================
+ *
+ * IMPORTANT:
+ *
+ * This progress is completely independent from IMG.LY.
+ *
+ * It always visually counts:
+ *
+ * 1 -> 2 -> 3 -> ... -> 100
+ *
+ * in approximately 2 seconds.
+ *
+ * Even if AI finishes in 200ms,
+ * the visual loader continues until 100%.
+ * =========================================================
+ */
+
+const VISIBLE_PROGRESS_DURATION = 1000;
+
+/*
+ * =========================================================
+ * BROWSER HELPERS
  * =========================================================
  */
 
@@ -94,12 +88,6 @@ function isBrowser() {
     typeof navigator !== "undefined"
   );
 }
-
-/*
- * =========================================================
- * DEVICE DETECTION
- * =========================================================
- */
 
 function getMemory() {
   if (!isBrowser()) {
@@ -130,15 +118,8 @@ function getCores() {
 }
 
 function isWeakDevice() {
-  if (!isBrowser()) {
-    return false;
-  }
-
-  const memory =
-    getMemory();
-
-  const cores =
-    getCores();
+  const memory = getMemory();
+  const cores = getCores();
 
   if (
     memory > 0 &&
@@ -159,19 +140,8 @@ function isWeakDevice() {
 
 /*
  * =========================================================
- * CONFIG
+ * CPU CONFIG
  * =========================================================
- *
- * CPU is intentionally forced for stability.
- *
- * Current IMG.LY models:
- *
- * isnet
- * isnet_fp16
- * isnet_quint8
- *
- * isnet_fp16 is the normal CPU model.
- * isnet_quint8 is smaller for weak devices.
  */
 
 function getCpuConfig() {
@@ -185,20 +155,16 @@ function getCpuConfig() {
       ? "isnet_quint8"
       : "isnet_fp16",
 
-    proxyToWorker: false,
+    proxyToWorker: true,
 
     weak,
   };
 }
 
 function getAiSize(config) {
-  if (
-    config?.weak
-  ) {
-    return AI_MAX_SIZE_WEAK;
-  }
-
-  return AI_MAX_SIZE_CPU;
+  return config?.weak
+    ? AI_MAX_SIZE_WEAK
+    : AI_MAX_SIZE_CPU;
 }
 
 /*
@@ -222,7 +188,7 @@ function getFileKey(file) {
 
 /*
  * =========================================================
- * AI INPUT
+ * CREATE AI INPUT
  * =========================================================
  */
 
@@ -243,9 +209,8 @@ async function createAiInput(
   }
 
   /*
-   * Fast browser path.
+   * Fast createImageBitmap path
    */
-
   if (
     typeof createImageBitmap ===
     "function"
@@ -269,10 +234,6 @@ async function createAiInput(
           width,
           height
         );
-
-      /*
-       * No resize required.
-       */
 
       if (
         width <= maxSize &&
@@ -385,9 +346,8 @@ async function createAiInput(
   }
 
   /*
-   * Canvas fallback.
+   * Canvas fallback
    */
-
   const image =
     await loadImage(
       source
@@ -556,10 +516,6 @@ async function scaleTransparentResult(
     image.naturalHeight ||
     image.height;
 
-  /*
-   * Already original size.
-   */
-
   if (
     originalWidth ===
       resultWidth &&
@@ -641,7 +597,11 @@ async function scaleTransparentResult(
 
 /*
  * =========================================================
- * PROGRESS HELPERS
+ * ENGINE PROGRESS
+ * =========================================================
+ *
+ * Engine progress is intentionally NOT connected to
+ * visible progress.
  * =========================================================
  */
 
@@ -656,13 +616,13 @@ function getProgressFromEngine(
     total > 0
   ) {
     const ratio =
-      current / total;
-
-    /*
-     * Resource download stage.
-     *
-     * Keep it inside 5-30%.
-     */
+      Math.max(
+        0,
+        Math.min(
+          1,
+          current / total
+        )
+      );
 
     if (
       key === "fetch" ||
@@ -675,10 +635,6 @@ function getProgressFromEngine(
       );
     }
   }
-
-  /*
-   * Generic stage mapping.
-   */
 
   const normalized =
     String(
@@ -747,7 +703,7 @@ export default function useBackgroundRemove({
 }) {
   /*
    * =======================================================
-   * CACHE
+   * MEMORY CACHE
    * =======================================================
    */
 
@@ -761,12 +717,18 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * PROGRESS
+   * RAF PROGRESS SYSTEM
    * =======================================================
    */
 
-  const progressTimerRef =
+  const progressAnimationFrameRef =
     useRef(null);
+
+  const progressStartTimeRef =
+    useRef(0);
+
+  const progressAnimationActiveRef =
+    useRef(false);
 
   const progressTargetRef =
     useRef(0);
@@ -774,92 +736,182 @@ export default function useBackgroundRemove({
   const progressValueRef =
     useRef(0);
 
-  const [backgroundProgress, setBackgroundProgress] =
-    useState(0);
-
-  const [backgroundError, setBackgroundError] =
-    useState("");
-
-  const [backgroundReady, setBackgroundReady] =
-    useState(false);
-
-  const [backgroundPreparing, setBackgroundPreparing] =
-    useState(false);
+  /*
+   * Loader timer
+   */
+  const removeLoaderTimerRef =
+    useRef(null);
 
   /*
    * =======================================================
-   * PROGRESS ANIMATION
+   * OPERATION OWNERSHIP
    * =======================================================
    */
 
-  function stopProgressAnimation() {
+  const removeOperationActiveRef =
+    useRef(false);
+
+  /*
+   * =======================================================
+   * STATE
+   * =======================================================
+   */
+
+  const [
+    backgroundProgress,
+    setBackgroundProgress,
+  ] = useState(0);
+
+  const [
+    backgroundError,
+    setBackgroundError,
+  ] = useState("");
+
+  const [
+    backgroundReady,
+    setBackgroundReady,
+  ] = useState(false);
+
+  const [
+    backgroundPreparing,
+    setBackgroundPreparing,
+  ] = useState(false);
+
+  const [
+    backgroundRemoved,
+    setBackgroundRemoved,
+  ] = useState(false);
+
+  const backgroundRemovedOutputKeyRef =
+    useRef("");
+
+  const backgroundRemoveFailedRef =
+    useRef(false);
+
+  /*
+   * =======================================================
+   * TIMER CLEANUP
+   * =======================================================
+   */
+
+  function clearRemoveLoaderTimer() {
     if (
-      progressTimerRef.current
+      removeLoaderTimerRef.current
     ) {
-      clearInterval(
-        progressTimerRef.current
+      clearTimeout(
+        removeLoaderTimerRef.current
       );
 
-      progressTimerRef.current =
+      removeLoaderTimerRef.current =
         null;
     }
   }
 
-  function setProgressTarget(
-    value
-  ) {
-    const next =
-      Math.max(
-        1,
-        Math.min(
-          99,
-          Math.round(
-            Number(value) || 1
-          )
-        )
-      );
+  /*
+   * =======================================================
+   * STOP RAF
+   * =======================================================
+   */
 
-    progressTargetRef.current =
-      Math.max(
-        progressTargetRef.current,
-        next
-      );
+  function stopProgressAnimation() {
+    progressAnimationActiveRef.current =
+      false;
 
     if (
-      !progressTimerRef.current
+      progressAnimationFrameRef.current !==
+      null
     ) {
-      progressTimerRef.current =
-        setInterval(
-          () => {
-            const current =
-              progressValueRef.current;
+      cancelAnimationFrame(
+        progressAnimationFrameRef.current
+      );
 
-            const target =
-              progressTargetRef.current;
-
-            if (
-              current >= target
-            ) {
-              return;
-            }
-
-            const nextValue =
-              Math.min(
-                target,
-                current + 1
-              );
-
-            progressValueRef.current =
-              nextValue;
-
-            setBackgroundProgress(
-              nextValue
-            );
-          },
-          45
-        );
+      progressAnimationFrameRef.current =
+        null;
     }
   }
+
+  /*
+   * =======================================================
+   * START VISIBLE PROGRESS
+   * =======================================================
+   */
+
+  function startProgressAnimation() {
+  stopProgressAnimation();
+
+  progressAnimationActiveRef.current = true;
+  progressValueRef.current = 1;
+  progressTargetRef.current = 100;
+
+  setBackgroundProgress(1);
+
+  const startedAt = performance.now();
+
+  const animate = () => {
+    if (!progressAnimationActiveRef.current) {
+      return;
+    }
+
+    const elapsed = performance.now() - startedAt;
+
+    // Always calculate from real elapsed time.
+    // So timer delay can never make the progress permanently stuck.
+    const ratio = Math.min(
+      1,
+      elapsed / VISIBLE_PROGRESS_DURATION
+    );
+
+    const nextValue = Math.min(
+      100,
+      Math.max(
+        1,
+        Math.floor(1 + ratio * 99)
+      )
+    );
+
+    if (nextValue !== progressValueRef.current) {
+      progressValueRef.current = nextValue;
+      setBackgroundProgress(nextValue);
+    }
+
+    if (ratio >= 1) {
+      progressValueRef.current = 100;
+      progressTargetRef.current = 100;
+      setBackgroundProgress(100);
+
+      progressAnimationActiveRef.current = false;
+      progressAnimationFrameRef.current = null;
+
+      return;
+    }
+
+    progressAnimationFrameRef.current = setTimeout(
+      animate,
+      10
+    );
+  };
+
+  animate();
+}
+
+  /*
+   * =======================================================
+   * ENGINE PROGRESS TARGET
+   * =======================================================
+   */
+
+  function setProgressTarget() {
+    /*
+     * Deliberately ignored.
+     */
+    return;
+  }
+
+  /*
+   * =======================================================
+   * RESET PROGRESS
+   * =======================================================
+   */
 
   function resetProgress(
     value = 0
@@ -888,6 +940,12 @@ export default function useBackgroundRemove({
     );
   }
 
+  /*
+   * =======================================================
+   * COMPLETE PROGRESS
+   * =======================================================
+   */
+
   function completeProgress() {
     stopProgressAnimation();
 
@@ -904,7 +962,7 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * PREPARE
+   * PREPARE BACKGROUND REMOVAL
    * =======================================================
    */
 
@@ -921,30 +979,42 @@ export default function useBackgroundRemove({
       }
 
       /*
-       * CACHE
+       * ===================================================
+       * MEMORY CACHE
+       * ===================================================
        */
 
-      const cached =
+      const memoryCached =
         preparedCacheRef.current.get(
           key
         );
 
       if (
-        cached?.blob &&
-        cached?.file &&
-        cached?.image
+        memoryCached?.ready &&
+        memoryCached?.file &&
+        memoryCached?.image
       ) {
-        return cached;
+        console.log(
+          "[BG] MEMORY CACHE HIT"
+        );
+
+        return memoryCached;
       }
 
       /*
+       * ===================================================
        * EXISTING PROMISE
+       * ===================================================
        */
 
       if (
-        cached?.promise
+        memoryCached?.promise
       ) {
-        return cached.promise;
+        console.log(
+          "[BG] EXISTING PREPARATION PROMISE"
+        );
+
+        return memoryCached.promise;
       }
 
       preparingKeyRef.current =
@@ -962,14 +1032,138 @@ export default function useBackgroundRemove({
         ""
       );
 
-      resetProgress(1);
+      if (
+        !removeOperationActiveRef.current
+      ) {
+        resetProgress(
+          1
+        );
+      }
 
       const promise =
         (async () => {
           /*
            * =================================================
-           * STEP 1
-           * Load library only in browser
+           * INDEXEDDB CACHE
+           * =================================================
+           */
+
+          console.log(
+            "[BG] CHECKING INDEXEDDB CACHE..."
+          );
+
+          setProgressTarget(
+            3
+          );
+
+          let indexedDbBlob =
+            null;
+
+          try {
+            indexedDbBlob =
+              await getPreparedBackground(
+                file
+              );
+          } catch (
+            cacheError
+          ) {
+            console.warn(
+              "[BG] IndexedDB cache read failed:",
+              cacheError
+            );
+          }
+
+          if (
+            preparingKeyRef.current !==
+            key
+          ) {
+            throw new Error(
+              "Background preparation cancelled."
+            );
+          }
+
+          /*
+           * =================================================
+           * INDEXEDDB HIT
+           * =================================================
+           */
+
+          if (
+            indexedDbBlob
+          ) {
+            console.log(
+              "[BG] INDEXEDDB CACHE HIT"
+            );
+
+            setProgressTarget(
+              90
+            );
+
+            const finalFile =
+              makePngFile(
+                indexedDbBlob,
+                getBaseName(
+                  file
+                ),
+                "no-background"
+              );
+
+            if (!finalFile) {
+              throw new Error(
+                "Cached transparent PNG could not be prepared."
+              );
+            }
+
+            const finalImage =
+              await loadImage(
+                finalFile
+              );
+
+            if (!finalImage) {
+              throw new Error(
+                "Cached transparent image could not be loaded."
+              );
+            }
+
+            const cachedResult = {
+              blob:
+                indexedDbBlob,
+
+              file:
+                finalFile,
+
+              image:
+                finalImage,
+
+              ready:
+                true,
+            };
+
+            preparedCacheRef.current.set(
+              key,
+              cachedResult
+            );
+
+            if (
+              !removeOperationActiveRef.current
+            ) {
+              completeProgress();
+            }
+
+            setBackgroundReady(
+              true
+            );
+
+            setBackgroundPreparing(
+              false
+            );
+
+            return cachedResult;
+          }
+
+          /*
+           * =================================================
+           * LOAD IMG.LY
            * =================================================
            */
 
@@ -997,8 +1191,7 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * STEP 2
-           * CPU CONFIG
+           * CONFIG
            * =================================================
            */
 
@@ -1017,6 +1210,12 @@ export default function useBackgroundRemove({
 
               model:
                 config.model,
+
+              proxyToWorker:
+                config.proxyToWorker,
+
+              weak:
+                config.weak,
             }
           );
 
@@ -1026,8 +1225,7 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * STEP 3
-           * CREATE SMALL AI INPUT
+           * AI INPUT
            * =================================================
            */
 
@@ -1035,6 +1233,13 @@ export default function useBackgroundRemove({
             getAiSize(
               config
             );
+
+          console.log(
+            "[BG] CREATING AI INPUT",
+            {
+              aiSize,
+            }
+          );
 
           const aiInput =
             await createAiInput(
@@ -1057,49 +1262,29 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * STEP 4
-           * INFERENCE
+           * AI INFERENCE
            * =================================================
            */
-
-          console.log(
-            "[BG] AI INFERENCE START",
-            {
-              device:
-                config.device,
-
-              model:
-                config.model,
-
-              aiSize,
-            }
-          );
 
           let transparentPreview;
 
           try {
+            console.log(
+              "[BG] BEFORE removeBackground"
+            );
+
             transparentPreview =
               await removeBackground(
                 aiInput,
                 {
-                  /*
-                   * CPU/WASM ONLY
-                   */
-
                   device:
-                    "cpu",
+                    config.device,
 
                   model:
                     config.model,
 
-                  /*
-                   * Worker is disabled here because we want
-                   * the simplest and most reliable browser
-                   * execution path first.
-                   */
-
                   proxyToWorker:
-                    false,
+                    config.proxyToWorker,
 
                   output: {
                     format:
@@ -1113,34 +1298,34 @@ export default function useBackgroundRemove({
                     current,
                     total
                   ) => {
-                    if (
-                      preparingKeyRef.current !==
-                      key
-                    ) {
-                      return;
-                    }
+                    console.log(
+                      "[BG] ENGINE:",
+                      progressKey,
+                      current,
+                      "/",
+                      total
+                    );
 
-                    const engineProgress =
-                      getProgressFromEngine(
-                        progressKey,
-                        current,
-                        total
-                      );
-
-                    if (
-                      engineProgress !==
-                      null
-                    ) {
-                      setProgressTarget(
-                        engineProgress
-                      );
-                    }
+                    /*
+                     * Intentionally ignored.
+                     */
+                    getProgressFromEngine(
+                      progressKey,
+                      current,
+                      total
+                    );
                   },
                 }
               );
-          } catch (error) {
+
+            console.log(
+              "[BG] AFTER removeBackground"
+            );
+          } catch (
+            error
+          ) {
             console.error(
-              "[BG] AI INFERENCE FAILED:",
+              "[BG] removeBackground FAILED:",
               error
             );
 
@@ -1164,17 +1349,8 @@ export default function useBackgroundRemove({
             );
           }
 
-          console.log(
-            "[BG] AI INFERENCE COMPLETE"
-          );
-
-          setProgressTarget(
-            95
-          );
-
           /*
            * =================================================
-           * STEP 5
            * RESTORE ORIGINAL SIZE
            * =================================================
            */
@@ -1185,9 +1361,7 @@ export default function useBackgroundRemove({
               file
             );
 
-          if (
-            !finalBlob
-          ) {
+          if (!finalBlob) {
             throw new Error(
               "Could not create final transparent image."
             );
@@ -1199,8 +1373,27 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * STEP 6
-           * CREATE PNG FILE
+           * SAVE CACHE
+           * =================================================
+           */
+
+          try {
+            await savePreparedBackground(
+              file,
+              finalBlob
+            );
+          } catch (
+            cacheError
+          ) {
+            console.warn(
+              "[BG] IndexedDB cache write failed:",
+              cacheError
+            );
+          }
+
+          /*
+           * =================================================
+           * CREATE FINAL FILE
            * =================================================
            */
 
@@ -1213,21 +1406,14 @@ export default function useBackgroundRemove({
               "no-background"
             );
 
-          if (
-            !finalFile
-          ) {
+          if (!finalFile) {
             throw new Error(
               "Could not create transparent PNG."
             );
           }
 
-          setProgressTarget(
-            98
-          );
-
           /*
            * =================================================
-           * STEP 7
            * LOAD FINAL IMAGE
            * =================================================
            */
@@ -1237,9 +1423,7 @@ export default function useBackgroundRemove({
               finalFile
             );
 
-          if (
-            !finalImage
-          ) {
+          if (!finalImage) {
             throw new Error(
               "Transparent image could not be loaded."
             );
@@ -1247,7 +1431,7 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * CACHE RESULT
+           * MEMORY CACHE RESULT
            * =================================================
            */
 
@@ -1270,7 +1454,18 @@ export default function useBackgroundRemove({
             result
           );
 
-          completeProgress();
+          /*
+           * IMPORTANT:
+           *
+           * Active button operation owns progress.
+           * Therefore DO NOT complete it here.
+           */
+
+          if (
+            !removeOperationActiveRef.current
+          ) {
+            completeProgress();
+          }
 
           setBackgroundReady(
             true
@@ -1281,37 +1476,26 @@ export default function useBackgroundRemove({
           );
 
           console.log(
-            "[BG] READY",
-            {
-              device:
-                config.device,
-
-              model:
-                config.model,
-
-              aiSize,
-            }
+            "[BG] READY"
           );
 
           return result;
         })();
 
-      /*
-       * Store promise immediately so Remove button does not
-       * start a second AI inference.
-       */
-
       preparedCacheRef.current.set(
         key,
         {
           promise,
-          ready: false,
+          ready:
+            false,
         }
       );
 
       try {
         return await promise;
-      } catch (error) {
+      } catch (
+        error
+      ) {
         const current =
           preparedCacheRef.current.get(
             key
@@ -1330,17 +1514,16 @@ export default function useBackgroundRemove({
           false
         );
 
-        stopProgressAnimation();
+        if (
+          !removeOperationActiveRef.current
+        ) {
+          stopProgressAnimation();
+        }
 
         if (
           error?.message !==
           "Background preparation cancelled."
         ) {
-          console.error(
-            "[BG] PREPARE FAILED:",
-            error
-          );
-
           setBackgroundError(
             error?.message ||
               "Background preparation failed."
@@ -1359,17 +1542,30 @@ export default function useBackgroundRemove({
 
   useEffect(() => {
     if (!workingFile) {
-      stopProgressAnimation();
+      if (
+        !removeOperationActiveRef.current
+      ) {
+        stopProgressAnimation();
 
-      setBackgroundReady(
+        setBackgroundReady(
+          false
+        );
+
+        setBackgroundPreparing(
+          false
+        );
+
+        resetProgress(
+          0
+        );
+      }
+
+      backgroundRemovedOutputKeyRef.current =
+        "";
+
+      setBackgroundRemoved(
         false
       );
-
-      setBackgroundPreparing(
-        false
-      );
-
-      resetProgress(0);
 
       return;
     }
@@ -1378,6 +1574,29 @@ export default function useBackgroundRemove({
       getFileKey(
         workingFile
       );
+
+    /*
+     * ===================================================
+     * BACKGROUND REMOVED STATE
+     * ===================================================
+     */
+
+    if (
+      backgroundRemovedOutputKeyRef.current &&
+      key ===
+        backgroundRemovedOutputKeyRef.current
+    ) {
+      setBackgroundRemoved(
+        true
+      );
+    } else if (
+      key !==
+      backgroundRemovedOutputKeyRef.current
+    ) {
+      setBackgroundRemoved(
+        false
+      );
+    }
 
     if (!key) {
       return;
@@ -1391,7 +1610,9 @@ export default function useBackgroundRemove({
     );
 
     /*
-     * CACHE HIT
+     * ===================================================
+     * MEMORY CACHE HIT
+     * ===================================================
      */
 
     const cached =
@@ -1412,10 +1633,20 @@ export default function useBackgroundRemove({
         false
       );
 
-      completeProgress();
+      if (
+        !removeOperationActiveRef.current
+      ) {
+        completeProgress();
+      }
 
       return;
     }
+
+    /*
+     * ===================================================
+     * AUTOMATIC PREPARATION
+     * ===================================================
+     */
 
     setBackgroundReady(
       false
@@ -1425,7 +1656,13 @@ export default function useBackgroundRemove({
       true
     );
 
-    resetProgress(1);
+    if (
+      !removeOperationActiveRef.current
+    ) {
+      resetProgress(
+        1
+      );
+    }
 
     prepareBackgroundRemoval(
       workingFile,
@@ -1453,7 +1690,11 @@ export default function useBackgroundRemove({
           "";
       }
 
-      stopProgressAnimation();
+      if (
+        !removeOperationActiveRef.current
+      ) {
+        stopProgressAnimation();
+      }
     };
   }, [
     workingFile,
@@ -1461,14 +1702,19 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * REMOVE BUTTON
+   * HANDLE REMOVE
    * =======================================================
    */
 
   async function handleBackgroundRemove() {
+    /*
+     * Once removed, button stays disabled until
+     * image changes/reset.
+     */
     if (
       !workingFile ||
-      removingBackground
+      removingBackground ||
+      backgroundRemoved
     ) {
       return;
     }
@@ -1482,10 +1728,32 @@ export default function useBackgroundRemove({
       return;
     }
 
+    /*
+     * Button owns visible progress.
+     */
+    removeOperationActiveRef.current =
+      true;
+
+    backgroundRemoveFailedRef.current =
+      false;
+
+    clearRemoveLoaderTimer();
+
+    const startedAt =
+      Date.now();
+
     try {
+      /*
+       * =================================================
+       * START LOADER
+       * =================================================
+       */
+
       setRemovingBackground(
         true
       );
+
+      startProgressAnimation();
 
       setBackgroundError(
         ""
@@ -1499,7 +1767,9 @@ export default function useBackgroundRemove({
       resetImageDrag();
 
       /*
-       * CACHE HIT
+       * =================================================
+       * CACHE
+       * =================================================
        */
 
       const cached =
@@ -1512,24 +1782,28 @@ export default function useBackgroundRemove({
           ? cached
           : null;
 
-      if (
-        result?.file &&
-        result?.image
-      ) {
-        console.log(
-          "[BG] REMOVE -> CACHE HIT"
-        );
-      } else {
-        console.log(
-          "[BG] REMOVE -> WAITING FOR PREPARATION"
-        );
+      /*
+       * =================================================
+       * PREPARE
+       * =================================================
+       */
 
+      if (
+        !result?.file ||
+        !result?.image
+      ) {
         result =
           await prepareBackgroundRemoval(
             workingFile,
             key
           );
       }
+
+      /*
+       * =================================================
+       * VALIDATE
+       * =================================================
+       */
 
       if (
         !result?.file ||
@@ -1547,33 +1821,21 @@ export default function useBackgroundRemove({
         result.image;
 
       /*
-       * ===================================================
-       * LAYER
-       * ===================================================
+       * =================================================
+       * APPLY RESULT
+       * =================================================
        */
 
       layers.addToolLayer({
-        type:
-          "background",
-
-        name:
-          "Background Removed",
-
+        type: "background",
+        name: "Background Removed",
         detail:
           "AI background removal",
-
         beforeFile:
           workingFile,
-
         summary:
           "Background removed",
       });
-
-      /*
-       * ===================================================
-       * APPLY RESULT
-       * ===================================================
-       */
 
       setWorkingFile(
         newFile
@@ -1597,7 +1859,22 @@ export default function useBackgroundRemove({
         "Background removed"
       );
 
-      completeProgress();
+      /*
+       * =================================================
+       * SUCCESS
+       * =================================================
+       */
+
+      /*
+       * IMPORTANT:
+       *
+       * DO NOT call completeProgress() here.
+       *
+       * Otherwise fast AI instantly changes
+       * 1% -> 100%.
+       *
+       * RAF will continue naturally to 100%.
+       */
 
       setBackgroundReady(
         false
@@ -1607,35 +1884,202 @@ export default function useBackgroundRemove({
         false
       );
 
+      setBackgroundError(
+        ""
+      );
+
+      const outputKey =
+        getFileKey(
+          newFile
+        );
+
+      backgroundRemovedOutputKeyRef.current =
+        outputKey;
+
+      /*
+       * Button becomes disabled immediately.
+       */
+      setBackgroundRemoved(
+        true
+      );
+
       console.log(
         "[BG] REMOVE COMPLETE"
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
+      /*
+       * =================================================
+       * ERROR
+       * =================================================
+       */
+
       console.error(
         "[BG] REMOVE FAILED:",
         error
+      );
+
+      backgroundRemoveFailedRef.current =
+        true;
+
+      removeOperationActiveRef.current =
+        false;
+
+      stopProgressAnimation();
+
+      clearRemoveLoaderTimer();
+
+      progressValueRef.current =
+        0;
+
+      progressTargetRef.current =
+        0;
+
+      setBackgroundProgress(
+        0
       );
 
       setBackgroundError(
         error?.message ||
           "Background removal failed."
       );
-    } finally {
+
+      setBackgroundPreparing(
+        false
+      );
+
+      setBackgroundReady(
+        false
+      );
+
+      setBackgroundRemoved(
+        false
+      );
+
+      backgroundRemovedOutputKeyRef.current =
+        "";
+
       setRemovingBackground(
         false
       );
+    } finally {
+      /*
+       * =================================================
+       * FAILURE
+       * =================================================
+       */
+
+      if (
+        backgroundRemoveFailedRef.current
+      ) {
+        clearRemoveLoaderTimer();
+
+        setRemovingBackground(
+          false
+        );
+
+        resetProgress(
+          0
+        );
+
+        removeOperationActiveRef.current =
+          false;
+
+        return;
+      }
+
+      /*
+       * =================================================
+       * SUCCESS
+       * =================================================
+       *
+       * IMPORTANT:
+       *
+       * DO NOT stop RAF here.
+       *
+       * It must continue from current value to 100%.
+       * =================================================
+       */
+
+      const elapsed =
+        Date.now() -
+        startedAt;
+
+      const remaining =
+        Math.max(
+          0,
+          VISIBLE_PROGRESS_DURATION -
+            elapsed
+        );
+
+      clearRemoveLoaderTimer();
+
+      /*
+       * AI took 2+ seconds.
+       *
+       * RAF should already be at 100,
+       * so hide immediately.
+       */
+      if (
+        remaining <= 0
+      ) {
+        completeProgress();
+
+        setRemovingBackground(
+          false
+        );
+
+        removeOperationActiveRef.current =
+          false;
+
+        return;
+      }
+
+      /*
+       * AI finished early.
+       *
+       * Keep loader visible until the full
+       * 2-second visual progress finishes.
+       */
+      removeLoaderTimerRef.current =
+        setTimeout(() => {
+          removeLoaderTimerRef.current =
+            null;
+
+          /*
+           * Force exact final 100%.
+           */
+          completeProgress();
+
+          setRemovingBackground(
+            false
+          );
+
+          removeOperationActiveRef.current =
+            false;
+
+          console.log(
+            "[BG] VISUAL PROGRESS COMPLETE"
+          );
+        }, remaining);
     }
   }
 
   /*
    * =======================================================
-   * CLEANUP
+   * FINAL CLEANUP
    * =======================================================
    */
 
   useEffect(() => {
     return () => {
       stopProgressAnimation();
+
+      clearRemoveLoaderTimer();
+
+      removeOperationActiveRef.current =
+        false;
 
       preparingKeyRef.current =
         "";
@@ -1659,11 +2103,7 @@ export default function useBackgroundRemove({
 
     backgroundPreparing,
 
-    /*
-     * Compatibility with existing UI.
-     *
-     * This is percentage now, NOT seconds.
-     */
+    backgroundRemoved,
 
     backgroundElapsedSeconds:
       backgroundProgress,
