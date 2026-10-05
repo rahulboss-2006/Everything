@@ -9,11 +9,21 @@ import {
   getClampedCanvasPoint,
   makePngFile,
 } from "../utils/editorTools/canvasHelpers";
-import {
-  buildAIInpaintMaskCanvas,
-  getMiGanSession,
-  runLocalAIObjectRemoval,
-} from "../utils/editorTools/miganInpaint";
+
+let miganModulePromise = null;
+
+async function getMiGanModule() {
+  if (!miganModulePromise) {
+    miganModulePromise = import(
+      "../utils/editorTools/miganInpaint"
+    ).catch((error) => {
+      miganModulePromise = null;
+      throw error;
+    });
+  }
+
+  return miganModulePromise;
+}
 
 const DEFAULT_AI_LABEL = "Preparing AI Object Remove...";
 
@@ -404,51 +414,125 @@ export default function useObjectRemove({
 
   /* ---------- apply: AI ---------- */
 
-  async function applyAIObjectRemove() {
-    const canvas = canvasRef.current;
-    const baseCanvas = objectBaseCanvasRef.current;
+ async function applyAIObjectRemove() {
+  const canvas = canvasRef.current;
+  const baseCanvas = objectBaseCanvasRef.current;
 
-    if (!canvas || !baseCanvas || objectApplying) return;
+  if (!canvas || !baseCanvas || objectApplying) {
+    return;
+  }
 
-    try {
-      setObjectApplying(true);
-      setAiModelLoading(true);
-      setAiProgress(1);
-      setAiProgressLabel(DEFAULT_AI_LABEL);
+  try {
+    setObjectApplying(true);
+    setAiModelLoading(true);
+    setAiProgress(1);
+    setAiProgressLabel(DEFAULT_AI_LABEL);
 
-      const selectionCanvas = aiObjectMaskCanvasRef.current;
-      if (!selectionCanvas) {
-        throw new Error("Brush over the object before pressing Apply.");
-      }
-      const selectionCtx = selectionCanvas.getContext("2d", {
-        willReadFrequently: true,
-      });
-      if (!selectionCtx) throw new Error("Could not read the object selection.");
-      const selectionData = selectionCtx.getImageData(
+    /*
+     * ======================================================
+     * LOAD HEAVY MI-GAN MODULE ONLY NOW
+     *
+     * This keeps MI-GAN / ONNX out of the initial editor
+     * loading path.
+     * ======================================================
+     */
+
+    const {
+      buildAIInpaintMaskCanvas,
+      runLocalAIObjectRemoval,
+    } = await getMiGanModule();
+
+    /*
+     * ======================================================
+     * CHECK USER SELECTION
+     * ======================================================
+     */
+
+    const selectionCanvas =
+      aiObjectMaskCanvasRef.current;
+
+    if (!selectionCanvas) {
+      throw new Error(
+        "Brush over the object before pressing Apply."
+      );
+    }
+
+    const selectionCtx =
+      selectionCanvas.getContext(
+        "2d",
+        {
+          willReadFrequently: true,
+        }
+      );
+
+    if (!selectionCtx) {
+      throw new Error(
+        "Could not read the object selection."
+      );
+    }
+
+    const selectionData =
+      selectionCtx.getImageData(
         0,
         0,
         selectionCanvas.width,
         selectionCanvas.height
       );
-      let selectedPixels = 0;
-      for (let i = 3; i < selectionData.data.length; i += 4) {
-        if (selectionData.data[i] > 4) {
-          selectedPixels += 1;
-          if (selectedPixels > 20) break;
+
+    let selectedPixels = 0;
+
+    for (
+      let i = 3;
+      i < selectionData.data.length;
+      i += 4
+    ) {
+      if (
+        selectionData.data[i] > 4
+      ) {
+        selectedPixels += 1;
+
+        if (selectedPixels > 20) {
+          break;
         }
       }
-      if (selectedPixels === 0) {
-        throw new Error("Brush over the object before pressing Apply.");
-      }
+    }
 
-      const maskCanvas = buildAIInpaintMaskCanvas(
+    if (selectedPixels === 0) {
+      throw new Error(
+        "Brush over the object before pressing Apply."
+      );
+    }
+
+    /*
+     * ======================================================
+     * BUILD AI MASK
+     * ======================================================
+     */
+
+    setAiProgress(5);
+    setAiProgressLabel(
+      "Preparing object mask..."
+    );
+
+    const maskCanvas =
+      buildAIInpaintMaskCanvas(
         baseCanvas,
         canvas,
         selectionCanvas,
         objectBrushSize
       );
 
-      const aiCanvas = await runLocalAIObjectRemoval(
+    /*
+     * ======================================================
+     * RUN LOCAL MI-GAN
+     *
+     * This is the first point where the ONNX runtime/model
+     * is actually needed.
+     * ======================================================
+     */
+
+    const aiCanvas =
+      await runLocalAIObjectRemoval(
         baseCanvas,
         maskCanvas,
         (progress, label) => {
@@ -457,59 +541,118 @@ export default function useObjectRemove({
         }
       );
 
-      const resultBlob = await canvasToBlob(aiCanvas, "image/png", 1);
+    /*
+     * ======================================================
+     * CREATE RESULT FILE
+     * ======================================================
+     */
 
-      const newFile = makePngFile(
+    const resultBlob =
+      await canvasToBlob(
+        aiCanvas,
+        "image/png",
+        1
+      );
+
+    const newFile =
+      makePngFile(
         resultBlob,
         getBaseName(workingFile),
         "ai-object-removed"
       );
 
-      const newImage = await loadImage(newFile);
+    const newImage =
+      await loadImage(newFile);
 
-      if (!newImage) throw new Error("Could not load the AI-generated image.");
-
-      const beforeFile = workingFile;
-      const maskDataURL = canvasToDataURLSafe(selectionCanvas);
-
-      // AI object removal lives in objectLayers (editable), not toolLayers.
-      layers.addObjectLayer({
-        type: "ai-object",
-        name: "AI Object Remove",
-        summary: "AI object removed",
-        beforeFile,
-        maskDataURL,
-      });
-
-      lastAIResultFileRef.current = newFile;
-      setAiObjectRemoved(true);
-      setWorkingFile(newFile);
-      setImage(newImage);
-
-      resetLiveEdits();
-
-      layers.addAppliedAction("AI object removed");
-
-      objectDrawingRef.current = false;
-      objectLastPointRef.current = null;
-      objectBaseCanvasRef.current = null;
-      clearAIObjectMask();
-      setObjectRemovalMode("standard");
-      setActiveTool(null);
-    } catch (error) {
-      console.error("AI object removal failed:", error);
-
-      alert(
-        error?.message ||
-          "AI object removal failed. Make sure the browser supports WebAssembly/WebGPU and the model can be downloaded."
+    if (!newImage) {
+      throw new Error(
+        "Could not load the AI-generated image."
       );
-    } finally {
-      setAiModelLoading(false);
-      setAiProgress(0);
-      setAiProgressLabel(DEFAULT_AI_LABEL);
-      setObjectApplying(false);
     }
+
+    /*
+     * ======================================================
+     * SAVE EDITABLE OBJECT LAYER
+     * ======================================================
+     */
+
+    const beforeFile =
+      workingFile;
+
+    const maskDataURL =
+      canvasToDataURLSafe(
+        selectionCanvas
+      );
+
+    layers.addObjectLayer({
+      type: "ai-object",
+      name: "AI Object Remove",
+      summary: "AI object removed",
+      beforeFile,
+      maskDataURL,
+    });
+
+    /*
+     * ======================================================
+     * UPDATE EDITOR
+     * ======================================================
+     */
+
+    lastAIResultFileRef.current =
+      newFile;
+
+    setAiObjectRemoved(true);
+
+    setWorkingFile(newFile);
+    setImage(newImage);
+
+    resetLiveEdits();
+
+    layers.addAppliedAction(
+      "AI object removed"
+    );
+
+    /*
+     * ======================================================
+     * CLEAN OBJECT TOOL STATE
+     * ======================================================
+     */
+
+    objectDrawingRef.current =
+      false;
+
+    objectLastPointRef.current =
+      null;
+
+    objectBaseCanvasRef.current =
+      null;
+
+    clearAIObjectMask();
+
+    setObjectRemovalMode(
+      "standard"
+    );
+
+    setActiveTool(null);
+  } catch (error) {
+    console.error(
+      "AI object removal failed:",
+      error
+    );
+
+    alert(
+      error?.message ||
+        "AI object removal failed. Make sure the browser supports WebAssembly/WebGPU and the model can be downloaded."
+    );
+  } finally {
+    setAiModelLoading(false);
+    setAiProgress(0);
+    setAiProgressLabel(
+      DEFAULT_AI_LABEL
+    );
+    setObjectApplying(false);
   }
+}
 
   /* ---------- apply: standard / router ---------- */
 

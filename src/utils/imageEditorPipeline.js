@@ -1,25 +1,37 @@
 /* =========================================================
    IMAGE EDITOR PIPELINE
    ---------------------------------------------------------
-   Order:
+   EDIT MODE:
+      Original Image
+           ↓
+      Preview Resolution
+           ↓
+      Adjustments
+           ↓
+      Rotation / Flip / Offset
+           ↓
+      Effects
+           ↓
+      Visible Output Canvas
 
-   Original Image
-        ↓
-   Adjustments
-        ↓
-   Rotation / Flip / Offset
-        ↓
-   Effects
-        ↓
-   Visible Output Canvas
+   APPLY / EXPORT:
+      Original Image
+           ↓
+      Full Resolution
+           ↓
+      Adjustments
+           ↓
+      Rotation / Flip / Offset
+           ↓
+      Effects
+           ↓
+      PNG Export
 
    IMPORTANT:
-   - Main visible canvas is NEVER used as an effect source.
-   - Every effect gets a fresh off-screen canvas.
-   - Adjustment values use editor state semantics:
-       0 = normal
-      -100 = minimum
-      +100 = maximum
+   - Preview rendering can use renderScale < 1.
+   - Final rendering uses renderScale = 1.
+   - Original image is never modified.
+   - Visible canvas is never used as an effect source.
 ========================================================= */
 
 import {
@@ -51,7 +63,6 @@ function clamp(
 ========================================================= */
 
 function getEffectList() {
-
   if (
     Array.isArray(
       EFFECT_PRESETS
@@ -60,17 +71,14 @@ function getEffectList() {
     return EFFECT_PRESETS;
   }
 
-
   if (
     EFFECT_PRESETS &&
     typeof EFFECT_PRESETS === "object"
   ) {
-
     return Object.values(
       EFFECT_PRESETS
     ).flatMap(
       (value) => {
-
         if (
           Array.isArray(value)
         ) {
@@ -89,7 +97,6 @@ function getEffectList() {
     );
   }
 
-
   return [];
 }
 
@@ -101,7 +108,6 @@ function getEffectList() {
 function getEffectPreset(
   effectId
 ) {
-
   if (
     !effectId ||
     effectId === "Preview"
@@ -109,10 +115,8 @@ function getEffectPreset(
     return null;
   }
 
-
   const effects =
     getEffectList();
-
 
   return (
     effects.find(
@@ -131,11 +135,9 @@ function getEffectPreset(
 function getEffectFilter(
   effect
 ) {
-
   if (!effect) {
     return "none";
   }
-
 
   /* -------------------------------------------------------
      Direct CSS filter
@@ -148,21 +150,16 @@ function getEffectFilter(
     return effect.filter.trim();
   }
 
-
   const filters = [];
 
 
   /* -------------------------------------------------------
      Brightness
-     Supports both:
-       1.2
-       120
   ------------------------------------------------------- */
 
   if (
     typeof effect.brightness === "number"
   ) {
-
     const value =
       effect.brightness;
 
@@ -183,7 +180,6 @@ function getEffectFilter(
   if (
     typeof effect.contrast === "number"
   ) {
-
     const value =
       effect.contrast;
 
@@ -204,7 +200,6 @@ function getEffectFilter(
   if (
     typeof effect.saturation === "number"
   ) {
-
     const value =
       effect.saturation;
 
@@ -225,10 +220,8 @@ function getEffectFilter(
   if (
     typeof effect.grayscale === "number"
   ) {
-
     const value =
       effect.grayscale;
-
 
     filters.push(
       `grayscale(${
@@ -255,10 +248,8 @@ function getEffectFilter(
   if (
     typeof effect.sepia === "number"
   ) {
-
     const value =
       effect.sepia;
-
 
     filters.push(
       `sepia(${
@@ -285,10 +276,8 @@ function getEffectFilter(
   if (
     typeof effect.invert === "number"
   ) {
-
     const value =
       effect.invert;
-
 
     filters.push(
       `invert(${
@@ -315,7 +304,6 @@ function getEffectFilter(
   if (
     typeof effect.hueRotate === "number"
   ) {
-
     filters.push(
       `hue-rotate(${
         effect.hueRotate
@@ -331,7 +319,6 @@ function getEffectFilter(
   if (
     typeof effect.blur === "number"
   ) {
-
     filters.push(
       `blur(${
         Math.max(
@@ -350,10 +337,8 @@ function getEffectFilter(
   if (
     typeof effect.opacity === "number"
   ) {
-
     const value =
       effect.opacity;
-
 
     filters.push(
       `opacity(${
@@ -381,108 +366,240 @@ function getEffectFilter(
 
 /* =========================================================
    REUSED SCRATCH CANVAS
-   Allocating a new full-size canvas on every slider tick is slow
-   and floods the garbage collector. One canvas is reused.
 ========================================================= */
 
 let scratchCanvas = null;
 
-function getScratchCanvas(width, height) {
+function getScratchCanvas(
+  width,
+  height
+) {
   if (!scratchCanvas) {
-    scratchCanvas = document.createElement("canvas");
+    scratchCanvas =
+      document.createElement(
+        "canvas"
+      );
   }
 
-  const w = Math.max(1, Math.round(width));
-  const h = Math.max(1, Math.round(height));
+  const w =
+    Math.max(
+      1,
+      Math.round(width)
+    );
 
-  if (scratchCanvas.width !== w) scratchCanvas.width = w;
-  if (scratchCanvas.height !== h) scratchCanvas.height = h;
+  const h =
+    Math.max(
+      1,
+      Math.round(height)
+    );
+
+  if (
+    scratchCanvas.width !== w
+  ) {
+    scratchCanvas.width = w;
+  }
+
+  if (
+    scratchCanvas.height !== h
+  ) {
+    scratchCanvas.height = h;
+  }
 
   return scratchCanvas;
 }
 
 
 /* =========================================================
-   COMBINED EFFECT FILTER
-   All selected effects are merged into ONE CSS filter list and
-   applied in a single draw (was: one new canvas per effect).
+   PING CANVASES
 ========================================================= */
 
 const FILTERS_PER_PASS = 3;
 
-let pingCanvases = [null, null];
+let pingCanvases = [
+  null,
+  null,
+];
 
-function getPingCanvas(index, width, height) {
+function getPingCanvas(
+  index,
+  width,
+  height
+) {
   if (!pingCanvases[index]) {
-    pingCanvases[index] = document.createElement("canvas");
+    pingCanvases[index] =
+      document.createElement(
+        "canvas"
+      );
   }
 
-  const canvas = pingCanvases[index];
+  const canvas =
+    pingCanvases[index];
 
-  if (canvas.width !== width) canvas.width = width;
-  if (canvas.height !== height) canvas.height = height;
+  if (
+    canvas.width !== width
+  ) {
+    canvas.width = width;
+  }
+
+  if (
+    canvas.height !== height
+  ) {
+    canvas.height = height;
+  }
 
   return canvas;
 }
 
-function getEffectFilterList(selectedEffects) {
-  if (!Array.isArray(selectedEffects)) return [];
+
+function getEffectFilterList(
+  selectedEffects
+) {
+  if (
+    !Array.isArray(
+      selectedEffects
+    )
+  ) {
+    return [];
+  }
 
   const list = [];
 
-  for (const effectId of selectedEffects) {
-    if (!effectId || effectId === "Preview") continue;
+  for (
+    const effectId of selectedEffects
+  ) {
+    if (
+      !effectId ||
+      effectId === "Preview"
+    ) {
+      continue;
+    }
 
-    const filter = getEffectFilter(getEffectPreset(effectId));
+    const filter =
+      getEffectFilter(
+        getEffectPreset(
+          effectId
+        )
+      );
 
-    if (filter && filter !== "none") list.push(filter);
+    if (
+      filter &&
+      filter !== "none"
+    ) {
+      list.push(filter);
+    }
   }
 
   return list;
 }
 
-/*
-  Applies effects in small batches (FILTERS_PER_PASS filters per draw)
-  using two reused canvases. One huge filter chain with 10+ effects can
-  exceed what the browser/GPU handles and make the draw fail; small
-  batches stay fast and reliable. Returns { source, lastFilter }:
-  the caller draws `source` with `lastFilter` into the visible canvas.
-*/
-function runEffectPasses(baseCanvas, selectedEffects) {
-  const filters = getEffectFilterList(selectedEffects);
 
-  if (filters.length === 0) {
-    return { source: baseCanvas, lastFilter: "none" };
+/* =========================================================
+   EFFECT PASSES
+========================================================= */
+
+function runEffectPasses(
+  baseCanvas,
+  selectedEffects
+) {
+  const filters =
+    getEffectFilterList(
+      selectedEffects
+    );
+
+  if (
+    filters.length === 0
+  ) {
+    return {
+      source: baseCanvas,
+      lastFilter: "none",
+    };
   }
 
   const chunks = [];
 
-  for (let i = 0; i < filters.length; i += FILTERS_PER_PASS) {
-    chunks.push(filters.slice(i, i + FILTERS_PER_PASS).join(" "));
+  for (
+    let i = 0;
+    i < filters.length;
+    i += FILTERS_PER_PASS
+  ) {
+    chunks.push(
+      filters
+        .slice(
+          i,
+          i + FILTERS_PER_PASS
+        )
+        .join(" ")
+    );
   }
 
-  let source = baseCanvas;
+  let source =
+    baseCanvas;
 
-  for (let i = 0; i < chunks.length - 1; i++) {
-    const dest = getPingCanvas(i % 2, baseCanvas.width, baseCanvas.height);
-    const ctx = dest.getContext("2d", { alpha: true });
+  for (
+    let i = 0;
+    i < chunks.length - 1;
+    i++
+  ) {
+    const dest =
+      getPingCanvas(
+        i % 2,
+        baseCanvas.width,
+        baseCanvas.height
+      );
+
+    const ctx =
+      dest.getContext(
+        "2d",
+        {
+          alpha: true,
+        }
+      );
+
+    if (!ctx) {
+      throw new Error(
+        "Could not create effect canvas context."
+      );
+    }
 
     prepareContext(ctx);
+
     ctx.filter = "none";
-    ctx.clearRect(0, 0, dest.width, dest.height);
-    ctx.filter = chunks[i];
+
+    ctx.clearRect(
+      0,
+      0,
+      dest.width,
+      dest.height
+    );
+
+    ctx.filter =
+      chunks[i];
 
     try {
-      ctx.drawImage(source, 0, 0, dest.width, dest.height);
+      ctx.drawImage(
+        source,
+        0,
+        0,
+        dest.width,
+        dest.height
+      );
     } finally {
-      ctx.filter = "none";
+      ctx.filter =
+        "none";
     }
 
     source = dest;
   }
 
-  return { source, lastFilter: chunks[chunks.length - 1] };
+  return {
+    source,
+    lastFilter:
+      chunks[
+        chunks.length - 1
+      ],
+  };
 }
+
 
 /* =========================================================
    SAFE OFF-SCREEN CANVAS
@@ -492,12 +609,10 @@ function createCanvas(
   width,
   height
 ) {
-
   const canvas =
     document.createElement(
       "canvas"
     );
-
 
   canvas.width =
     Math.max(
@@ -505,13 +620,11 @@ function createCanvas(
       Math.round(width)
     );
 
-
   canvas.height =
     Math.max(
       1,
       Math.round(height)
     );
-
 
   return canvas;
 }
@@ -524,21 +637,16 @@ function createCanvas(
 function prepareContext(
   ctx
 ) {
-
   if (!ctx) {
     return;
   }
 
-
   ctx.imageSmoothingEnabled =
     true;
 
-
   try {
-
     ctx.imageSmoothingQuality =
       "high";
-
   } catch {
     // Older browsers
   }
@@ -547,18 +655,6 @@ function prepareContext(
 
 /* =========================================================
    EDITOR ADJUSTMENT FILTER
-   ---------------------------------------------------------
-   IMPORTANT:
-
-   Editor state:
-       brightness 0  = normal
-       contrast   0  = normal
-       saturation 0  = normal
-
-   Therefore:
-       0   → 100%
-       +20 → 120%
-       -20 → 80%
 ========================================================= */
 
 function getAdjustmentFilter({
@@ -566,14 +662,12 @@ function getAdjustmentFilter({
   contrast = 0,
   saturation = 0,
 }) {
-
   const safeBrightness =
     Number.isFinite(
       Number(brightness)
     )
       ? Number(brightness)
       : 0;
-
 
   const safeContrast =
     Number.isFinite(
@@ -582,14 +676,12 @@ function getAdjustmentFilter({
       ? Number(contrast)
       : 0;
 
-
   const safeSaturation =
     Number.isFinite(
       Number(saturation)
     )
       ? Number(saturation)
       : 0;
-
 
   return [
     `brightness(${
@@ -618,6 +710,17 @@ function getAdjustmentFilter({
 
 /* =========================================================
    DRAW BASE IMAGE
+   ---------------------------------------------------------
+   renderScale:
+
+      1
+        = original/full resolution
+
+      0.5
+        = 50%
+
+      1280 / source max side
+        = editor preview resolution
 ========================================================= */
 
 function drawBaseImage({
@@ -633,15 +736,14 @@ function drawBaseImage({
   flipY,
 
   imageOffset,
+
+  renderScale = 1,
 }) {
-
   if (!image) {
-
     throw new Error(
       "Image is required."
     );
   }
-
 
   const sourceWidth =
     Math.max(
@@ -653,7 +755,6 @@ function drawBaseImage({
         1
       )
     );
-
 
   const sourceHeight =
     Math.max(
@@ -667,10 +768,24 @@ function drawBaseImage({
     );
 
 
+  /* -------------------------------------------------------
+     SAFE SCALE
+  ------------------------------------------------------- */
+
+  const safeRenderScale =
+    clamp(
+      Number(renderScale) || 1,
+      0.05,
+      1
+    );
+
+
   const normalizedRotation =
     (
-      (Number(rotation) || 0) %
-      360 +
+      (
+        Number(rotation) || 0
+      ) %
+        360 +
       360
     ) % 360;
 
@@ -680,19 +795,41 @@ function drawBaseImage({
     normalizedRotation === 270;
 
 
-  const outputWidth =
+  const fullOutputWidth =
     isQuarterTurn
       ? sourceHeight
       : sourceWidth;
 
-
-  const outputHeight =
+  const fullOutputHeight =
     isQuarterTurn
       ? sourceWidth
       : sourceHeight;
 
 
-  const canvas = getScratchCanvas(outputWidth, outputHeight);
+  const outputWidth =
+    Math.max(
+      1,
+      Math.round(
+        fullOutputWidth *
+          safeRenderScale
+      )
+    );
+
+  const outputHeight =
+    Math.max(
+      1,
+      Math.round(
+        fullOutputHeight *
+          safeRenderScale
+      )
+    );
+
+
+  const canvas =
+    getScratchCanvas(
+      outputWidth,
+      outputHeight
+    );
 
 
   const ctx =
@@ -705,7 +842,6 @@ function drawBaseImage({
 
 
   if (!ctx) {
-
     throw new Error(
       "Could not create canvas context."
     );
@@ -723,10 +859,9 @@ function drawBaseImage({
   );
 
 
-  /*
-   * Apply adjustments only here.
-   * The visible canvas is not involved.
-   */
+  /* -------------------------------------------------------
+     ADJUSTMENTS
+  ------------------------------------------------------- */
 
   ctx.filter =
     getAdjustmentFilter({
@@ -748,7 +883,6 @@ function drawBaseImage({
   if (
     normalizedRotation !== 0
   ) {
-
     ctx.rotate(
       normalizedRotation *
         Math.PI /
@@ -768,30 +902,44 @@ function drawBaseImage({
       imageOffset?.x
     ) || 0;
 
-
   const offsetY =
     Number(
       imageOffset?.y
     ) || 0;
 
 
-  try {
+  const scaledSourceWidth =
+    sourceWidth *
+    safeRenderScale;
 
+  const scaledSourceHeight =
+    sourceHeight *
+    safeRenderScale;
+
+
+  const scaledOffsetX =
+    offsetX *
+    safeRenderScale;
+
+  const scaledOffsetY =
+    offsetY *
+    safeRenderScale;
+
+
+  try {
     ctx.drawImage(
       image,
 
-      -sourceWidth / 2 +
-        offsetX,
+      -scaledSourceWidth / 2 +
+        scaledOffsetX,
 
-      -sourceHeight / 2 +
-        offsetY,
+      -scaledSourceHeight / 2 +
+        scaledOffsetY,
 
-      sourceWidth,
-      sourceHeight
+      scaledSourceWidth,
+      scaledSourceHeight
     );
-
   } finally {
-
     ctx.restore();
 
     ctx.filter =
@@ -805,31 +953,25 @@ function drawBaseImage({
 
 /* =========================================================
    APPLY ONE EFFECT
-   ---------------------------------------------------------
-   Every effect gets a completely new canvas.
 ========================================================= */
 
 function applyEffect(
   sourceCanvas,
   effect
 ) {
-
   if (!sourceCanvas) {
     return null;
   }
 
-
   if (!effect) {
     return sourceCanvas;
   }
-
 
   const outputCanvas =
     createCanvas(
       sourceCanvas.width,
       sourceCanvas.height
     );
-
 
   const ctx =
     outputCanvas.getContext(
@@ -839,17 +981,13 @@ function applyEffect(
       }
     );
 
-
   if (!ctx) {
-
     throw new Error(
       "Could not create effect canvas context."
     );
   }
 
-
   prepareContext(ctx);
-
 
   ctx.clearRect(
     0,
@@ -858,18 +996,14 @@ function applyEffect(
     outputCanvas.height
   );
 
-
   const filter =
     getEffectFilter(
       effect
     );
 
-
   try {
-
     ctx.filter =
       filter || "none";
-
 
     ctx.drawImage(
       sourceCanvas,
@@ -878,34 +1012,24 @@ function applyEffect(
       outputCanvas.width,
       outputCanvas.height
     );
-
   } finally {
-
     ctx.filter =
       "none";
   }
-
 
   return outputCanvas;
 }
 
 
 /* =========================================================
-   APPLY EFFECTS SEQUENTIALLY
-========================================================= */
-
-
-
-/* =========================================================
    COPY FINAL RESULT
-   ---------------------------------------------------------
-   IMPORTANT:
-   We preserve the existing output canvas
-   element. Only its drawing buffer is updated.
 ========================================================= */
 
-function copyCanvas(sourceCanvas, outputCanvas, filter = "none") {
-
+function copyCanvas(
+  sourceCanvas,
+  outputCanvas,
+  filter = "none"
+) {
   if (
     !sourceCanvas ||
     !outputCanvas
@@ -913,33 +1037,23 @@ function copyCanvas(sourceCanvas, outputCanvas, filter = "none") {
     return;
   }
 
-
   const width =
     sourceCanvas.width;
-
 
   const height =
     sourceCanvas.height;
 
 
-  /*
-   * Only update dimensions when
-   * actually necessary.
-   */
-
   if (
     outputCanvas.width !== width
   ) {
-
     outputCanvas.width =
       width;
   }
 
-
   if (
     outputCanvas.height !== height
   ) {
-
     outputCanvas.height =
       height;
   }
@@ -955,7 +1069,6 @@ function copyCanvas(sourceCanvas, outputCanvas, filter = "none") {
 
 
   if (!ctx) {
-
     throw new Error(
       "Could not create output canvas context."
     );
@@ -973,7 +1086,8 @@ function copyCanvas(sourceCanvas, outputCanvas, filter = "none") {
   );
 
 
-  ctx.filter = filter || "none";
+  ctx.filter =
+    filter || "none";
 
 
   ctx.drawImage(
@@ -997,12 +1111,6 @@ function copyCanvas(sourceCanvas, outputCanvas, filter = "none") {
 export function renderImageEdits({
   image,
 
-  /*
-   * IMPORTANT:
-   * Defaults MUST be 0 because ImageEditor
-   * stores adjustment state as 0 = normal.
-   */
-
   brightness = 0,
   contrast = 0,
   saturation = 0,
@@ -1020,15 +1128,23 @@ export function renderImageEdits({
   selectedEffects = [],
 
   outputCanvas,
-}) {
 
+  /*
+   * IMPORTANT:
+   *
+   * renderScale = 1
+   *     Full-resolution render.
+   *
+   * renderScale < 1
+   *     Fast editor preview.
+   */
+  renderScale = 1,
+}) {
   if (!image) {
     return;
   }
 
-
   if (!outputCanvas) {
-
     throw new Error(
       "outputCanvas is required."
     );
@@ -1042,7 +1158,6 @@ export function renderImageEdits({
 
   const baseCanvas =
     drawBaseImage({
-
       image,
 
       brightness,
@@ -1055,6 +1170,8 @@ export function renderImageEdits({
       flipY,
 
       imageOffset,
+
+      renderScale,
     });
 
 
@@ -1063,16 +1180,26 @@ export function renderImageEdits({
      Effects
   ------------------------------------------------------- */
 
-  const { source: effectSource, lastFilter } =
-    runEffectPasses(baseCanvas, selectedEffects);
+  const {
+    source: effectSource,
+    lastFilter,
+  } =
+    runEffectPasses(
+      baseCanvas,
+      selectedEffects
+    );
 
 
   /* -------------------------------------------------------
      STEP 3
-     Copy final result to visible canvas
+     Copy final result
   ------------------------------------------------------- */
 
-  copyCanvas(effectSource, outputCanvas, lastFilter);
+  copyCanvas(
+    effectSource,
+    outputCanvas,
+    lastFilter
+  );
 }
 
 
@@ -1085,12 +1212,9 @@ export function canvasToBlob(
   type = "image/png",
   quality = 1
 ) {
-
   return new Promise(
     (resolve, reject) => {
-
       if (!canvas) {
-
         reject(
           new Error(
             "Canvas is required."
@@ -1100,14 +1224,10 @@ export function canvasToBlob(
         return;
       }
 
-
       try {
-
         canvas.toBlob(
           (blob) => {
-
             if (!blob) {
-
               reject(
                 new Error(
                   "Canvas could not be converted to Blob."
@@ -1117,7 +1237,6 @@ export function canvasToBlob(
               return;
             }
 
-
             resolve(blob);
           },
 
@@ -1125,9 +1244,7 @@ export function canvasToBlob(
 
           quality
         );
-
       } catch (error) {
-
         reject(error);
       }
     }
@@ -1145,14 +1262,12 @@ export async function canvasToFile(
   type = "image/png",
   quality = 1
 ) {
-
   const blob =
     await canvasToBlob(
       canvas,
       type,
       quality
     );
-
 
   return new File(
     [blob],

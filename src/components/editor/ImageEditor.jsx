@@ -1,13 +1,16 @@
-import { useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useRef,
+  useState,
+} from "react";
 
 import EditCompleteOverlay from "./EditCompleteOverlay";
-import EffectsPanel from "./EffectsPanel";
 import EditorControls from "./EditorControls";
 import EditorCanvas from "./EditorCanvas";
 import ResizeDock from "./ResizeDock";
 import CropDock from "./CropDock";
 import DraggableDock from "./DraggableDock";
-import ObjectRemoveDock from "./ObjectRemoveDock";
 
 import EditorHeader from "./EditorHeader";
 import LayersButton from "./LayersButton";
@@ -34,7 +37,33 @@ import useResizeTool from "../../hooks/useResizeTool";
 import useRestoreToolLayer from "../../hooks/useRestoreToolLayer";
 import useWheelSlidersEffect from "../../hooks/useWheelSlidersEffect";
 
-function ImageEditor({ file, onComplete, onClose }) {
+/*
+ * =========================================================
+ * HEAVY EDITOR FEATURES
+ *
+ * These are loaded only when actually rendered.
+ *
+ * EffectsPanel:
+ *   Loaded only after Effects is opened.
+ *
+ * ObjectRemoveDock:
+ *   Loaded only after Object Remove is opened.
+ * =========================================================
+ */
+
+const EffectsPanel = lazy(
+  () => import("./EffectsPanel")
+);
+
+const ObjectRemoveDock = lazy(
+  () => import("./ObjectRemoveDock")
+);
+
+function ImageEditor({
+  file,
+  onComplete,
+  onClose,
+}) {
   const canvasRef = useRef(null);
   const previewRef = useRef(null);
   const zoomAreaRef = useRef(null);
@@ -59,7 +88,8 @@ function ImageEditor({ file, onComplete, onClose }) {
 
   const [showLayers, setShowLayers] = useState(false);
   const [showEffects, setShowEffects] = useState(false);
-  const [effectPreviewSrc, setEffectPreviewSrc] = useState("");
+  const [effectPreviewSrc, setEffectPreviewSrc] =
+    useState("");
 
   const [applying, setApplying] = useState(false);
 
@@ -69,35 +99,39 @@ function ImageEditor({ file, onComplete, onClose }) {
    * ======================================================
    */
 
-  const [showComplete, setShowComplete] = useState(false);
+  const [showComplete, setShowComplete] =
+    useState(false);
 
-  const [completionEdits, setCompletionEdits] = useState([]);
+  const [completionEdits, setCompletionEdits] =
+    useState([]);
 
   const completionFileRef = useRef(null);
 
   const [removingBackground, setRemovingBackground] =
     useState(false);
 
-  const [objectApplying, setObjectApplying] = useState(false);
+  const [objectApplying, setObjectApplying] =
+    useState(false);
 
-  const [activeTool, setActiveTool] = useState(null);
+  const [activeTool, setActiveTool] =
+    useState(null);
 
   /*
-   * IMPORTANT:
-   *
-   * Always use this function when a tool wants to become
-   * active. It forces a fresh state transition even when
-   * the same tool is selected again after being closed.
+   * ======================================================
+   * TOOL ACTIVATION
+   * ======================================================
    */
+
   const activateTool = (tool) => {
-  setActiveTool(null);
+    setActiveTool(null);
 
-  requestAnimationFrame(() => {
-    setActiveTool(tool);
-  });
-};
+    requestAnimationFrame(() => {
+      setActiveTool(tool);
+    });
+  };
 
-  const cropMode = activeTool === "crop";
+  const cropMode =
+    activeTool === "crop";
 
   const objectMode =
     activeTool === "object" ||
@@ -106,7 +140,8 @@ function ImageEditor({ file, onComplete, onClose }) {
   const aiObjectMode =
     activeTool === "ai-object";
 
-  const resizeMode = activeTool === "resize";
+  const resizeMode =
+    activeTool === "resize";
 
   const editorControlsDisabled =
     cropMode ||
@@ -150,9 +185,7 @@ function ImageEditor({ file, onComplete, onClose }) {
     const safeEdits =
       sourceEdits
         .filter(Boolean)
-        .map((edit) =>
-          String(edit).trim()
-        )
+        .map((edit) => String(edit).trim())
         .filter(Boolean);
 
     if (nextWorkingFile) {
@@ -331,6 +364,10 @@ function ImageEditor({ file, onComplete, onClose }) {
   /*
    * ======================================================
    * OBJECT REMOVE
+   *
+   * The hook itself remains normal.
+   * Its heavy MI-GAN dependency is dynamically loaded
+   * inside useObjectRemove.js only when AI removal is used.
    * ======================================================
    */
 
@@ -424,46 +461,62 @@ function ImageEditor({ file, onComplete, onClose }) {
    */
 
   const {
-    handleApply,
-  } = useApplyAll({
-    canvasRef,
+  handleApply,
+} = useApplyAll({
+  canvasRef,
 
-    workingFile,
-    setWorkingFile,
+  image,
 
-    objectMode,
-    resizeMode,
-    cropMode,
+  workingFile,
+  setWorkingFile,
 
-    applying,
-    setApplying,
+  brightness,
+  contrast,
+  saturation,
 
-    liveState: {
-      brightness,
-      contrast,
-      saturation,
+  rotation,
 
-      rotation,
+  flipX,
+  flipY,
 
-      flipX,
-      flipY,
+  imageOffset,
 
-      selectedEffects:
-        effects.selectedEffects,
-    },
+  selectedEffects:
+    effects.selectedEffects,
 
-    layers,
+  objectMode,
+  resizeMode,
+  cropMode,
 
-    effects,
+  applying,
+  setApplying,
 
-    clearLiveEdits,
+  liveState: {
+    brightness,
+    contrast,
+    saturation,
 
-    setEffectPreviewSrc,
-    setShowEffects,
+    rotation,
 
-    setShowComplete:
-      openCompletionOverlay,
-  });
+    flipX,
+    flipY,
+
+    selectedEffects:
+      effects.selectedEffects,
+  },
+
+  layers,
+
+  effects,
+
+  clearLiveEdits,
+
+  setEffectPreviewSrc,
+  setShowEffects,
+
+  setShowComplete:
+    openCompletionOverlay,
+});
 
   /*
    * ======================================================
@@ -1103,27 +1156,27 @@ function ImageEditor({ file, onComplete, onClose }) {
         {/* EFFECTS PANEL */}
 
         {showEffects && (
-          <EffectsPanel
-            imageSrc={effectPreviewSrc}
-            image={image}
+          <Suspense fallback={null}>
+            <EffectsPanel
+              imageSrc={effectPreviewSrc}
+              image={image}
 
-            selectedEffects={
-              effects.selectedEffects
-            }
+              selectedEffects={
+                effects.selectedEffects
+              }
 
-            onSelect={
-              effects.toggleEffect
-            }
+              onSelect={
+                effects.toggleEffect
+              }
 
-            onClose={() =>
-              setShowEffects(false)
-            }
-          />
+              onClose={() =>
+                setShowEffects(false)
+              }
+            />
+          </Suspense>
         )}
 
-        {/* =================================================
-            COMPLETION OVERLAY
-            ================================================= */}
+        {/* COMPLETION OVERLAY */}
 
         {showComplete && (
           <EditCompleteOverlay
@@ -1134,14 +1187,7 @@ function ImageEditor({ file, onComplete, onClose }) {
           />
         )}
 
-        {/* =================================================
-            RESIZE DOCK
-
-            IMPORTANT:
-            Mount only while resizeMode is true.
-            This guarantees a fresh dock instance after
-            closing and reopening Resize.
-            ================================================= */}
+        {/* RESIZE DOCK */}
 
         {resizeMode && (
           <DraggableDock>
@@ -1217,14 +1263,7 @@ function ImageEditor({ file, onComplete, onClose }) {
           </DraggableDock>
         )}
 
-        {/* =================================================
-            CROP DOCK
-
-            IMPORTANT:
-            Mount only while cropMode is true.
-            This guarantees a fresh dock instance after
-            closing and reopening Crop.
-            ================================================= */}
+        {/* CROP DOCK */}
 
         {cropMode && (
           <DraggableDock>
@@ -1255,39 +1294,37 @@ function ImageEditor({ file, onComplete, onClose }) {
           </DraggableDock>
         )}
 
-        {/* =================================================
-            OBJECT REMOVE DOCK
-
-            Mount only while objectMode is active.
-            ================================================= */}
+        {/* OBJECT REMOVE DOCK */}
 
         {objectMode && (
-          <ObjectRemoveDock
-            objectMode={objectMode}
-            aiObjectMode={aiObjectMode}
+          <Suspense fallback={null}>
+            <ObjectRemoveDock
+              objectMode={objectMode}
+              aiObjectMode={aiObjectMode}
 
-            objectBrushSize={
-              object.objectBrushSize
-            }
+              objectBrushSize={
+                object.objectBrushSize
+              }
 
-            setObjectBrushSize={
-              object.setObjectBrushSize
-            }
+              setObjectBrushSize={
+                object.setObjectBrushSize
+              }
 
-            cancelObjectRemove={
-              object.cancelObjectRemove
-            }
+              cancelObjectRemove={
+                object.cancelObjectRemove
+              }
 
-            applyObjectRemove={
-              object.applyObjectRemove
-            }
+              applyObjectRemove={
+                object.applyObjectRemove
+              }
 
-            objectApplying={
-              objectApplying
-            }
+              objectApplying={
+                objectApplying
+              }
 
-            anchor={objectDockAnchor}
-          />
+              anchor={objectDockAnchor}
+            />
+          </Suspense>
         )}
       </div>
     </div>

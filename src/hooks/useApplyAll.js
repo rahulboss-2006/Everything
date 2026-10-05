@@ -1,5 +1,8 @@
 import {
   canvasToBlob,
+} from "../utils/editorTools/canvasHelpers";
+
+import {
   getBaseName,
   makePngFile,
 } from "../utils/editorTools/canvasHelpers";
@@ -8,28 +11,55 @@ import {
   getLiveEditLabels,
 } from "../utils/editorTools/liveEdits";
 
-/*
-=========================================================
-APPLY ALL EDITS
-=========================================================
+import {
+  renderImageEdits,
+} from "../utils/imageEditorPipeline";
 
-IMPORTANT:
 
-- Every edit is kept as a separate item.
-- Duplicate edits are NOT removed.
-- Previous applied actions are preserved.
-- Previous applied effects are preserved.
-- Current live edits are added.
-- The exported PNG is created before clearing live state.
-- The new workingFile is NOT applied until the completion
-  overlay finishes.
-=========================================================
-*/
+/* =========================================================
+   APPLY ALL
+   ---------------------------------------------------------
+   IMPORTANT:
+
+   The visible canvas is now PREVIEW resolution.
+
+   Therefore:
+
+       canvasRef.current
+              ❌
+       must NOT be exported.
+
+   Instead:
+
+       Original Image
+             ↓
+       renderImageEdits()
+             ↓
+       renderScale = 1
+             ↓
+       Full-resolution PNG
+========================================================= */
 
 export default function useApplyAll({
   canvasRef,
+
+  image,
+
   workingFile,
   setWorkingFile,
+
+  brightness,
+  contrast,
+  saturation,
+
+  rotation,
+
+  flipX,
+  flipY,
+
+  imageOffset,
+
+  selectedEffects,
 
   objectMode,
   resizeMode,
@@ -47,18 +77,20 @@ export default function useApplyAll({
 
   setEffectPreviewSrc,
   setShowEffects,
+
   setShowComplete,
 }) {
-  async function handleApply() {
-    /*
-    =======================================================
-    GUARDS
-    =======================================================
-    */
 
+
+  /* =======================================================
+     HANDLE APPLY
+  ======================================================= */
+
+  async function handleApply() {
     if (
       !canvasRef.current ||
       !workingFile ||
+      !image ||
       objectMode ||
       resizeMode ||
       cropMode ||
@@ -67,53 +99,56 @@ export default function useApplyAll({
       return;
     }
 
+
     try {
-      setApplying(true);
+      setApplying(
+        true
+      );
+
 
       /*
-      =====================================================
-      CURRENT CANVAS
-      =====================================================
-      */
-
-      const canvas =
+       * Keep the existing visible canvas
+       * only as an editor-state guard.
+       *
+       * It is NOT used for final export.
+       */
+      const visibleCanvas =
         canvasRef.current;
 
-      /*
-      =====================================================
-      1. PREVIOUS APPLIED ACTIONS
-      =====================================================
 
-      These are actions already stored by useEditLayers.
-      =====================================================
-      */
+      if (
+        !visibleCanvas
+      ) {
+        return;
+      }
+
+
+      /* ===================================================
+         PREVIOUS LAYER HISTORY
+      =================================================== */
 
       const previousEdits =
         Array.isArray(
-          layers?.appliedActionsRef?.current
+          layers
+            ?.appliedActionsRef
+            ?.current
         )
           ? [
-              ...layers.appliedActionsRef.current,
+              ...layers
+                .appliedActionsRef
+                .current,
             ]
           : [];
 
-      /*
-      =====================================================
-      2. PREVIOUS APPLIED EFFECT HISTORY
-      =====================================================
 
-      IMPORTANT:
-
-      Use appliedEffectHistoryRef if available.
-
-      Do NOT use only effectLayersRef here because
-      effectLayersRef represents LIVE effects.
-      =====================================================
-      */
+      /* ===================================================
+         PREVIOUS EFFECT HISTORY
+      =================================================== */
 
       const previousEffects =
         Array.isArray(
-          effects?.appliedEffectHistoryRef
+          effects
+            ?.appliedEffectHistoryRef
             ?.current
         )
           ? [
@@ -123,66 +158,50 @@ export default function useApplyAll({
             ]
           : [];
 
-      /*
-      =====================================================
-      3. CURRENT LIVE EFFECTS
-      =====================================================
-      */
+
+      /* ===================================================
+         CURRENT VISIBLE EFFECT LAYERS
+      =================================================== */
 
       const currentEffects =
         Array.isArray(
-          effects?.effectLayersRef?.current
+          effects
+            ?.effectLayersRef
+            ?.current
         )
-          ? effects.effectLayersRef.current
+          ? effects
+              .effectLayersRef
+              .current
               .filter(
                 (layer) =>
                   layer &&
-                  layer.visible !== false
+                  layer.visible !==
+                    false
               )
               .map(
                 (layer) =>
                   layer.name ||
                   layer.effectId
               )
-              .filter(Boolean)
+              .filter(
+                Boolean
+              )
           : [];
 
-      /*
-      =====================================================
-      4. CURRENT LIVE NORMAL EDITS
-      =====================================================
-      */
+
+      /* ===================================================
+         LIVE ADJUSTMENTS
+      =================================================== */
 
       const liveEdits =
         getLiveEditLabels(
           liveState
         );
 
-      /*
-      =====================================================
-      5. BUILD COMPLETE EDIT LIST
-      =====================================================
 
-      IMPORTANT:
-
-      NO Set()
-
-      NO duplicate removal.
-
-      Every block stays separate.
-
-      Example:
-
-      Brightness
-      Contrast
-      Blur
-      Blur
-      Rotate
-      Brightness
-
-      All 6 remain.
-      =====================================================
-      */
+      /* ===================================================
+         COMBINE EDIT HISTORY
+      =================================================== */
 
       const allEdits = [
         ...previousEdits,
@@ -191,84 +210,86 @@ export default function useApplyAll({
         ...liveEdits,
       ];
 
+
       const edits =
         allEdits
-          .filter(Boolean)
-          .map((edit) =>
-            String(edit).trim()
+          .filter(
+            Boolean
           )
-          .filter(Boolean);
+          .map(
+            (edit) =>
+              String(
+                edit
+              ).trim()
+          )
+          .filter(
+            Boolean
+          );
 
-      /*
-      =====================================================
-      DEBUG
-      =====================================================
-      */
 
-      console.log(
-        "========================================"
-      );
+      /* ===================================================
+         FULL RESOLUTION RENDER
+         --------------------------------------------------
+         THIS is the important part.
 
-      console.log(
-        "[APPLY] Previous actions:",
-        previousEdits
-      );
+         The visible canvas may be:
 
-      console.log(
-        "[APPLY] Previous effects:",
-        previousEffects
-      );
+             1280 × 853
 
-      console.log(
-        "[APPLY] Current effects:",
-        currentEffects
-      );
+         but the export canvas becomes:
 
-      console.log(
-        "[APPLY] Live edits:",
-        liveEdits
-      );
+             6000 × 4000
 
-      console.log(
-        "[APPLY] ALL EDITS:",
-        allEdits
-      );
+         for a 6000 × 4000 original.
+      =================================================== */
 
-      console.log(
-        "[APPLY] FINAL EDIT COUNT:",
-        edits.length
-      );
+      const exportCanvas =
+        document.createElement(
+          "canvas"
+        );
 
-      console.log(
-        "[APPLY] FINAL completion edits:",
-        edits
-      );
 
-      console.log(
-        "========================================"
-      );
+      renderImageEdits({
+        image,
 
-      /*
-      =====================================================
-      6. EXPORT CURRENT CANVAS
-      =====================================================
+        brightness,
+        contrast,
+        saturation,
 
-      Export BEFORE clearing live state.
-      =====================================================
-      */
+        rotation,
+
+        flipX,
+        flipY,
+
+        imageOffset,
+
+        selectedEffects,
+
+        outputCanvas:
+          exportCanvas,
+
+        /*
+         * FULL RESOLUTION.
+         */
+        renderScale: 1,
+      });
+
+
+      /* ===================================================
+         CONVERT FULL-RES CANVAS TO PNG
+      =================================================== */
 
       const blob =
         await canvasToBlob(
-          canvas,
+          exportCanvas,
           "image/png",
           1
         );
 
-      /*
-      =====================================================
-      7. CREATE FINAL FILE
-      =====================================================
-      */
+
+      /* ===================================================
+         CREATE FINAL FILE
+      =================================================== */
 
       const editedFile =
         makePngFile(
@@ -279,19 +300,14 @@ export default function useApplyAll({
           "edited"
         );
 
-      console.log(
-        "[APPLY] Final edited file:",
-        editedFile
-      );
 
-      /*
-      =====================================================
-      8. SAVE CURRENT NORMAL EDITS
-      =====================================================
-      */
+      /* ===================================================
+         ADD ADJUSTMENT LAYER
+      =================================================== */
 
       if (
-        liveEdits.length > 0
+        liveEdits.length >
+        0
       ) {
         layers.addToolLayer({
           type: "apply",
@@ -300,93 +316,93 @@ export default function useApplyAll({
             "Applied Adjustments",
 
           detail:
-            liveEdits.join(", "),
+            liveEdits.join(
+              ", "
+            ),
 
           beforeFile:
             workingFile,
 
           summary:
-            liveEdits.join(", "),
+            liveEdits.join(
+              ", "
+            ),
         });
       }
 
-      /*
-      =====================================================
-      9. SAVE CURRENT EFFECTS INTO EFFECT HISTORY
-      =====================================================
-      */
+
+      /* ===================================================
+         ADD EFFECT HISTORY
+      =================================================== */
 
       if (
-        currentEffects.length > 0 &&
-        effects?.addAppliedEffectHistory
+        currentEffects.length >
+          0 &&
+        effects
+          ?.addAppliedEffectHistory
       ) {
         effects.addAppliedEffectHistory(
           currentEffects
         );
       }
 
-      /*
-      =====================================================
-      10. SAVE COMPLETE HISTORY
-      =====================================================
-      */
+
+      /* ===================================================
+         SAVE ALL EDIT LABELS
+      =================================================== */
 
       layers.setAppliedActions(
         edits
       );
 
-      /*
-      =====================================================
-      11. CLEAR LIVE STATE
-      =====================================================
-      */
+
+      /* ===================================================
+         RESET LIVE STATE
+      =================================================== */
 
       clearLiveEdits();
 
-      setEffectPreviewSrc("");
 
-      setShowEffects(false);
-
-      /*
-      =====================================================
-      12. IMPORTANT
-
-      DO NOT UPDATE workingFile HERE.
-
-      Previously you had:
-
-          setWorkingFile(editedFile)
-
-      That caused the final image to change before the
-      completion animation finished.
-
-      We now pass the edited file to the completion
-      callback.
-      =====================================================
-      */
-
-      console.log(
-        "[APPLY] Opening completion overlay..."
+      setEffectPreviewSrc(
+        ""
       );
+
+
+      setShowEffects(
+        false
+      );
+
+
+      /* ===================================================
+         COMPLETION OVERLAY
+      =================================================== */
 
       setShowComplete(
         edits,
         editedFile
       );
-    } catch (error) {
+
+    } catch (
+      error
+    ) {
       console.error(
         "[APPLY] Applying changes failed:",
         error
       );
 
+
       alert(
         error?.message ||
           "Could not apply the image changes. Please try again."
       );
+
     } finally {
-      setApplying(false);
+      setApplying(
+        false
+      );
     }
   }
+
 
   return {
     handleApply,
