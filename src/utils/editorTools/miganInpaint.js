@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    LOCAL AI OBJECT REMOVAL (MI-GAN / ONNX)
 
    Runs entirely in-browser.
@@ -80,18 +80,20 @@ function isWeakDevice() {
  * original editor resolution for the final output.
  */
 function getMiGanMaxDimension() {
+  // MI-GAN runtime grows quickly with image area. Keep the working canvas
+  // modest for responsive local processing; the result is still composited
+  // back onto the original-size canvas. This affects AI Object Remove only.
   if (isWeakDevice()) {
+    return 640;
+  }
+
+  const cores = getHardwareConcurrency();
+
+  if (cores <= 6) {
     return 768;
   }
 
-  const cores =
-    getHardwareConcurrency();
-
-  if (cores <= 6) {
-    return 896;
-  }
-
-  return 1024;
+  return 896;
 }
 
 /*

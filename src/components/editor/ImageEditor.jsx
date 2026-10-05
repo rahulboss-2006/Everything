@@ -451,6 +451,7 @@ function ImageEditor({ file, onComplete, onClose }) {
                     setShowEffects={setShowEffects}
                     handleAIObjectRemove={object.handleAIObjectRemove}
                     aiObjectMode={aiObjectMode}
+                    aiObjectRemoved={object.aiObjectRemoved}
                     objectApplying={objectApplying}
                     handleRotate={handleRotate}
                     handleFlipHorizontal={handleFlipHorizontal}

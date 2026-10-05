@@ -47,6 +47,17 @@ async function parseResponse(response) {
 
 async function refreshAccessToken() {
   try {
+    const refreshToken =
+      localStorage.getItem("refreshToken");
+
+    if (!refreshToken) {
+      console.warn(
+        "REFRESH: No refresh token found."
+      );
+
+      return false;
+    }
+
     const response = await fetch(
       `${API_BASE_URL}/auth/refresh`,
       {
@@ -57,24 +68,52 @@ async function refreshAccessToken() {
         headers: {
           "Content-Type": "application/json",
         },
+
+        body: JSON.stringify({
+          refreshToken,
+        }),
       }
     );
 
-    if (!response.ok) {
+    const data =
+      await response.json().catch(() => ({}));
+
+    if (!response.ok || !data?.accessToken) {
+      console.error(
+        "REFRESH FAILED:",
+        response.status,
+        data
+      );
+
       return false;
     }
 
-    const data = await response.json().catch(() => ({}));
+    /* Save new access token */
+    localStorage.setItem(
+      "accessToken",
+      data.accessToken
+    );
 
-    if (data?.accessToken) {
+    /* Backend rotates refresh token */
+    if (data.refreshToken) {
       localStorage.setItem(
-        "accessToken",
-        data.accessToken
+        "refreshToken",
+        data.refreshToken
       );
     }
 
+    console.log(
+      "TOKEN REFRESH SUCCESS"
+    );
+
     return true;
-  } catch {
+
+  } catch (error) {
+    console.error(
+      "TOKEN REFRESH ERROR:",
+      error
+    );
+
     return false;
   }
 }

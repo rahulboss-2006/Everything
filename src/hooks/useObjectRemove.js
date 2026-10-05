@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadImage } from "../utils/imageEditor";
 import {
   canvasToBlob,
@@ -11,6 +11,7 @@ import {
 } from "../utils/editorTools/canvasHelpers";
 import {
   buildAIInpaintMaskCanvas,
+  getMiGanSession,
   runLocalAIObjectRemoval,
 } from "../utils/editorTools/miganInpaint";
 
@@ -39,12 +40,23 @@ export default function useObjectRemove({
   const objectLastPointRef = useRef(null);
   const aiObjectMaskCanvasRef = useRef(null);
   const aiObjectOverlayCanvasRef = useRef(null);
+  const lastAIResultFileRef = useRef(null);
 
   const [objectBrushSize, setObjectBrushSize] = useState(40);
   const [aiModelLoading, setAiModelLoading] = useState(false);
   const [aiProgress, setAiProgress] = useState(0);
   const [aiProgressLabel, setAiProgressLabel] = useState(DEFAULT_AI_LABEL);
   const [objectRemovalMode, setObjectRemovalMode] = useState("standard");
+  const [aiObjectRemoved, setAiObjectRemoved] = useState(false);
+
+  // Keep the successful state for the generated result, but clear it when the
+  // user loads/restores a different image. The AI result itself must not clear it.
+  useEffect(() => {
+    if (lastAIResultFileRef.current && workingFile !== lastAIResultFileRef.current) {
+      lastAIResultFileRef.current = null;
+      setAiObjectRemoved(false);
+    }
+  }, [workingFile]);
 
   /* ---------- session helpers ---------- */
 
@@ -74,6 +86,8 @@ export default function useObjectRemove({
     aiObjectMaskCanvasRef.current = null;
     aiObjectOverlayCanvasRef.current = null;
     setObjectRemovalMode("standard");
+    lastAIResultFileRef.current = null;
+    setAiObjectRemoved(false);
   }
 
   function handleObjectRemove() {
@@ -93,7 +107,7 @@ export default function useObjectRemove({
   }
 
   function handleAIObjectRemove() {
-    if (!workingFile || removingBackground || objectApplying) return;
+    if (!workingFile || removingBackground || objectApplying || aiObjectRemoved) return;
 
     setShowEffects(false);
     setObjectRemovalMode("ai");
@@ -107,6 +121,13 @@ export default function useObjectRemove({
     ensureAIObjectMaskCanvas();
     clearAIObjectMask();
     setActiveTool("ai-object");
+
+    // Start downloading/initializing the MI-GAN model while the user paints
+    // the selection. The actual Apply action reuses this same cached session.
+    // This is intentionally isolated from Background Remove.
+    void getMiGanSession().catch((error) => {
+      console.warn("AI Object Remove model preload failed; it will retry on Apply.", error);
+    });
   }
 
   function cancelObjectRemove() {
@@ -458,6 +479,8 @@ export default function useObjectRemove({
         maskDataURL,
       });
 
+      lastAIResultFileRef.current = newFile;
+      setAiObjectRemoved(true);
       setWorkingFile(newFile);
       setImage(newImage);
 
@@ -559,6 +582,7 @@ export default function useObjectRemove({
     aiModelLoading,
     aiProgress,
     aiProgressLabel,
+    aiObjectRemoved,
 
     // actions
     handleObjectRemove,

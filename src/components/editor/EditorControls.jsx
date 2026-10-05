@@ -41,6 +41,7 @@ function EditorControls({
 
   handleAIObjectRemove,
   aiObjectMode,
+  aiObjectRemoved = false,
   objectApplying,
 
   handleRotate,
@@ -212,7 +213,7 @@ function EditorControls({
             title="AI Object Remove"
             aria-label="AI Object Remove"
             onClick={handleAIObjectRemove}
-            disabled={editorControlsDisabled}
+            disabled={editorControlsDisabled || aiObjectRemoved}
             className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-medium transition sm:px-3 disabled:cursor-not-allowed disabled:opacity-50 ${
               aiObjectMode
                 ? "bg-violet-600 text-white"
@@ -228,7 +229,7 @@ function EditorControls({
               <Sparkles size={17} className="shrink-0" />
             )}
 
-            <span className="truncate">A.O.R</span>
+            <span className="truncate">{aiObjectRemoved ? "Removed" : "A.O.R"}</span>
           </button>
         </div>
       </div>
