@@ -1,3 +1,4 @@
+
 import {
   useEffect,
   useMemo,
@@ -10,11 +11,6 @@ import {
   FileImage,
   FileText,
   Upload,
-  ShieldCheck,
-  Zap,
-  Sparkles,
-  X,
-  ArrowRight,
   Settings2,
 } from "lucide-react";
 
@@ -28,12 +24,6 @@ import {
 } from "./utils/formatOptions";
 
 import {
-  convertImage,
-  convertImageToPdf,
-  convertPdfToImage,
-} from "./services/converterApi";
-
-import {
   BrowserRouter,
   Routes,
   Route,
@@ -45,7 +35,11 @@ import Footer from "./components/Footer";
 import DropZone from "./components/DropZone";
 
 import Home from "./pages/Home";
-// Keep the homepage in the initial bundle. Load secondary pages only when visited.
+
+/* =========================================
+   LAZY SECONDARY PAGES
+========================================= */
+
 const About = lazy(() => import("./pages/About"));
 const Features = lazy(() => import("./pages/Features"));
 const Contact = lazy(() => import("./pages/Contact"));
@@ -54,10 +48,14 @@ const Recharge = lazy(() => import("./pages/Recharge"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AdminPanel = lazy(() => import("./admin/AdminPanel"));
+
 import {
   useAuth,
 } from "./context/AuthContext";
-import { downloadFile } from "./utils/downloadFile";
+
+import {
+  downloadFile,
+} from "./utils/downloadFile";
 
 
 /* =========================================
@@ -86,193 +84,231 @@ function AppLayout({ children }) {
 ========================================= */
 
 function App() {
-  const { user } = useAuth();
   return (
     <BrowserRouter basename="/Everything">
 
-      <Suspense fallback={<div className="min-h-[50vh] px-4 py-16 text-center text-sm text-slate-500" role="status">Loading page…</div>}>
-      <Routes>
+      <Suspense
+        fallback={
+          <div
+            className="min-h-[50vh] px-4 py-16 text-center text-sm text-slate-500"
+            role="status"
+          >
+            Loading page…
+          </div>
+        }
+      >
 
-        {/* HOME */}
+        <Routes>
 
-        <Route
-          path="/"
-          element={
-            <AppLayout>
-              <Home />
+          {/* =================================
+              HOME
+          ================================= */}
 
-              <section
-                className="border-t border-slate-200 px-4 py-20 dark:border-slate-800 sm:px-6 lg:px-8"
-              >
+          <Route
+            path="/"
+            element={
+              <AppLayout>
 
-                <div className="mx-auto max-w-7xl">
+                <Home />
 
-                  <div className="mb-12">
+                <section
+                  className="border-t border-slate-200 px-4 py-20 dark:border-slate-800 sm:px-6 lg:px-8"
+                >
 
-                    <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-slate-500">
-                      Features
-                    </p>
+                  <div className="mx-auto max-w-7xl">
 
-                    <h2 className="text-3xl font-bold sm:text-4xl">
-                      Everything you need
+                    <div className="mb-12">
+
+                      <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-slate-500">
+                        Features
+                      </p>
+
+                      <h2 className="text-3xl font-bold sm:text-4xl">
+                        Everything you need
+                      </h2>
+
+                      <p className="mt-4 text-slate-600 dark:text-slate-400">
+                        One modern workspace for image
+                        and PDF conversion.
+                      </p>
+
+                    </div>
+
+                    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+
+                      <FeatureCard
+                        icon={<Upload size={22} />}
+                        title="Drag & Drop"
+                        description="Drop your files directly into the converter."
+                      />
+
+                      <FeatureCard
+                        icon={<FileImage size={22} />}
+                        title="Image Converter"
+                        description="Convert JPG, JPEG, PNG and WEBP files."
+                      />
+
+                      <FeatureCard
+                        icon={<FileText size={22} />}
+                        title="PDF Converter"
+                        description="Convert PDF pages into popular image formats."
+                      />
+
+                      <FeatureCard
+                        icon={<Settings2 size={22} />}
+                        title="Image Editor"
+                        description="Edit, crop, resize and optimize images."
+                      />
+
+                    </div>
+
+                  </div>
+
+                </section>
+
+
+                <section
+                  className="px-4 py-20 sm:px-6 lg:px-8"
+                >
+
+                  <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-slate-800 dark:bg-slate-900/50 sm:p-12">
+
+                    <h2 className="text-3xl font-bold">
+                      One place for your files
                     </h2>
 
-                    <p className="mt-4 text-slate-600 dark:text-slate-400">
-                      One modern workspace for image
-                      and PDF conversion.
+                    <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
+                      Upload your file, select a format,
+                      edit when needed, convert it,
+                      and download the result.
                     </p>
 
                   </div>
 
-                  <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                </section>
 
-                    <FeatureCard
-                      icon={<Upload size={22} />}
-                      title="Drag & Drop"
-                      description="Drop your files directly into the converter."
-                    />
-
-                    <FeatureCard
-                      icon={<FileImage size={22} />}
-                      title="Image Converter"
-                      description="Convert JPG, JPEG, PNG and WEBP files."
-                    />
-
-                    <FeatureCard
-                      icon={<FileText size={22} />}
-                      title="PDF Converter"
-                      description="Convert PDF pages into popular image formats."
-                    />
-
-                    <FeatureCard
-                      icon={<Settings2 size={22} />}
-                      title="Image Editor"
-                      description="Edit, crop, resize and optimize images."
-                    />
-
-                  </div>
-
-                </div>
-
-              </section>
-
-              <section
-                className="px-4 py-20 sm:px-6 lg:px-8"
-              >
-
-                <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-slate-800 dark:bg-slate-900/50 sm:p-12">
-
-                  <h2 className="text-3xl font-bold">
-                    One place for your files
-                  </h2>
-
-                  <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
-                    Upload your file, select a format,
-                    edit when needed, convert it,
-                    and download the result.
-                  </p>
-
-                </div>
-
-              </section>
-
-            </AppLayout>
-          }
-        />
+              </AppLayout>
+            }
+          />
 
 
-        {/* ABOUT */}
+          {/* =================================
+              ABOUT
+          ================================= */}
 
-        <Route
-          path="/about"
-          element={
-            <AppLayout>
-              <About />
-            </AppLayout>
-          }
-        />
-
-
-        {/* FEATURES */}
-
-        <Route
-          path="/features"
-          element={
-            <AppLayout>
-              <Features />
-            </AppLayout>
-          }
-        />
+          <Route
+            path="/about"
+            element={
+              <AppLayout>
+                <About />
+              </AppLayout>
+            }
+          />
 
 
-        {/* CONTACT */}
+          {/* =================================
+              FEATURES
+          ================================= */}
 
-        <Route
-          path="/contact"
-          element={
-            <AppLayout>
-              <Contact />
-            </AppLayout>
-          }
-        />
-
-
-        {/* ADMIN PANEL */}
-
-        <Route
-          path="/admin"
-          element={<AdminPanel />}
-        />
+          <Route
+            path="/features"
+            element={
+              <AppLayout>
+                <Features />
+              </AppLayout>
+            }
+          />
 
 
-        {/* LOGIN */}
+          {/* =================================
+              CONTACT
+          ================================= */}
 
-        <Route
-          path="/login"
-          element={<Auth />}
-        />
-
-
-
-
-        {/* REGISTER */}
-
-        <Route
-          path="/register"
-          element={<Auth />}
-        />
+          <Route
+            path="/contact"
+            element={
+              <AppLayout>
+                <Contact />
+              </AppLayout>
+            }
+          />
 
 
-        {/* RECHARGE */}
+          {/* =================================
+              ADMIN
+          ================================= */}
 
-        <Route
-          path="/recharge"
-          element={<Recharge />}
-        />
+          <Route
+            path="/admin"
+            element={<AdminPanel />}
+          />
 
 
-        {/* UNKNOWN URL */}
+          {/* =================================
+              LOGIN
+          ================================= */}
 
-        <Route
-          path="*"
-          element={
-            <AppLayout>
-              <Home />
-            </AppLayout>
-          }
-        />
+          <Route
+            path="/login"
+            element={<Auth />}
+          />
 
-        <Route
-          path="/forgot-password"
-          element={<ForgotPassword />}
-        />
 
-        <Route
-          path="/reset-password"
-          element={<ResetPassword />}
-        />
+          {/* =================================
+              REGISTER
+          ================================= */}
 
-      </Routes>
+          <Route
+            path="/register"
+            element={<Auth />}
+          />
+
+
+          {/* =================================
+              RECHARGE
+          ================================= */}
+
+          <Route
+            path="/recharge"
+            element={<Recharge />}
+          />
+
+
+          {/* =================================
+              FORGOT PASSWORD
+          ================================= */}
+
+          <Route
+            path="/forgot-password"
+            element={<ForgotPassword />}
+          />
+
+
+          {/* =================================
+              RESET PASSWORD
+          ================================= */}
+
+          <Route
+            path="/reset-password"
+            element={<ResetPassword />}
+          />
+
+
+          {/* =================================
+              UNKNOWN URL
+          ================================= */}
+
+          <Route
+            path="*"
+            element={
+              <AppLayout>
+                <Home />
+              </AppLayout>
+            }
+          />
+
+        </Routes>
+
       </Suspense>
 
     </BrowserRouter>
@@ -285,6 +321,11 @@ function App() {
 ========================================= */
 
 function UploadBox() {
+
+  const {
+    user,
+  } = useAuth();
+
 
   const [dragging, setDragging] =
     useState(false);
@@ -397,17 +438,42 @@ function UploadBox() {
 
   /* =======================================
      CONVERT
+     
+     IMPORTANT:
+     converterApi is NOT imported at
+     application startup.
+
+     It is downloaded only when the
+     user actually starts a conversion.
   ======================================= */
 
   const handleConvert =
     async () => {
 
-    console.log("CONVERT CREDIT CHECK:", user?.credits, "USER:", user);
+      console.log(
+        "CONVERT CREDIT CHECK:",
+        user?.credits,
+        "USER:",
+        user
+      );
 
-    if ((user?.credits ?? 0) <= 0) {
-      window.location.href = "/Everything/recharge";
-      return;
-    }
+
+      /* =================================
+         CREDIT CHECK
+      ================================= */
+
+      if ((user?.credits ?? 0) <= 0) {
+
+        window.location.href =
+          "/Everything/recharge";
+
+        return;
+      }
+
+
+      /* =================================
+         FILE CHECK
+      ================================= */
 
       if (!file) {
 
@@ -418,6 +484,10 @@ function UploadBox() {
         return;
       }
 
+
+      /* =================================
+         FORMAT CHECK
+      ================================= */
 
       if (!selectedFormat) {
 
@@ -443,11 +513,35 @@ function UploadBox() {
         );
 
 
+        /*
+         * =================================
+         * LAZY LOAD CONVERTER
+         * =================================
+         *
+         * This is the important performance
+         * change.
+         *
+         * converterApi.js will NOT be part
+         * of the initial Home/Login download.
+         *
+         * Browser downloads it only when
+         * conversion actually starts.
+         */
+
+        const {
+          convertImage,
+          convertImageToPdf,
+          convertPdfToImage,
+        } = await import(
+          "./services/converterApi"
+        );
+
+
         let result;
 
 
         /* =================================
-           IMAGE Ã¢â€ â€™ PDF
+           IMAGE → PDF
         ================================= */
 
         if (
@@ -461,12 +555,14 @@ function UploadBox() {
 
 
           result =
-            await convertImageToPdf(file);
+            await convertImageToPdf(
+              file
+            );
         }
 
 
         /* =================================
-           IMAGE Ã¢â€ â€™ IMAGE
+           IMAGE → IMAGE
         ================================= */
 
         else if (
@@ -487,7 +583,7 @@ function UploadBox() {
 
 
         /* =================================
-           PDF Ã¢â€ â€™ IMAGE
+           PDF → IMAGE
         ================================= */
 
         else {
@@ -535,15 +631,17 @@ function UploadBox() {
 
 
         if (!downloadUrl) {
+
           throw new Error(
             "Download URL was not returned by the server."
           );
         }
 
 
-        await downloadFile(downloadUrl, result?.fileName);
-
-
+        await downloadFile(
+          downloadUrl,
+          result?.fileName
+        );
 
 
         /* =================================
@@ -551,7 +649,7 @@ function UploadBox() {
         ================================= */
 
         setConversionStatus(
-          "Ã¢Å“â€œ Conversion complete"
+          "✓ Conversion complete"
         );
 
 
@@ -619,7 +717,9 @@ function UploadBox() {
       event.dataTransfer.files?.[0];
 
 
-    handleFile(droppedFile);
+    handleFile(
+      droppedFile
+    );
   }
 
 
@@ -657,9 +757,14 @@ function UploadBox() {
       }
 
 
-      return URL.createObjectURL(file);
+      return URL.createObjectURL(
+        file
+      );
 
-    }, [file, extension]);
+    }, [
+      file,
+      extension,
+    ]);
 
 
   /* =======================================
@@ -680,7 +785,9 @@ function UploadBox() {
 
     };
 
-  }, [previewUrl]);
+  }, [
+    previewUrl,
+  ]);
 
 
   /* =======================================
@@ -702,9 +809,12 @@ function UploadBox() {
       onFileSelect={handleFile}
       onRemoveFile={removeFile}
       onConvert={handleConvert}
+
       onEditComplete={(editedFile) => {
 
-        setFile(editedFile);
+        setFile(
+          editedFile
+        );
 
         setSelectedFormat(null);
 
@@ -713,6 +823,7 @@ function UploadBox() {
         setError("");
 
       }}
+
     />
 
   );
@@ -758,5 +869,4 @@ function FeatureCard({
 
 
 export default App;
-
 
