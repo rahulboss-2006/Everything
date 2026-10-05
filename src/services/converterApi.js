@@ -7,6 +7,34 @@ const SERVER_BASE_URL =
 
 
 /* ================================
+   DOWNLOAD URL
+================================ */
+
+function resolveDownloadUrl(downloadUrl) {
+  if (!downloadUrl) {
+    return "";
+  }
+
+  /*
+   * Backend may return:
+   *
+   * /api/outputs/file.zip
+   * /outputs/file.zip
+   * https://everything-backend-.../api/outputs/file.zip
+   */
+
+  try {
+    return new URL(
+      downloadUrl,
+      API_BASE_URL
+    ).toString();
+  } catch {
+    return downloadUrl;
+  }
+}
+
+
+/* ================================
    RESPONSE
 ================================ */
 
@@ -54,17 +82,6 @@ async function parseResponse(response) {
 let refreshPromise = null;
 
 async function refreshAccessToken() {
-  /*
-    Prevent multiple simultaneous refresh requests.
-
-    Example:
-    Request A → 401
-    Request B → 401
-    Request C → 401
-
-    Only ONE refresh request will be sent.
-  */
-
   if (refreshPromise) {
     return refreshPromise;
   }
@@ -86,7 +103,6 @@ async function refreshAccessToken() {
         `${API_BASE_URL}/auth/refresh`,
         {
           method: "POST",
-
           credentials: "include",
 
           headers: {
@@ -115,18 +131,10 @@ async function refreshAccessToken() {
         return false;
       }
 
-      /*
-        Save NEW access token first.
-      */
-
       localStorage.setItem(
         "accessToken",
         data.accessToken
       );
-
-      /*
-        Backend may rotate refresh token.
-      */
 
       if (data.refreshToken) {
         localStorage.setItem(
@@ -150,10 +158,6 @@ async function refreshAccessToken() {
       return false;
 
     } finally {
-      /*
-        Allow future refresh operations.
-      */
-
       refreshPromise = null;
     }
   })();
@@ -189,14 +193,6 @@ async function authenticatedFetch(
   options = {},
   retry = true
 ) {
-  /*
-    IMPORTANT:
-    Never reuse an old Authorization header.
-
-    Always read the latest token from
-    localStorage immediately before fetch.
-  */
-
   const headers = {
     ...(options.headers || {}),
     ...getAuthHeaders(),
@@ -207,12 +203,9 @@ async function authenticatedFetch(
   try {
     response = await fetch(url, {
       ...options,
-
       headers,
-
       credentials: "include",
     });
-
   } catch (error) {
     console.error(
       "NETWORK ERROR:",
@@ -239,23 +232,10 @@ async function authenticatedFetch(
       await refreshAccessToken();
 
     if (refreshed) {
-      /*
-        IMPORTANT:
-        Do NOT reuse the old request headers.
-
-        Call authenticatedFetch again so
-        getAuthHeaders() reads the NEW token.
-      */
-
       return authenticatedFetch(
         url,
         {
           ...options,
-
-          /*
-            Remove any stale Authorization
-            header supplied by the previous request.
-          */
 
           headers: {
             ...(options.headers || {}),
@@ -265,7 +245,6 @@ async function authenticatedFetch(
       );
     }
   }
-
 
   return response;
 }
@@ -291,27 +270,25 @@ export async function convertImage(
     outputFormat
   );
 
-
   const response =
     await authenticatedFetch(
       `${API_BASE_URL}/converter/image`,
       {
         method: "POST",
-
         body: formData,
       }
     );
 
-
   const data =
     await parseResponse(response);
-
 
   return {
     ...data,
 
     downloadUrl:
-      `${SERVER_BASE_URL}${data.downloadUrl}`,
+      resolveDownloadUrl(
+        data.downloadUrl
+      ),
   };
 }
 
@@ -330,27 +307,25 @@ export async function convertImageToPdf(
     file
   );
 
-
   const response =
     await authenticatedFetch(
       `${API_BASE_URL}/pdf/image-to-pdf`,
       {
         method: "POST",
-
         body: formData,
       }
     );
 
-
   const data =
     await parseResponse(response);
-
 
   return {
     ...data,
 
     downloadUrl:
-      `${SERVER_BASE_URL}${data.downloadUrl}`,
+      resolveDownloadUrl(
+        data.downloadUrl
+      ),
   };
 }
 
@@ -375,27 +350,24 @@ export async function convertPdfToImage(
     outputFormat
   );
 
-
   const response =
     await authenticatedFetch(
       `${API_BASE_URL}/pdf/pdf-to-image`,
       {
         method: "POST",
-
         body: formData,
       }
     );
 
-
   const data =
     await parseResponse(response);
-
 
   return {
     ...data,
 
     downloadUrl:
-      `${SERVER_BASE_URL}${data.downloadUrl}`,
+      resolveDownloadUrl(
+        data.downloadUrl
+      ),
   };
 }
-

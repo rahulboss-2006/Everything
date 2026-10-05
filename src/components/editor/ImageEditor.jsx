@@ -69,23 +69,33 @@ function ImageEditor({ file, onComplete, onClose }) {
    * ======================================================
    */
 
-  const [showComplete, setShowComplete] =
-  useState(false);
+  const [showComplete, setShowComplete] = useState(false);
 
-  const [completionEdits, setCompletionEdits] =
-  useState([]);
+  const [completionEdits, setCompletionEdits] = useState([]);
 
-  const completionFileRef =
-  useRef(null);
+  const completionFileRef = useRef(null);
 
   const [removingBackground, setRemovingBackground] =
     useState(false);
 
-  const [objectApplying, setObjectApplying] =
-    useState(false);
+  const [objectApplying, setObjectApplying] = useState(false);
 
-  const [activeTool, setActiveTool] =
-    useState(null);
+  const [activeTool, setActiveTool] = useState(null);
+
+  /*
+   * IMPORTANT:
+   *
+   * Always use this function when a tool wants to become
+   * active. It forces a fresh state transition even when
+   * the same tool is selected again after being closed.
+   */
+  const activateTool = (tool) => {
+  setActiveTool(null);
+
+  requestAnimationFrame(() => {
+    setActiveTool(tool);
+  });
+};
 
   const cropMode = activeTool === "crop";
 
@@ -118,100 +128,55 @@ function ImageEditor({ file, onComplete, onClose }) {
    * ======================================================
    * COMPLETION OVERLAY OPENER
    * ======================================================
-   *
-   * This function accepts either:
-   *
-   *   openCompletionOverlay(["Brightness +20"])
-   *
-   * or old-style:
-   *
-   *   openCompletionOverlay(true)
-   *
-   * If no edit array is supplied, it reads the latest
-   * applied actions from the layers ref.
    */
 
   function openCompletionOverlay(
-  edits,
-  nextWorkingFile = null
-) {
-  let sourceEdits = [];
-
-  /*
-  ========================================================
-  EXPLICIT EDITS
-  ========================================================
-  */
-
-  if (Array.isArray(edits)) {
-    sourceEdits = edits;
-  }
-
-  /*
-  ========================================================
-  FALLBACK
-  ========================================================
-  */
-
-  else if (
-    Array.isArray(
-      layers?.appliedActionsRef?.current
-    )
+    edits,
+    nextWorkingFile = null
   ) {
-    sourceEdits =
-      layers.appliedActionsRef.current;
-  }
+    let sourceEdits = [];
 
-  /*
-  ========================================================
-  NORMALIZE
-  ========================================================
-  */
-
-  const safeEdits =
-    sourceEdits
-      .filter(Boolean)
-      .map((edit) =>
-        String(edit).trim()
+    if (Array.isArray(edits)) {
+      sourceEdits = edits;
+    } else if (
+      Array.isArray(
+        layers?.appliedActionsRef?.current
       )
-      .filter(Boolean);
+    ) {
+      sourceEdits =
+        layers.appliedActionsRef.current;
+    }
 
-  /*
-  ========================================================
-  SAVE FINAL FILE FOR AFTER OVERLAY
-  ========================================================
-  */
+    const safeEdits =
+      sourceEdits
+        .filter(Boolean)
+        .map((edit) =>
+          String(edit).trim()
+        )
+        .filter(Boolean);
 
-  if (nextWorkingFile) {
-    completionFileRef.current =
-      nextWorkingFile;
+    if (nextWorkingFile) {
+      completionFileRef.current =
+        nextWorkingFile;
+    }
+
+    console.log(
+      "[COMPLETION] Opening overlay"
+    );
+
+    console.log(
+      "[COMPLETION] Edits:",
+      safeEdits
+    );
+
+    console.log(
+      "[COMPLETION] Pending file:",
+      nextWorkingFile
+    );
+
+    setCompletionEdits(safeEdits);
+    setShowComplete(true);
   }
-
-  console.log(
-    "[COMPLETION] Opening overlay"
-  );
-
-  console.log(
-    "[COMPLETION] Edits:",
-    safeEdits
-  );
-
-  console.log(
-    "[COMPLETION] Pending file:",
-    nextWorkingFile
-  );
-
-  /*
-  IMPORTANT:
-  Save edits before opening overlay.
-  */
-
-  setCompletionEdits(
-    safeEdits
-  );
-
-  setShowComplete(true);
-}
 
   /*
    * ======================================================
@@ -303,7 +268,7 @@ function ImageEditor({ file, onComplete, onClose }) {
     setZoom,
     setImageOffset,
 
-    setActiveTool,
+    setActiveTool: activateTool,
 
     resetLiveEdits,
 
@@ -341,7 +306,7 @@ function ImageEditor({ file, onComplete, onClose }) {
     canvasRef,
     previewRef,
 
-    setActiveTool,
+    setActiveTool: activateTool,
 
     editorControlsDisabled,
     applying,
@@ -375,7 +340,7 @@ function ImageEditor({ file, onComplete, onClose }) {
 
     canvasRef,
 
-    setActiveTool,
+    setActiveTool: activateTool,
 
     workingFile,
     setWorkingFile,
@@ -400,10 +365,6 @@ function ImageEditor({ file, onComplete, onClose }) {
    * ======================================================
    * BACKGROUND REMOVE
    * ======================================================
-   *
-   * IMPORTANT:
-   * Use openCompletionOverlay instead of raw
-   * setShowComplete.
    */
 
   const background =
@@ -418,7 +379,7 @@ function ImageEditor({ file, onComplete, onClose }) {
 
       setImageOffset,
 
-      setActiveTool,
+      setActiveTool: activateTool,
 
       resetImageDrag:
         imageDrag.resetImageDrag,
@@ -460,55 +421,49 @@ function ImageEditor({ file, onComplete, onClose }) {
    * ======================================================
    * APPLY ALL
    * ======================================================
-   *
-   * IMPORTANT:
-   * useApplyAll sends the actual edits array to
-   * openCompletionOverlay().
    */
 
   const {
-  handleApply,
-} = useApplyAll({
-  canvasRef,
+    handleApply,
+  } = useApplyAll({
+    canvasRef,
 
-  workingFile,
-  setWorkingFile,
+    workingFile,
+    setWorkingFile,
 
-  objectMode,
-  resizeMode,
-  cropMode,
+    objectMode,
+    resizeMode,
+    cropMode,
 
-  applying,
-  setApplying,
+    applying,
+    setApplying,
 
-  liveState: {
-    brightness,
-    contrast,
-    saturation,
+    liveState: {
+      brightness,
+      contrast,
+      saturation,
 
-    rotation,
+      rotation,
 
-    flipX,
-    flipY,
+      flipX,
+      flipY,
 
-    selectedEffects:
-      effects.selectedEffects,
-  },
+      selectedEffects:
+        effects.selectedEffects,
+    },
 
-  layers,
+    layers,
 
-  // IMPORTANT:
-  // Needed for preserving previously applied effects
-  effects,
+    effects,
 
-  clearLiveEdits,
+    clearLiveEdits,
 
-  setEffectPreviewSrc,
-  setShowEffects,
+    setEffectPreviewSrc,
+    setShowEffects,
 
-  setShowComplete:
-    openCompletionOverlay,
-});
+    setShowComplete:
+      openCompletionOverlay,
+  });
 
   /*
    * ======================================================
@@ -605,7 +560,6 @@ function ImageEditor({ file, onComplete, onClose }) {
       setSaturation,
 
       setRotation,
-
       setFlipX,
       setFlipY,
 
@@ -655,85 +609,38 @@ function ImageEditor({ file, onComplete, onClose }) {
    */
 
   function handleReset() {
-  if (
-    editorControlsDisabled
-  ) {
-    return;
+    if (editorControlsDisabled) {
+      return;
+    }
+
+    resetLiveEdits();
+
+    effects.clearEffectHistory();
+
+    crop.resetCrop();
+
+    setActiveTool(null);
+
+    setShowEffects(false);
+
+    setShowComplete(false);
+
+    setCompletionEdits([]);
+
+    completionFileRef.current = null;
+
+    setEffectPreviewSrc("");
+
+    resize.clearResizeState();
+
+    object.resetObjectState();
+
+    layers.clearLayers();
+
+    if (workingFile !== file) {
+      setWorkingFile(file);
+    }
   }
-
-  /*
-  ========================================================
-  RESET LIVE EDITS
-  ========================================================
-  */
-
-  resetLiveEdits();
-
-  /*
-  ========================================================
-  CLEAR EFFECT HISTORY
-  ========================================================
-  */
-
-  effects.clearEffectHistory();
-
-  /*
-  ========================================================
-  RESET CROP
-  ========================================================
-  */
-
-  crop.resetCrop();
-
-  setActiveTool(null);
-
-  setShowEffects(false);
-
-  /*
-  ========================================================
-  RESET COMPLETION
-  ========================================================
-  */
-
-  setShowComplete(false);
-
-  setCompletionEdits([]);
-
-  completionFileRef.current =
-    null;
-
-  setEffectPreviewSrc("");
-
-  /*
-  ========================================================
-  RESET RESIZE / OBJECT
-  ========================================================
-  */
-
-  resize.clearResizeState();
-
-  object.resetObjectState();
-
-  /*
-  ========================================================
-  CLEAR OPERATION LAYERS
-  ========================================================
-  */
-
-  layers.clearLayers();
-
-  /*
-  ========================================================
-  RESTORE ORIGINAL FILE
-  ========================================================
-  */
-
-  if (
-    workingFile !== file
-  ) {
-    setWorkingFile(file);
-  }
-}
 
   /*
    * ======================================================
@@ -742,58 +649,35 @@ function ImageEditor({ file, onComplete, onClose }) {
    */
 
   function handleComplete() {
-  const finalFile =
-    completionFileRef.current ||
-    workingFile;
+    const finalFile =
+      completionFileRef.current ||
+      workingFile;
 
-  if (!finalFile) {
-    return;
+    if (!finalFile) {
+      return;
+    }
+
+    console.log(
+      "[COMPLETION] Overlay finished"
+    );
+
+    console.log(
+      "[COMPLETION] Updating main image:",
+      finalFile
+    );
+
+    setWorkingFile(finalFile);
+
+    setShowComplete(false);
+
+    setCompletionEdits([]);
+
+    completionFileRef.current = null;
+
+    onComplete?.(finalFile);
+
+    onClose?.();
   }
-
-  console.log(
-    "[COMPLETION] Overlay finished"
-  );
-
-  console.log(
-    "[COMPLETION] Updating main image:",
-    finalFile
-  );
-
-  /*
-  ========================================================
-  NOW UPDATE MAIN IMAGE
-  ========================================================
-  */
-
-  setWorkingFile(
-    finalFile
-  );
-
-  /*
-  ========================================================
-  CLOSE COMPLETION OVERLAY
-  ========================================================
-  */
-
-  setShowComplete(false);
-
-  setCompletionEdits([]);
-
-  completionFileRef.current =
-    null;
-
-  /*
-  ========================================================
-  SEND FINAL FILE TO PARENT
-  ========================================================
-  */
-
-  onComplete?.(
-    finalFile
-  );
-
-  onClose?.();
-}
 
   /*
    * ======================================================
@@ -933,7 +817,9 @@ function ImageEditor({ file, onComplete, onClose }) {
                   crop.isCtrlDragging
                 }
 
-                isCtrlPressed={isCtrlPressed}
+                isCtrlPressed={
+                  isCtrlPressed
+                }
 
                 setIsCropHovering={
                   crop.setIsCropHovering
@@ -1248,132 +1134,161 @@ function ImageEditor({ file, onComplete, onClose }) {
           />
         )}
 
-        {/* RESIZE DOCK */}
+        {/* =================================================
+            RESIZE DOCK
 
-        <DraggableDock>
-          <ResizeDock
-            resizeMode={resizeMode}
+            IMPORTANT:
+            Mount only while resizeMode is true.
+            This guarantees a fresh dock instance after
+            closing and reopening Resize.
+            ================================================= */}
 
-            resizeWidth={
-              resize.resizeWidth
+        {resizeMode && (
+          <DraggableDock>
+            <ResizeDock
+              resizeMode={resizeMode}
+
+              resizeWidth={
+                resize.resizeWidth
+              }
+
+              resizeHeight={
+                resize.resizeHeight
+              }
+
+              resizeUnit={
+                resize.resizeUnit
+              }
+
+              resizeResolution={
+                resize.resizeResolution
+              }
+
+              resizeResample={
+                resize.resizeResample
+              }
+
+              resizeLockRatio={
+                resize.resizeLockRatio
+              }
+
+              applying={applying}
+
+              getDisplayValue={
+                resize.getDisplayValue
+              }
+
+              handleResizeWidthChange={
+                resize.handleResizeWidthChange
+              }
+
+              handleResizeHeightChange={
+                resize.handleResizeHeightChange
+              }
+
+              handleResizeUnitChange={
+                resize.handleResizeUnitChange
+              }
+
+              handleResolutionChange={
+                resize.handleResolutionChange
+              }
+
+              setResizeLockRatio={
+                resize.setResizeLockRatio
+              }
+
+              setResizeResample={
+                resize.setResizeResample
+              }
+
+              resetResizeDimensions={
+                resize.resetResizeDimensions
+              }
+
+              cancelResize={
+                resize.cancelResize
+              }
+
+              applyResize={
+                resize.applyResize
+              }
+            />
+          </DraggableDock>
+        )}
+
+        {/* =================================================
+            CROP DOCK
+
+            IMPORTANT:
+            Mount only while cropMode is true.
+            This guarantees a fresh dock instance after
+            closing and reopening Crop.
+            ================================================= */}
+
+        {cropMode && (
+          <DraggableDock>
+            <CropDock
+              activeTool={activeTool}
+
+              CROP_PRESETS={CROP_PRESETS}
+
+              cropPreset={crop.cropPreset}
+
+              handleCropPreset={
+                crop.handleCropPreset
+              }
+
+              zoom={zoom}
+              setZoom={setZoom}
+
+              cancelCrop={
+                crop.cancelCrop
+              }
+
+              applyCrop={
+                crop.applyCrop
+              }
+
+              applying={applying}
+            />
+          </DraggableDock>
+        )}
+
+        {/* =================================================
+            OBJECT REMOVE DOCK
+
+            Mount only while objectMode is active.
+            ================================================= */}
+
+        {objectMode && (
+          <ObjectRemoveDock
+            objectMode={objectMode}
+            aiObjectMode={aiObjectMode}
+
+            objectBrushSize={
+              object.objectBrushSize
             }
 
-            resizeHeight={
-              resize.resizeHeight
+            setObjectBrushSize={
+              object.setObjectBrushSize
             }
 
-            resizeUnit={
-              resize.resizeUnit
+            cancelObjectRemove={
+              object.cancelObjectRemove
             }
 
-            resizeResolution={
-              resize.resizeResolution
+            applyObjectRemove={
+              object.applyObjectRemove
             }
 
-            resizeResample={
-              resize.resizeResample
+            objectApplying={
+              objectApplying
             }
 
-            resizeLockRatio={
-              resize.resizeLockRatio
-            }
-
-            applying={applying}
-
-            getDisplayValue={
-              resize.getDisplayValue
-            }
-
-            handleResizeWidthChange={
-              resize.handleResizeWidthChange
-            }
-
-            handleResizeHeightChange={
-              resize.handleResizeHeightChange
-            }
-
-            handleResizeUnitChange={
-              resize.handleResizeUnitChange
-            }
-
-            handleResolutionChange={
-              resize.handleResolutionChange
-            }
-
-            setResizeLockRatio={
-              resize.setResizeLockRatio
-            }
-
-            setResizeResample={
-              resize.setResizeResample
-            }
-
-            resetResizeDimensions={
-              resize.resetResizeDimensions
-            }
-
-            cancelResize={
-              resize.cancelResize
-            }
-
-            applyResize={
-              resize.applyResize
-            }
+            anchor={objectDockAnchor}
           />
-        </DraggableDock>
-
-        {/* CROP DOCK */}
-
-        <DraggableDock>
-          <CropDock
-            activeTool={activeTool}
-
-            CROP_PRESETS={CROP_PRESETS}
-
-            cropPreset={crop.cropPreset}
-
-            handleCropPreset={
-              crop.handleCropPreset
-            }
-
-            zoom={zoom}
-            setZoom={setZoom}
-
-            cancelCrop={crop.cancelCrop}
-            applyCrop={crop.applyCrop}
-
-            applying={applying}
-          />
-        </DraggableDock>
-
-        {/* OBJECT REMOVE DOCK */}
-
-        <ObjectRemoveDock
-          objectMode={objectMode}
-          aiObjectMode={aiObjectMode}
-
-          objectBrushSize={
-            object.objectBrushSize
-          }
-
-          setObjectBrushSize={
-            object.setObjectBrushSize
-          }
-
-          cancelObjectRemove={
-            object.cancelObjectRemove
-          }
-
-          applyObjectRemove={
-            object.applyObjectRemove
-          }
-
-          objectApplying={
-            objectApplying
-          }
-
-          anchor={objectDockAnchor}
-        />
+        )}
       </div>
     </div>
   );
