@@ -106,29 +106,31 @@ export default function useObjectRemove({
     setActiveTool("object");
   }
 
-  function handleAIObjectRemove() {
-    if (!workingFile || removingBackground || objectApplying || aiObjectRemoved) return;
+ function handleAIObjectRemove() {
+  if (!workingFile || removingBackground || objectApplying) return;
 
-    setShowEffects(false);
-    setObjectRemovalMode("ai");
+  setAiObjectRemoved(false);
 
-    resetImageDrag();
+  setShowEffects(false);
+  setObjectRemovalMode("ai");
 
-    snapshotObjectBaseCanvas();
+  resetImageDrag();
 
-    objectDrawingRef.current = false;
-    objectLastPointRef.current = null;
-    ensureAIObjectMaskCanvas();
-    clearAIObjectMask();
-    setActiveTool("ai-object");
+  snapshotObjectBaseCanvas();
 
-    // Start downloading/initializing the MI-GAN model while the user paints
-    // the selection. The actual Apply action reuses this same cached session.
-    // This is intentionally isolated from Background Remove.
-    void getMiGanSession().catch((error) => {
-      console.warn("AI Object Remove model preload failed; it will retry on Apply.", error);
-    });
-  }
+  objectDrawingRef.current = false;
+  objectLastPointRef.current = null;
+  ensureAIObjectMaskCanvas();
+  clearAIObjectMask();
+  setActiveTool("ai-object");
+
+  void getMiGanSession().catch((error) => {
+    console.warn(
+      "AI Object Remove model preload failed; it will retry on Apply.",
+      error
+    );
+  });
+}
 
   function cancelObjectRemove() {
     const canvas = canvasRef.current;
