@@ -1,0 +1,3268 @@
+﻿===== EVERYTHING CONVERSION DEBUG =====
+
+
+==================================================
+FILE: src\App.jsx
+==================================================
+import {
+  useEffect,
+  useMemo,
+  useState,
+  lazy,
+  Suspense,
+} from "react";
+
+import {
+  FileImage,
+  FileText,
+  Upload,
+  ShieldCheck,
+  Zap,
+  Sparkles,
+  X,
+  ArrowRight,
+  Settings2,
+} from "lucide-react";
+
+import {
+  getFileCategory,
+  getDetectedFormat,
+} from "./utils/fileTypes";
+
+import {
+  getConversionOptions,
+} from "./utils/formatOptions";
+
+import {
+  convertImage,
+  convertImageToPdf,
+  convertPdfToImage,
+} from "./services/converterApi";
+
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+} from "react-router-dom";
+
+import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
+
+import DropZone from "./components/DropZone";
+
+import Home from "./pages/Home";
+// Keep the homepage in the initial bundle. Load secondary pages only when visited.
+const About = lazy(() => import("./pages/About"));
+const Features = lazy(() => import("./pages/Features"));
+const Contact = lazy(() => import("./pages/Contact"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Recharge = lazy(() => import("./pages/Recharge"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const AdminPanel = lazy(() => import("./admin/AdminPanel"));
+import {
+  useAuth,
+} from "./context/AuthContext";
+import { downloadFile } from "./utils/downloadFile";
+
+
+/* =========================================
+   APP LAYOUT
+========================================= */
+
+function AppLayout({ children }) {
+  return (
+    <div className="min-h-screen bg-white text-slate-900 transition-colors dark:bg-slate-950 dark:text-white">
+
+      <Navbar />
+
+      <main>
+        {children}
+      </main>
+
+      <Footer />
+
+    </div>
+  );
+}
+
+
+/* =========================================
+   APP
+========================================= */
+
+function App() {
+  const { user } = useAuth();
+  return (
+    <BrowserRouter basename="/Everything">
+
+      <Suspense fallback={<div className="min-h-[50vh] px-4 py-16 text-center text-sm text-slate-500" role="status">Loading pageâ€¦</div>}>
+      <Routes>
+
+        {/* HOME */}
+
+        <Route
+          path="/"
+          element={
+            <AppLayout>
+              <Home />
+
+              <section
+                className="border-t border-slate-200 px-4 py-20 dark:border-slate-800 sm:px-6 lg:px-8"
+              >
+
+                <div className="mx-auto max-w-7xl">
+
+                  <div className="mb-12">
+
+                    <p className="mb-3 text-sm font-semibold uppercase tracking-widest text-slate-500">
+                      Features
+                    </p>
+
+                    <h2 className="text-3xl font-bold sm:text-4xl">
+                      Everything you need
+                    </h2>
+
+                    <p className="mt-4 text-slate-600 dark:text-slate-400">
+                      One modern workspace for image
+                      and PDF conversion.
+                    </p>
+
+                  </div>
+
+                  <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+
+                    <FeatureCard
+                      icon={<Upload size={22} />}
+                      title="Drag & Drop"
+                      description="Drop your files directly into the converter."
+                    />
+
+                    <FeatureCard
+                      icon={<FileImage size={22} />}
+                      title="Image Converter"
+                      description="Convert JPG, JPEG, PNG and WEBP files."
+                    />
+
+                    <FeatureCard
+                      icon={<FileText size={22} />}
+                      title="PDF Converter"
+                      description="Convert PDF pages into popular image formats."
+                    />
+
+                    <FeatureCard
+                      icon={<Settings2 size={22} />}
+                      title="Image Editor"
+                      description="Edit, crop, resize and optimize images."
+                    />
+
+                  </div>
+
+                </div>
+
+              </section>
+
+              <section
+                className="px-4 py-20 sm:px-6 lg:px-8"
+              >
+
+                <div className="mx-auto max-w-4xl rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center dark:border-slate-800 dark:bg-slate-900/50 sm:p-12">
+
+                  <h2 className="text-3xl font-bold">
+                    One place for your files
+                  </h2>
+
+                  <p className="mx-auto mt-4 max-w-2xl leading-7 text-slate-600 dark:text-slate-400">
+                    Upload your file, select a format,
+                    edit when needed, convert it,
+                    and download the result.
+                  </p>
+
+                </div>
+
+              </section>
+
+            </AppLayout>
+          }
+        />
+
+
+        {/* ABOUT */}
+
+        <Route
+          path="/about"
+          element={
+            <AppLayout>
+              <About />
+            </AppLayout>
+          }
+        />
+
+
+        {/* FEATURES */}
+
+        <Route
+          path="/features"
+          element={
+            <AppLayout>
+              <Features />
+            </AppLayout>
+          }
+        />
+
+
+        {/* CONTACT */}
+
+        <Route
+          path="/contact"
+          element={
+            <AppLayout>
+              <Contact />
+            </AppLayout>
+          }
+        />
+
+
+        {/* ADMIN PANEL */}
+
+        <Route
+          path="/admin"
+          element={<AdminPanel />}
+        />
+
+
+        {/* LOGIN */}
+
+        <Route
+          path="/login"
+          element={<Auth />}
+        />
+
+
+
+
+        {/* REGISTER */}
+
+        <Route
+          path="/register"
+          element={<Auth />}
+        />
+
+
+        {/* RECHARGE */}
+
+        <Route
+          path="/recharge"
+          element={<Recharge />}
+        />
+
+
+        {/* UNKNOWN URL */}
+
+        <Route
+          path="*"
+          element={
+            <AppLayout>
+              <Home />
+            </AppLayout>
+          }
+        />
+
+        <Route
+          path="/forgot-password"
+          element={<ForgotPassword />}
+        />
+
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
+        />
+
+      </Routes>
+      </Suspense>
+
+    </BrowserRouter>
+  );
+}
+
+
+/* =========================================
+   UPLOAD BOX
+========================================= */
+
+function UploadBox() {
+
+  const [dragging, setDragging] =
+    useState(false);
+
+  const [file, setFile] =
+    useState(null);
+
+  const [selectedFormat, setSelectedFormat] =
+    useState(null);
+
+  const [isConverting, setIsConverting] =
+    useState(false);
+
+  const [conversionStatus, setConversionStatus] =
+    useState("");
+
+  const [showImageEditor, setShowImageEditor] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+
+  /* =======================================
+     HANDLE FILE
+  ======================================= */
+
+  function handleFile(selectedFile) {
+
+    if (!selectedFile) {
+      return;
+    }
+
+
+    const category =
+      getFileCategory(selectedFile);
+
+
+    const detectedFormat =
+      getDetectedFormat(selectedFile);
+
+
+    const supportedFormats = [
+      "jpg",
+      "jpeg",
+      "png",
+      "webp",
+      "pdf",
+    ];
+
+
+    if (
+      category === "unknown" ||
+      !supportedFormats.includes(
+        detectedFormat
+      )
+    ) {
+
+      setError(
+        "Please upload JPG, JPEG, PNG, WEBP or PDF."
+      );
+
+      return;
+    }
+
+
+    setFile(selectedFile);
+
+    setSelectedFormat(null);
+
+    setConversionStatus("");
+
+    setError("");
+  }
+
+
+  /* =======================================
+     EXTENSION
+  ======================================= */
+
+  const extension =
+    useMemo(() => {
+
+      if (!file) {
+        return "";
+      }
+
+      return getDetectedFormat(file);
+
+    }, [file]);
+
+
+  /* =======================================
+     OPTIONS
+  ======================================= */
+
+  const options =
+    useMemo(() => {
+
+      if (!extension) {
+        return [];
+      }
+
+      return getConversionOptions(
+        extension
+      );
+
+    }, [extension]);
+
+
+  /* =======================================
+     CONVERT
+  ======================================= */
+
+  const handleConvert =
+    async () => {
+
+    console.log("CONVERT CREDIT CHECK:", user?.credits, "USER:", user);
+
+    if ((user?.credits ?? 0) <= 0) {
+      window.location.href = "/Everything/recharge";
+      return;
+    }
+
+      if (!file) {
+
+        setError(
+          "Please select a file."
+        );
+
+        return;
+      }
+
+
+      if (!selectedFormat) {
+
+        setError(
+          "Please select an output format."
+        );
+
+        return;
+      }
+
+
+      try {
+
+        setError("");
+
+        setIsConverting(true);
+
+
+        setConversionStatus(
+          extension === "pdf"
+            ? "Analyzing PDF..."
+            : "Preparing conversion..."
+        );
+
+
+        let result;
+
+
+        /* =================================
+           IMAGE ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ PDF
+        ================================= */
+
+        if (
+          extension !== "pdf" &&
+          selectedFormat === "pdf"
+        ) {
+
+          setConversionStatus(
+            "Converting image to PDF..."
+          );
+
+
+          result =
+            await convertImageToPdf(file);
+        }
+
+
+        /* =================================
+           IMAGE ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ IMAGE
+        ================================= */
+
+        else if (
+          extension !== "pdf"
+        ) {
+
+          setConversionStatus(
+            `Converting to ${selectedFormat.toUpperCase()}...`
+          );
+
+
+          result =
+            await convertImage(
+              file,
+              selectedFormat
+            );
+        }
+
+
+        /* =================================
+           PDF ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ IMAGE
+        ================================= */
+
+        else {
+
+          setConversionStatus(
+            `Converting PDF to ${selectedFormat.toUpperCase()}...`
+          );
+
+
+          result =
+            await convertPdfToImage(
+              file,
+              selectedFormat
+            );
+        }
+
+
+        /* =================================
+           RESULT TYPE
+        ================================= */
+
+        if (
+          result?.type === "zip"
+        ) {
+
+          setConversionStatus(
+            "Creating ZIP file..."
+          );
+
+        } else {
+
+          setConversionStatus(
+            "Preparing download..."
+          );
+
+        }
+
+
+        /* =================================
+           DOWNLOAD
+        ================================= */
+
+        const downloadUrl =
+          result?.downloadUrl;
+
+
+        if (!downloadUrl) {
+          throw new Error(
+            "Download URL was not returned by the server."
+          );
+        }
+
+
+        await downloadFile(downloadUrl, result?.fileName);
+
+
+
+
+        /* =================================
+           SUCCESS
+        ================================= */
+
+        setConversionStatus(
+          "ÃƒÂ¢Ã…â€œÃ¢â‚¬Å“ Conversion complete"
+        );
+
+
+      } catch (error) {
+
+        console.error(
+          "FRONTEND CONVERSION ERROR:",
+          error
+        );
+
+
+        console.error(
+          "ERROR NAME:",
+          error?.name
+        );
+
+
+        console.error(
+          "ERROR MESSAGE:",
+          error?.message
+        );
+
+
+        setError(
+          error?.message ||
+          "Conversion failed."
+        );
+
+
+        setConversionStatus("");
+
+        setIsConverting(false);
+
+        return;
+      }
+
+
+      /* =================================
+         CLEAR SUCCESS
+      ================================= */
+
+      setTimeout(() => {
+
+        setConversionStatus("");
+
+        setIsConverting(false);
+
+      }, 1500);
+
+    };
+
+
+  /* =======================================
+     DROP
+  ======================================= */
+
+  function handleDrop(event) {
+
+    event.preventDefault();
+
+    setDragging(false);
+
+
+    const droppedFile =
+      event.dataTransfer.files?.[0];
+
+
+    handleFile(droppedFile);
+  }
+
+
+  /* =======================================
+     REMOVE FILE
+  ======================================= */
+
+  function removeFile() {
+
+    setFile(null);
+
+    setSelectedFormat(null);
+
+    setConversionStatus("");
+
+    setError("");
+
+    setShowImageEditor(false);
+  }
+
+
+  /* =======================================
+     PREVIEW URL
+  ======================================= */
+
+  const previewUrl =
+    useMemo(() => {
+
+      if (
+        !file ||
+        extension === "pdf"
+      ) {
+
+        return "";
+      }
+
+
+      return URL.createObjectURL(file);
+
+    }, [file, extension]);
+
+
+  /* =======================================
+     CLEANUP PREVIEW
+  ======================================= */
+
+  useEffect(() => {
+
+    return () => {
+
+      if (previewUrl) {
+
+        URL.revokeObjectURL(
+          previewUrl
+        );
+
+      }
+
+    };
+
+  }, [previewUrl]);
+
+
+  /* =======================================
+     UI
+  ======================================= */
+
+  return (
+
+    <DropZone
+      file={file}
+      extension={extension}
+      options={options}
+      selectedFormat={selectedFormat}
+      setSelectedFormat={setSelectedFormat}
+      isConverting={isConverting}
+      conversionStatus={conversionStatus}
+      error={error}
+      previewUrl={previewUrl}
+      onFileSelect={handleFile}
+      onRemoveFile={removeFile}
+      onConvert={handleConvert}
+      onEditComplete={(editedFile) => {
+
+        setFile(editedFile);
+
+        setSelectedFormat(null);
+
+        setConversionStatus("");
+
+        setError("");
+
+      }}
+    />
+
+  );
+}
+
+
+/* =========================================
+   FEATURE CARD
+========================================= */
+
+function FeatureCard({
+  icon,
+  title,
+  description,
+}) {
+
+  return (
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900">
+
+      <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
+
+        {icon}
+
+      </div>
+
+
+      <h3 className="font-bold">
+        {title}
+      </h3>
+
+
+      <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+
+        {description}
+
+      </p>
+
+    </div>
+
+  );
+}
+
+
+export default App;
+
+
+
+
+==================================================
+FILE: src\components\DropZone.jsx
+==================================================
+import { lazy, Suspense, useState } from "react";
+
+import {
+  Upload,
+  FileText,
+  X,
+  ArrowRight,
+} from "lucide-react";
+
+const ImageEditor = lazy(() => import("./editor/ImageEditor"));
+
+
+/* =========================================================
+   NORMALIZE EDITED FILE NAME
+   =========================================================
+
+   Examples:
+
+   photo.jpg
+   photo-edited.jpg
+   photo-cropped.jpg
+   photo-edited-edited.jpg
+   photo-cropped-edited.jpg
+
+   à¦¸à¦¬à¦¶à§‡à¦·à§‡:
+
+   photo-edited.jpg
+========================================================= */
+
+function createEditedFileName(file) {
+  if (!file?.name) {
+    return file?.name || "edited-image";
+  }
+
+  const lastDotIndex = file.name.lastIndexOf(".");
+
+  const hasExtension =
+    lastDotIndex > 0;
+
+  const extension = hasExtension
+    ? file.name.slice(lastDotIndex)
+    : "";
+
+  let baseName = hasExtension
+    ? file.name.slice(0, lastDotIndex)
+    : file.name;
+
+
+  /* -----------------------------------------
+     Remove generated suffixes
+  ----------------------------------------- */
+
+  baseName = baseName
+    .replace(/[-_ ]edited$/i, "")
+    .replace(/[-_ ]cropped$/i, "");
+
+
+  /*
+     Remove multiple generated suffixes.
+
+     photo-edited-edited
+     photo-cropped-edited
+     photo-edited-cropped
+
+     à¦¸à¦¬ clean à¦¹à§Ÿà§‡:
+     photo
+  */
+
+  let previousName = "";
+
+  while (previousName !== baseName) {
+
+    previousName = baseName;
+
+    baseName = baseName
+      .replace(/[-_ ]edited$/i, "")
+      .replace(/[-_ ]cropped$/i, "");
+  }
+
+
+  return `${baseName}-edited${extension}`;
+}
+
+
+/* =========================================================
+   CREATE RENAMED FILE
+========================================================= */
+
+function renameEditedFile(file) {
+
+  if (!(file instanceof File)) {
+    return file;
+  }
+
+  const newName =
+    createEditedFileName(file);
+
+
+  /*
+     à¦¯à¦¦à¦¿ à¦¨à¦¾à¦® already correct à¦¹à§Ÿ,
+     à¦¤à¦¾à¦¹à¦²à§‡ à¦¨à¦¤à§à¦¨ File à¦¬à¦¾à¦¨à¦¾à¦¨à§‹à¦° à¦¦à¦°à¦•à¦¾à¦° à¦¨à§‡à¦‡à¥¤
+  */
+
+  if (file.name === newName) {
+    return file;
+  }
+
+
+  return new File(
+    [file],
+    newName,
+    {
+      type: file.type,
+      lastModified: file.lastModified,
+    }
+  );
+}
+
+
+export default function DropZone({
+  file,
+  extension,
+  options,
+  selectedFormat,
+  setSelectedFormat,
+  isConverting,
+  conversionStatus,
+  error,
+  previewUrl,
+  onFileSelect,
+  onRemoveFile,
+  onConvert,
+  onEditComplete,
+}) {
+
+  const [dragging, setDragging] = useState(false);
+  const [showImageEditor, setShowImageEditor] = useState(false);
+
+
+  /* =======================================
+     FILE INPUT
+  ======================================= */
+
+  function handleFileChange(event) {
+
+    const selectedFile =
+      event.target.files?.[0];
+
+    if (selectedFile) {
+      onFileSelect(selectedFile);
+    }
+
+    // Same file à¦†à¦¬à¦¾à¦° select à¦•à¦°à¦¾à¦° à¦¸à§à¦¯à§‹à¦—
+    event.target.value = "";
+  }
+
+
+  /* =======================================
+     DRAG OVER
+  ======================================= */
+
+  function handleDragOver(event) {
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    setDragging(true);
+  }
+
+
+  /* =======================================
+     DRAG LEAVE
+  ======================================= */
+
+  function handleDragLeave(event) {
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    setDragging(false);
+  }
+
+
+  /* =======================================
+     DROP
+  ======================================= */
+
+  function handleDrop(event) {
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    setDragging(false);
+
+    const droppedFile =
+      event.dataTransfer.files?.[0];
+
+    if (droppedFile) {
+      onFileSelect(droppedFile);
+    }
+  }
+
+
+  /* =======================================
+     EDIT COMPLETE
+  ======================================= */
+
+  function handleEditorComplete(editedFile) {
+
+    if (!editedFile) {
+      return;
+    }
+
+
+    /*
+       Important:
+
+       ImageEditor à¦¥à§‡à¦•à§‡ à¦¯à¦¦à¦¿ à¦†à¦¸à§‡:
+
+       photo.jpg
+       photo-cropped.jpg
+       photo-edited.jpg
+       photo-edited-edited.jpg
+
+       à¦à¦–à¦¾à¦¨à§‡ à¦¸à¦¬ normalize à¦¹à¦¬à§‡:
+
+       photo-edited.jpg
+    */
+
+    const finalEditedFile =
+      renameEditedFile(editedFile);
+
+
+    /*
+       Parent/Home-à¦ updated File à¦ªà¦¾à¦ à¦¾à¦¨à§‹ à¦¹à¦šà§à¦›à§‡à¥¤
+
+       à¦à¦° à¦«à¦²à§‡ main image preview-à¦“ update à¦¹à¦¬à§‡,
+       à¦¯à¦¦à¦¿ parent-à¦à¦° onEditComplete file state update à¦•à¦°à§‡à¥¤
+    */
+
+    onEditComplete?.(finalEditedFile);
+
+
+    /*
+       Editor à¦¬à¦¨à§à¦§
+    */
+
+    setShowImageEditor(false);
+  }
+
+
+  return (
+    <div
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={`rounded-3xl border-2 border-dashed p-4 transition sm:p-6 ${
+        dragging
+          ? "border-slate-950 bg-slate-100 dark:border-white dark:bg-slate-900"
+          : "border-slate-300 bg-slate-100 dark:border-slate-700 dark:bg-slate-900"
+      }`}
+    >
+
+      {/* =================================
+          EMPTY STATE
+      ================================= */}
+
+      {!file ? (
+
+        <label
+          htmlFor="everything-file-input"
+          className="flex min-h-[300px] cursor-pointer flex-col items-center justify-center rounded-2xl px-4 text-center"
+        >
+
+          <input
+            id="everything-file-input"
+            type="file"
+            className="hidden"
+            accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+            onChange={handleFileChange}
+          />
+
+
+          {/* ICON */}
+
+          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800">
+
+            <Upload size={28} />
+
+          </div>
+
+
+          {/* TITLE */}
+
+          <h3 className="text-xl font-bold">
+            Drop your file here
+          </h3>
+
+
+          {/* DESCRIPTION */}
+
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            or click to browse from your device
+          </p>
+
+
+          {/* BUTTON */}
+
+          <span className="mt-6 rounded-xl bg-slate-950 px-6 py-3 text-sm font-semibold text-white dark:bg-white dark:text-slate-950">
+            Choose File
+          </span>
+
+
+          {/* SUPPORTED */}
+
+          <p className="mt-5 text-xs text-slate-400">
+            JPG Â· JPEG Â· PNG Â· WEBP Â· PDF
+          </p>
+
+
+          {/* ERROR */}
+
+          {error && (
+            <p className="mt-4 text-sm font-medium text-red-500">
+              {error}
+            </p>
+          )}
+
+        </label>
+
+      ) : (
+
+        /* =================================
+           FILE SELECTED
+        ================================= */
+
+        <div className="rounded-2xl bg-slate-50 p-6 dark:bg-slate-950">
+
+          {/* FILE HEADER */}
+
+          <div className="flex items-start justify-between gap-4">
+
+            <div className="flex min-w-0 items-center gap-4">
+
+              {/* PREVIEW */}
+
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-900">
+
+                {extension === "pdf" ? (
+
+                  <FileText size={30} />
+
+                ) : (
+
+                  <img
+                    src={previewUrl}
+                    alt={file.name}
+                    className="h-full w-full object-cover"
+                  />
+
+                )}
+
+              </div>
+
+
+              {/* FILE INFO */}
+
+              <div className="min-w-0">
+
+                <h3 className="truncate font-bold">
+                  {file.name}
+                </h3>
+
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+
+                  {(file.size / 1024 / 1024).toFixed(2)}
+                  {" MB"}
+                  {" â€¢ "}
+                  {extension.toUpperCase()}
+
+                </p>
+
+              </div>
+
+            </div>
+
+
+            {/* REMOVE */}
+
+            <button
+              type="button"
+              onClick={onRemoveFile}
+              disabled={isConverting}
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800"
+              aria-label="Remove file"
+            >
+
+              <X size={20} />
+
+            </button>
+
+          </div>
+
+
+          {/* =================================
+              CONVERSION OPTIONS
+          ================================= */}
+
+          <div className="mt-8">
+
+            <div className="mb-4 flex items-center gap-2">
+
+              <ArrowRight size={18} />
+
+              <h3 className="font-bold">
+                Convert to
+              </h3>
+
+            </div>
+
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+              {options.map((format) => (
+
+                <button
+                  type="button"
+                  key={format}
+                  disabled={isConverting}
+                  onClick={() =>
+                    setSelectedFormat(format)
+                  }
+                  className={`rounded-xl border px-4 py-4 text-sm font-bold uppercase transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    selectedFormat === format
+                      ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
+                      : "border-slate-200 bg-white hover:border-slate-400 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-600"
+                  }`}
+                >
+
+                  {format}
+
+                </button>
+
+              ))}
+
+            </div>
+
+          </div>
+
+
+          {/* =================================
+              ACTIONS
+          ================================= */}
+
+          <div className="mt-8">
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+
+              {/* EDIT */}
+
+              {extension !== "pdf" && (
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowImageEditor(true)
+                  }
+                  disabled={isConverting}
+                  className="flex-1 rounded-xl border border-slate-300 px-5 py-3 text-sm font-semibold transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-900"
+                >
+                  Edit Image
+                </button>
+
+              )}
+
+
+              {/* CONVERT */}
+
+              <button
+                type="button"
+                onClick={onConvert}
+                disabled={
+                  !selectedFormat ||
+                  isConverting
+                }
+                className="flex-1 rounded-xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-slate-950"
+              >
+
+                {isConverting
+                  ? conversionStatus || "Converting..."
+                  : "Convert to..."}
+
+              </button>
+
+            </div>
+
+
+            {/* ERROR */}
+
+            {error && (
+
+              <p className="mt-3 text-sm font-medium text-red-500">
+                {error}
+              </p>
+
+            )}
+
+          </div>
+
+        </div>
+      )}
+
+
+      {/* =================================
+          IMAGE EDITOR
+      ================================= */}
+
+      {showImageEditor &&
+        file &&
+        extension !== "pdf" && (
+
+          <Suspense fallback={<div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-6 text-center text-sm text-white" role="status">Loading image editorâ€¦</div>}>
+            <ImageEditor
+              file={file}
+              onClose={() => setShowImageEditor(false)}
+              onComplete={handleEditorComplete}
+            />
+          </Suspense>
+
+        )}
+
+    </div>
+  );
+}
+
+
+==================================================
+FILE: src\components\FilePreview.jsx
+==================================================
+import { FileText, X } from "lucide-react";
+
+function FilePreview({ file, onRemove }) {
+  if (!file) return null;
+
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf";
+
+  const previewUrl = isImage
+    ? URL.createObjectURL(file)
+    : null;
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+
+      {/* Remove */}
+      <button
+        onClick={onRemove}
+        className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur transition hover:bg-black"
+      >
+        <X size={18} />
+      </button>
+
+      {/* IMAGE PREVIEW */}
+      {isImage && previewUrl && (
+        <div className="flex min-h-[280px] items-center justify-center bg-slate-100 p-4 dark:bg-slate-950">
+          <img
+            src={previewUrl}
+            alt={file.name}
+            className="max-h-[420px] max-w-full rounded-xl object-contain shadow-lg"
+          />
+        </div>
+      )}
+
+      {/* PDF */}
+      {isPdf && (
+        <div className="flex min-h-[280px] flex-col items-center justify-center bg-slate-100 dark:bg-slate-950">
+
+          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-slate-900">
+            <FileText size={38} />
+          </div>
+
+          <p className="mt-5 font-semibold">
+            PDF File
+          </p>
+
+        </div>
+      )}
+
+      {/* FILE INFO */}
+      <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+
+        <p className="truncate font-semibold">
+          {file.name}
+        </p>
+
+        <p className="mt-1 text-sm text-slate-500">
+          {(file.size / 1024 / 1024).toFixed(2)} MB
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
+
+export default FilePreview;
+
+
+==================================================
+FILE: src\components\ProgressBar.jsx
+==================================================
+
+
+==================================================
+FILE: src\services\converterApi.js
+==================================================
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+
+/* ================================
+   RESPONSE
+================================ */
+
+async function parseResponse(response) {
+  const text = await response.text();
+
+  let data = {};
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    const error = new Error(
+      `Server returned invalid response (${response.status}).`
+    );
+
+    error.status = response.status;
+    error.data = {
+      success: false,
+      message: `Invalid server response (${response.status}).`,
+    };
+
+    throw error;
+  }
+
+  if (!response.ok || data.success === false) {
+    const error = new Error(
+      data.message || "Conversion failed."
+    );
+
+    error.status = response.status;
+    error.data = data;
+
+    throw error;
+  }
+
+  return data;
+}
+
+
+/* ================================
+   REFRESH ACCESS TOKEN
+================================ */
+
+async function refreshAccessToken() {
+  try {
+    const refreshToken =
+      localStorage.getItem("refreshToken");
+
+    if (!refreshToken) {
+      console.warn(
+        "REFRESH: No refresh token found."
+      );
+
+      return false;
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/auth/refresh`,
+      {
+        method: "POST",
+
+        credentials: "include",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          refreshToken,
+        }),
+      }
+    );
+
+    const data =
+      await response.json().catch(() => ({}));
+
+    if (!response.ok || !data?.accessToken) {
+      console.error(
+        "REFRESH FAILED:",
+        response.status,
+        data
+      );
+
+      return false;
+    }
+
+    /* Save new access token */
+    localStorage.setItem(
+      "accessToken",
+      data.accessToken
+    );
+
+    /* Backend rotates refresh token */
+    if (data.refreshToken) {
+      localStorage.setItem(
+        "refreshToken",
+        data.refreshToken
+      );
+    }
+
+    console.log(
+      "TOKEN REFRESH SUCCESS"
+    );
+
+    return true;
+
+  } catch (error) {
+    console.error(
+      "TOKEN REFRESH ERROR:",
+      error
+    );
+
+    return false;
+  }
+}
+
+
+/* ================================
+   AUTH HEADERS
+================================ */
+
+function getAuthHeaders() {
+  const token =
+    localStorage.getItem("accessToken");
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
+
+/* ================================
+   AUTHENTICATED REQUEST
+================================ */
+
+async function authenticatedFetch(
+  url,
+  options = {},
+  retry = true
+) {
+  const headers = {
+    ...(options.headers || {}),
+    ...getAuthHeaders(),
+  };
+
+  let response = await fetch(url, {
+    ...options,
+
+    headers,
+
+    credentials: "include",
+  });
+
+
+  /* ================================
+     ACCESS TOKEN EXPIRED
+  ================================ */
+
+  if (response.status === 401 && retry) {
+    const refreshed =
+      await refreshAccessToken();
+
+    if (refreshed) {
+      return authenticatedFetch(
+        url,
+        options,
+        false
+      );
+    }
+  }
+
+  return response;
+}
+
+
+/* ================================
+   IMAGE â†’ IMAGE
+================================ */
+
+export async function convertImage(
+  file,
+  outputFormat
+) {
+  const formData = new FormData();
+
+  formData.append(
+    "file",
+    file
+  );
+
+  formData.append(
+    "outputFormat",
+    outputFormat
+  );
+
+
+  const response =
+    await authenticatedFetch(
+      `${API_BASE_URL}/converter/image`,
+      {
+        method: "POST",
+
+        body: formData,
+      }
+    );
+
+
+  const data =
+    await parseResponse(response);
+
+
+  return {
+    ...data,
+
+    downloadUrl:
+      `${SERVER_BASE_URL}${data.downloadUrl}`,
+  };
+}
+
+
+/* ================================
+   IMAGE â†’ PDF
+================================ */
+
+export async function convertImageToPdf(
+  file
+) {
+  const formData = new FormData();
+
+  formData.append(
+    "file",
+    file
+  );
+
+
+  const response =
+    await authenticatedFetch(
+      `${API_BASE_URL}/pdf/image-to-pdf`,
+      {
+        method: "POST",
+
+        body: formData,
+      }
+    );
+
+
+  const data =
+    await parseResponse(response);
+
+
+  return {
+    ...data,
+
+    downloadUrl:
+      `${SERVER_BASE_URL}${data.downloadUrl}`,
+  };
+}
+
+
+/* ================================
+   PDF â†’ IMAGE
+================================ */
+
+export async function convertPdfToImage(
+  file,
+  outputFormat
+) {
+  const formData = new FormData();
+
+  formData.append(
+    "file",
+    file
+  );
+
+  formData.append(
+    "outputFormat",
+    outputFormat
+  );
+
+
+  const response =
+    await authenticatedFetch(
+      `${API_BASE_URL}/pdf/pdf-to-image`,
+      {
+        method: "POST",
+
+        body: formData,
+      }
+    );
+
+
+  const data =
+    await parseResponse(response);
+
+
+  return {
+    ...data,
+
+    downloadUrl:
+      `${SERVER_BASE_URL}${data.downloadUrl}`,
+  };
+}
+
+
+
+
+
+
+==================================================
+FILE: src\utils\downloadFile.js
+==================================================
+/*
+  Reliable download for converted files.
+
+  - Fetches the file as a Blob and saves it with an <a download>, so the
+    page never navigates away (the old window.location.assign replaced the
+    whole app with a JSON error if the file was missing).
+  - If the browser blocks the fetch (CORS / network), falls back to a plain
+    link click, which still downloads thanks to Content-Disposition.
+*/
+function nameFromUrl(url) {
+  try {
+    return decodeURIComponent(new URL(url).pathname.split("/").pop() || "download");
+  } catch {
+    return "download";
+  }
+}
+
+function clickLink(href, fileName) {
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = fileName || "";
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+export async function downloadFile(url, fileName) {
+  const name = fileName || nameFromUrl(url);
+
+  let response;
+  try {
+    response = await fetch(url);
+  } catch {
+    clickLink(url, name); // network/CORS problem -> let the browser handle it
+    return;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      response.status === 404
+        ? "File expired or not found. Please convert again."
+        : `Download failed (${response.status}).`
+    );
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  clickLink(objectUrl, name);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+}
+
+
+==================================================
+FILE: src\utils\fileTypes.js
+==================================================
+const SUPPORTED_FORMATS = [
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "pdf",
+];
+
+
+export function getFileExtension(filename) {
+  if (!filename) return "";
+
+  const lastDot = filename.lastIndexOf(".");
+
+  if (lastDot === -1) return "";
+
+  return filename
+    .slice(lastDot + 1)
+    .toLowerCase();
+}
+
+
+export function getFileCategory(file) {
+  if (!file) return "unknown";
+
+  const extension =
+    getFileExtension(file.name);
+
+  if (
+    SUPPORTED_FORMATS.includes(extension)
+  ) {
+    return extension === "pdf"
+      ? "pdf"
+      : "image";
+  }
+
+  if (file.type === "application/pdf") {
+    return "pdf";
+  }
+
+  if (
+    file.type === "image/jpeg" ||
+    file.type === "image/png" ||
+    file.type === "image/webp"
+  ) {
+    return "image";
+  }
+
+  return "unknown";
+}
+
+
+export function getDetectedFormat(file) {
+  if (!file) return "";
+
+  /*
+    IMPORTANT:
+
+    Original filename has priority.
+
+    photo.jpeg -> jpeg
+    photo.jpg  -> jpg
+    photo.png  -> png
+    photo.webp -> webp
+    file.pdf   -> pdf
+  */
+
+  const extension =
+    getFileExtension(file.name);
+
+  if (
+    SUPPORTED_FORMATS.includes(extension)
+  ) {
+    return extension;
+  }
+
+  /*
+    MIME fallback.
+
+    JPEG stays JPEG.
+    We do NOT convert it to JPG.
+  */
+
+  const mimeMap = {
+    "image/jpeg": "jpeg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "application/pdf": "pdf",
+  };
+
+  return mimeMap[file.type] || "";
+}
+
+
+export function isSupportedFile(file) {
+  const format =
+    getDetectedFormat(file);
+
+  return SUPPORTED_FORMATS.includes(
+    format
+  );
+}
+
+
+==================================================
+FILE: src\utils\formatOptions.js
+==================================================
+const conversionMap = {
+  jpg: ["jpeg", "png", "webp", "pdf"],
+  jpeg: ["jpg", "png", "webp", "pdf"],
+  png: ["jpg", "jpeg", "webp", "pdf"],
+  webp: ["jpg", "jpeg", "png", "pdf"],
+  pdf: ["jpg", "jpeg", "png", "webp"],
+};
+
+export function getConversionOptions(extension) {
+  if (!extension) return [];
+
+  return (
+    conversionMap[
+      extension.toLowerCase()
+    ] || []
+  );
+}
+
+export default conversionMap;
+
+
+==================================================
+FILE: src\utils\imageEditor.js
+==================================================
+export function createEditedFile(
+  canvas,
+  originalFile,
+  quality = 0.92
+) {
+  return new Promise((resolve, reject) => {
+    // Determine output format before calling toBlob
+    const extension =
+      originalFile.type === "image/png"
+        ? "png"
+        : "jpeg";
+
+    const mimeType =
+      extension === "png"
+        ? "image/png"
+        : "image/jpeg";
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(
+            new Error(
+              "Unable to create edited image."
+            )
+          );
+          return;
+        }
+
+        const baseName =
+          originalFile.name.replace(
+            /\.[^/.]+$/,
+            ""
+          );
+
+        const editedFile = new File(
+          [blob],
+          `${baseName}-edited.${extension}`,
+          {
+            type: mimeType,
+            lastModified: Date.now(),
+          }
+        );
+
+        resolve(editedFile);
+      },
+      mimeType,
+      quality
+    );
+  });
+}
+
+export function loadImage(file) {
+  return new Promise(
+    (resolve, reject) => {
+      const image = new Image();
+
+      const objectUrl =
+        URL.createObjectURL(file);
+
+      image.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(image);
+      };
+
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+
+        reject(
+          new Error(
+            "Unable to load image."
+          )
+        );
+      };
+
+      image.src = objectUrl;
+    }
+  );
+}
+
+
+==================================================
+FILE: src\utils\imageEditorPipeline.js
+==================================================
+/* =========================================================
+   IMAGE EDITOR PIPELINE
+   ---------------------------------------------------------
+   Order:
+
+   Original Image
+        â†“
+   Adjustments
+        â†“
+   Rotation / Flip / Offset
+        â†“
+   Effects
+        â†“
+   Visible Output Canvas
+
+   IMPORTANT:
+   - Main visible canvas is NEVER used as an effect source.
+   - Every effect gets a fresh off-screen canvas.
+   - Adjustment values use editor state semantics:
+       0 = normal
+      -100 = minimum
+      +100 = maximum
+========================================================= */
+
+import {
+  EFFECT_PRESETS,
+} from "./editorEffects";
+
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function clamp(
+  value,
+  min,
+  max
+) {
+  return Math.min(
+    max,
+    Math.max(
+      min,
+      value
+    )
+  );
+}
+
+
+/* =========================================================
+   EFFECT LIST
+========================================================= */
+
+function getEffectList() {
+
+  if (
+    Array.isArray(
+      EFFECT_PRESETS
+    )
+  ) {
+    return EFFECT_PRESETS;
+  }
+
+
+  if (
+    EFFECT_PRESETS &&
+    typeof EFFECT_PRESETS === "object"
+  ) {
+
+    return Object.values(
+      EFFECT_PRESETS
+    ).flatMap(
+      (value) => {
+
+        if (
+          Array.isArray(value)
+        ) {
+          return value;
+        }
+
+        if (
+          value &&
+          typeof value === "object"
+        ) {
+          return [value];
+        }
+
+        return [];
+      }
+    );
+  }
+
+
+  return [];
+}
+
+
+/* =========================================================
+   GET EFFECT PRESET
+========================================================= */
+
+function getEffectPreset(
+  effectId
+) {
+
+  if (
+    !effectId ||
+    effectId === "Preview"
+  ) {
+    return null;
+  }
+
+
+  const effects =
+    getEffectList();
+
+
+  return (
+    effects.find(
+      (effect) =>
+        effect &&
+        effect.id === effectId
+    ) || null
+  );
+}
+
+
+/* =========================================================
+   EFFECT FILTER
+========================================================= */
+
+function getEffectFilter(
+  effect
+) {
+
+  if (!effect) {
+    return "none";
+  }
+
+
+  /* -------------------------------------------------------
+     Direct CSS filter
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.filter === "string" &&
+    effect.filter.trim()
+  ) {
+    return effect.filter.trim();
+  }
+
+
+  const filters = [];
+
+
+  /* -------------------------------------------------------
+     Brightness
+     Supports both:
+       1.2
+       120
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.brightness === "number"
+  ) {
+
+    const value =
+      effect.brightness;
+
+    filters.push(
+      `brightness(${
+        Math.abs(value) > 3
+          ? `${value}%`
+          : value
+      })`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Contrast
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.contrast === "number"
+  ) {
+
+    const value =
+      effect.contrast;
+
+    filters.push(
+      `contrast(${
+        Math.abs(value) > 3
+          ? `${value}%`
+          : value
+      })`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Saturation
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.saturation === "number"
+  ) {
+
+    const value =
+      effect.saturation;
+
+    filters.push(
+      `saturate(${
+        Math.abs(value) > 3
+          ? `${value}%`
+          : value
+      })`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Grayscale
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.grayscale === "number"
+  ) {
+
+    const value =
+      effect.grayscale;
+
+
+    filters.push(
+      `grayscale(${
+        value > 1
+          ? `${clamp(
+              value,
+              0,
+              100
+            )}%`
+          : clamp(
+              value,
+              0,
+              1
+            )
+      })`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Sepia
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.sepia === "number"
+  ) {
+
+    const value =
+      effect.sepia;
+
+
+    filters.push(
+      `sepia(${
+        value > 1
+          ? `${clamp(
+              value,
+              0,
+              100
+            )}%`
+          : clamp(
+              value,
+              0,
+              1
+            )
+      })`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Invert
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.invert === "number"
+  ) {
+
+    const value =
+      effect.invert;
+
+
+    filters.push(
+      `invert(${
+        value > 1
+          ? `${clamp(
+              value,
+              0,
+              100
+            )}%`
+          : clamp(
+              value,
+              0,
+              1
+            )
+      })`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Hue Rotate
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.hueRotate === "number"
+  ) {
+
+    filters.push(
+      `hue-rotate(${
+        effect.hueRotate
+      }deg)`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Blur
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.blur === "number"
+  ) {
+
+    filters.push(
+      `blur(${
+        Math.max(
+          0,
+          effect.blur
+        )
+      }px)`
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     Opacity
+  ------------------------------------------------------- */
+
+  if (
+    typeof effect.opacity === "number"
+  ) {
+
+    const value =
+      effect.opacity;
+
+
+    filters.push(
+      `opacity(${
+        value > 1
+          ? `${clamp(
+              value,
+              0,
+              100
+            )}%`
+          : clamp(
+              value,
+              0,
+              1
+            )
+      })`
+    );
+  }
+
+
+  return filters.length
+    ? filters.join(" ")
+    : "none";
+}
+
+
+/* =========================================================
+   REUSED SCRATCH CANVAS
+   Allocating a new full-size canvas on every slider tick is slow
+   and floods the garbage collector. One canvas is reused.
+========================================================= */
+
+let scratchCanvas = null;
+
+function getScratchCanvas(width, height) {
+  if (!scratchCanvas) {
+    scratchCanvas = document.createElement("canvas");
+  }
+
+  const w = Math.max(1, Math.round(width));
+  const h = Math.max(1, Math.round(height));
+
+  if (scratchCanvas.width !== w) scratchCanvas.width = w;
+  if (scratchCanvas.height !== h) scratchCanvas.height = h;
+
+  return scratchCanvas;
+}
+
+
+/* =========================================================
+   COMBINED EFFECT FILTER
+   All selected effects are merged into ONE CSS filter list and
+   applied in a single draw (was: one new canvas per effect).
+========================================================= */
+
+const FILTERS_PER_PASS = 3;
+
+let pingCanvases = [null, null];
+
+function getPingCanvas(index, width, height) {
+  if (!pingCanvases[index]) {
+    pingCanvases[index] = document.createElement("canvas");
+  }
+
+  const canvas = pingCanvases[index];
+
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+
+  return canvas;
+}
+
+function getEffectFilterList(selectedEffects) {
+  if (!Array.isArray(selectedEffects)) return [];
+
+  const list = [];
+
+  for (const effectId of selectedEffects) {
+    if (!effectId || effectId === "Preview") continue;
+
+    const filter = getEffectFilter(getEffectPreset(effectId));
+
+    if (filter && filter !== "none") list.push(filter);
+  }
+
+  return list;
+}
+
+/*
+  Applies effects in small batches (FILTERS_PER_PASS filters per draw)
+  using two reused canvases. One huge filter chain with 10+ effects can
+  exceed what the browser/GPU handles and make the draw fail; small
+  batches stay fast and reliable. Returns { source, lastFilter }:
+  the caller draws `source` with `lastFilter` into the visible canvas.
+*/
+function runEffectPasses(baseCanvas, selectedEffects) {
+  const filters = getEffectFilterList(selectedEffects);
+
+  if (filters.length === 0) {
+    return { source: baseCanvas, lastFilter: "none" };
+  }
+
+  const chunks = [];
+
+  for (let i = 0; i < filters.length; i += FILTERS_PER_PASS) {
+    chunks.push(filters.slice(i, i + FILTERS_PER_PASS).join(" "));
+  }
+
+  let source = baseCanvas;
+
+  for (let i = 0; i < chunks.length - 1; i++) {
+    const dest = getPingCanvas(i % 2, baseCanvas.width, baseCanvas.height);
+    const ctx = dest.getContext("2d", { alpha: true });
+
+    prepareContext(ctx);
+    ctx.filter = "none";
+    ctx.clearRect(0, 0, dest.width, dest.height);
+    ctx.filter = chunks[i];
+
+    try {
+      ctx.drawImage(source, 0, 0, dest.width, dest.height);
+    } finally {
+      ctx.filter = "none";
+    }
+
+    source = dest;
+  }
+
+  return { source, lastFilter: chunks[chunks.length - 1] };
+}
+
+/* =========================================================
+   SAFE OFF-SCREEN CANVAS
+========================================================= */
+
+function createCanvas(
+  width,
+  height
+) {
+
+  const canvas =
+    document.createElement(
+      "canvas"
+    );
+
+
+  canvas.width =
+    Math.max(
+      1,
+      Math.round(width)
+    );
+
+
+  canvas.height =
+    Math.max(
+      1,
+      Math.round(height)
+    );
+
+
+  return canvas;
+}
+
+
+/* =========================================================
+   PREPARE CONTEXT
+========================================================= */
+
+function prepareContext(
+  ctx
+) {
+
+  if (!ctx) {
+    return;
+  }
+
+
+  ctx.imageSmoothingEnabled =
+    true;
+
+
+  try {
+
+    ctx.imageSmoothingQuality =
+      "high";
+
+  } catch {
+    // Older browsers
+  }
+}
+
+
+/* =========================================================
+   EDITOR ADJUSTMENT FILTER
+   ---------------------------------------------------------
+   IMPORTANT:
+
+   Editor state:
+       brightness 0  = normal
+       contrast   0  = normal
+       saturation 0  = normal
+
+   Therefore:
+       0   â†’ 100%
+       +20 â†’ 120%
+       -20 â†’ 80%
+========================================================= */
+
+function getAdjustmentFilter({
+  brightness = 0,
+  contrast = 0,
+  saturation = 0,
+}) {
+
+  const safeBrightness =
+    Number.isFinite(
+      Number(brightness)
+    )
+      ? Number(brightness)
+      : 0;
+
+
+  const safeContrast =
+    Number.isFinite(
+      Number(contrast)
+    )
+      ? Number(contrast)
+      : 0;
+
+
+  const safeSaturation =
+    Number.isFinite(
+      Number(saturation)
+    )
+      ? Number(saturation)
+      : 0;
+
+
+  return [
+    `brightness(${
+      Math.max(
+        0,
+        100 + safeBrightness
+      )
+    }%)`,
+
+    `contrast(${
+      Math.max(
+        0,
+        100 + safeContrast
+      )
+    }%)`,
+
+    `saturate(${
+      Math.max(
+        0,
+        100 + safeSaturation
+      )
+    }%)`,
+  ].join(" ");
+}
+
+
+/* =========================================================
+   DRAW BASE IMAGE
+========================================================= */
+
+function drawBaseImage({
+  image,
+
+  brightness,
+  contrast,
+  saturation,
+
+  rotation,
+
+  flipX,
+  flipY,
+
+  imageOffset,
+}) {
+
+  if (!image) {
+
+    throw new Error(
+      "Image is required."
+    );
+  }
+
+
+  const sourceWidth =
+    Math.max(
+      1,
+      Math.round(
+        image.naturalWidth ||
+        image.videoWidth ||
+        image.width ||
+        1
+      )
+    );
+
+
+  const sourceHeight =
+    Math.max(
+      1,
+      Math.round(
+        image.naturalHeight ||
+        image.videoHeight ||
+        image.height ||
+        1
+      )
+    );
+
+
+  const normalizedRotation =
+    (
+      (Number(rotation) || 0) %
+      360 +
+      360
+    ) % 360;
+
+
+  const isQuarterTurn =
+    normalizedRotation === 90 ||
+    normalizedRotation === 270;
+
+
+  const outputWidth =
+    isQuarterTurn
+      ? sourceHeight
+      : sourceWidth;
+
+
+  const outputHeight =
+    isQuarterTurn
+      ? sourceWidth
+      : sourceHeight;
+
+
+  const canvas = getScratchCanvas(outputWidth, outputHeight);
+
+
+  const ctx =
+    canvas.getContext(
+      "2d",
+      {
+        alpha: true,
+      }
+    );
+
+
+  if (!ctx) {
+
+    throw new Error(
+      "Could not create canvas context."
+    );
+  }
+
+
+  prepareContext(ctx);
+
+
+  ctx.clearRect(
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+
+  /*
+   * Apply adjustments only here.
+   * The visible canvas is not involved.
+   */
+
+  ctx.filter =
+    getAdjustmentFilter({
+      brightness,
+      contrast,
+      saturation,
+    });
+
+
+  ctx.save();
+
+
+  ctx.translate(
+    canvas.width / 2,
+    canvas.height / 2
+  );
+
+
+  if (
+    normalizedRotation !== 0
+  ) {
+
+    ctx.rotate(
+      normalizedRotation *
+        Math.PI /
+        180
+    );
+  }
+
+
+  ctx.scale(
+    flipX ? -1 : 1,
+    flipY ? -1 : 1
+  );
+
+
+  const offsetX =
+    Number(
+      imageOffset?.x
+    ) || 0;
+
+
+  const offsetY =
+    Number(
+      imageOffset?.y
+    ) || 0;
+
+
+  try {
+
+    ctx.drawImage(
+      image,
+
+      -sourceWidth / 2 +
+        offsetX,
+
+      -sourceHeight / 2 +
+        offsetY,
+
+      sourceWidth,
+      sourceHeight
+    );
+
+  } finally {
+
+    ctx.restore();
+
+    ctx.filter =
+      "none";
+  }
+
+
+  return canvas;
+}
+
+
+/* =========================================================
+   APPLY ONE EFFECT
+   ---------------------------------------------------------
+   Every effect gets a completely new canvas.
+========================================================= */
+
+function applyEffect(
+  sourceCanvas,
+  effect
+) {
+
+  if (!sourceCanvas) {
+    return null;
+  }
+
+
+  if (!effect) {
+    return sourceCanvas;
+  }
+
+
+  const outputCanvas =
+    createCanvas(
+      sourceCanvas.width,
+      sourceCanvas.height
+    );
+
+
+  const ctx =
+    outputCanvas.getContext(
+      "2d",
+      {
+        alpha: true,
+      }
+    );
+
+
+  if (!ctx) {
+
+    throw new Error(
+      "Could not create effect canvas context."
+    );
+  }
+
+
+  prepareContext(ctx);
+
+
+  ctx.clearRect(
+    0,
+    0,
+    outputCanvas.width,
+    outputCanvas.height
+  );
+
+
+  const filter =
+    getEffectFilter(
+      effect
+    );
+
+
+  try {
+
+    ctx.filter =
+      filter || "none";
+
+
+    ctx.drawImage(
+      sourceCanvas,
+      0,
+      0,
+      outputCanvas.width,
+      outputCanvas.height
+    );
+
+  } finally {
+
+    ctx.filter =
+      "none";
+  }
+
+
+  return outputCanvas;
+}
+
+
+/* =========================================================
+   APPLY EFFECTS SEQUENTIALLY
+========================================================= */
+
+
+
+/* =========================================================
+   COPY FINAL RESULT
+   ---------------------------------------------------------
+   IMPORTANT:
+   We preserve the existing output canvas
+   element. Only its drawing buffer is updated.
+========================================================= */
+
+function copyCanvas(sourceCanvas, outputCanvas, filter = "none") {
+
+  if (
+    !sourceCanvas ||
+    !outputCanvas
+  ) {
+    return;
+  }
+
+
+  const width =
+    sourceCanvas.width;
+
+
+  const height =
+    sourceCanvas.height;
+
+
+  /*
+   * Only update dimensions when
+   * actually necessary.
+   */
+
+  if (
+    outputCanvas.width !== width
+  ) {
+
+    outputCanvas.width =
+      width;
+  }
+
+
+  if (
+    outputCanvas.height !== height
+  ) {
+
+    outputCanvas.height =
+      height;
+  }
+
+
+  const ctx =
+    outputCanvas.getContext(
+      "2d",
+      {
+        alpha: true,
+      }
+    );
+
+
+  if (!ctx) {
+
+    throw new Error(
+      "Could not create output canvas context."
+    );
+  }
+
+
+  prepareContext(ctx);
+
+
+  ctx.clearRect(
+    0,
+    0,
+    outputCanvas.width,
+    outputCanvas.height
+  );
+
+
+  ctx.filter = filter || "none";
+
+
+  ctx.drawImage(
+    sourceCanvas,
+    0,
+    0,
+    width,
+    height
+  );
+
+
+  ctx.filter =
+    "none";
+}
+
+
+/* =========================================================
+   MAIN RENDER FUNCTION
+========================================================= */
+
+export function renderImageEdits({
+  image,
+
+  /*
+   * IMPORTANT:
+   * Defaults MUST be 0 because ImageEditor
+   * stores adjustment state as 0 = normal.
+   */
+
+  brightness = 0,
+  contrast = 0,
+  saturation = 0,
+
+  rotation = 0,
+
+  flipX = false,
+  flipY = false,
+
+  imageOffset = {
+    x: 0,
+    y: 0,
+  },
+
+  selectedEffects = [],
+
+  outputCanvas,
+}) {
+
+  if (!image) {
+    return;
+  }
+
+
+  if (!outputCanvas) {
+
+    throw new Error(
+      "outputCanvas is required."
+    );
+  }
+
+
+  /* -------------------------------------------------------
+     STEP 1
+     Image + adjustments + transform
+  ------------------------------------------------------- */
+
+  const baseCanvas =
+    drawBaseImage({
+
+      image,
+
+      brightness,
+      contrast,
+      saturation,
+
+      rotation,
+
+      flipX,
+      flipY,
+
+      imageOffset,
+    });
+
+
+  /* -------------------------------------------------------
+     STEP 2
+     Effects
+  ------------------------------------------------------- */
+
+  const { source: effectSource, lastFilter } =
+    runEffectPasses(baseCanvas, selectedEffects);
+
+
+  /* -------------------------------------------------------
+     STEP 3
+     Copy final result to visible canvas
+  ------------------------------------------------------- */
+
+  copyCanvas(effectSource, outputCanvas, lastFilter);
+}
+
+
+/* =========================================================
+   CANVAS â†’ BLOB
+========================================================= */
+
+export function canvasToBlob(
+  canvas,
+  type = "image/png",
+  quality = 1
+) {
+
+  return new Promise(
+    (resolve, reject) => {
+
+      if (!canvas) {
+
+        reject(
+          new Error(
+            "Canvas is required."
+          )
+        );
+
+        return;
+      }
+
+
+      try {
+
+        canvas.toBlob(
+          (blob) => {
+
+            if (!blob) {
+
+              reject(
+                new Error(
+                  "Canvas could not be converted to Blob."
+                )
+              );
+
+              return;
+            }
+
+
+            resolve(blob);
+          },
+
+          type,
+
+          quality
+        );
+
+      } catch (error) {
+
+        reject(error);
+      }
+    }
+  );
+}
+
+
+/* =========================================================
+   CANVAS â†’ FILE
+========================================================= */
+
+export async function canvasToFile(
+  canvas,
+  fileName = "edited-image.png",
+  type = "image/png",
+  quality = 1
+) {
+
+  const blob =
+    await canvasToBlob(
+      canvas,
+      type,
+      quality
+    );
+
+
+  return new File(
+    [blob],
+    fileName,
+    {
+      type:
+        blob.type ||
+        type,
+    }
+  );
+}
+
+
+/* =========================================================
+   DEFAULT EXPORT
+========================================================= */
+
+export default {
+  renderImageEdits,
+  canvasToBlob,
+  canvasToFile,
+};
+
+
+==================================================
+FILE: src\utils\editorTools\canvasHelpers.js
+==================================================
+export function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function getBaseName(file) {
+  return file?.name?.replace(/\.[^/.]+$/, "") || "image";
+}
+
+export function makePngFile(blob, baseName, suffix) {
+  return new File([blob], `${baseName}-${suffix}.png`, {
+    type: "image/png",
+    lastModified: Date.now(),
+  });
+}
+
+export function canvasToBlob(sourceCanvas, type = "image/png", quality = 1) {
+  return new Promise((resolve, reject) => {
+    sourceCanvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Could not create image data."));
+          return;
+        }
+        resolve(blob);
+      },
+      type,
+      quality
+    );
+  });
+}
+
+export function canvasToDataURLSafe(sourceCanvas) {
+  try {
+    return sourceCanvas?.toDataURL("image/png") || "";
+  } catch {
+    return "";
+  }
+}
+
+export function dataURLToCanvas(dataURL) {
+  if (!dataURL) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return resolve(null);
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas);
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataURL;
+  });
+}
+
+export function captureStandardObjectMask(baseCanvas, editedCanvas) {
+  if (!baseCanvas || !editedCanvas) return "";
+  const mask = document.createElement("canvas");
+  mask.width = baseCanvas.width;
+  mask.height = baseCanvas.height;
+  const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
+  const editCtx = editedCanvas.getContext("2d", { willReadFrequently: true });
+  const maskCtx = mask.getContext("2d", { willReadFrequently: true });
+  if (!baseCtx || !editCtx || !maskCtx) return "";
+  const base = baseCtx.getImageData(0, 0, baseCanvas.width, baseCanvas.height);
+  const edited = editCtx.getImageData(
+    0,
+    0,
+    editedCanvas.width,
+    editedCanvas.height
+  );
+  const out = maskCtx.createImageData(mask.width, mask.height);
+  for (let i = 0; i < base.data.length; i += 4) {
+    const removed = base.data[i + 3] - edited.data[i + 3] > 18;
+    out.data[i] = 255;
+    out.data[i + 1] = 0;
+    out.data[i + 2] = 0;
+    out.data[i + 3] = removed ? 255 : 0;
+  }
+  maskCtx.putImageData(out, 0, 0);
+  return mask.toDataURL("image/png");
+}
+
+/* Pointer -> canvas pixel coordinates (unclamped) */
+export function getCanvasPoint(canvas, event) {
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  return {
+    x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+    y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+  };
+}
+
+/* Pointer -> canvas pixel coordinates (clamped inside the canvas) */
+export function getClampedCanvasPoint(canvas, event) {
+  const point = getCanvasPoint(canvas, event);
+  if (!point) return null;
+  return {
+    x: clamp(point.x, 0, canvas.width),
+    y: clamp(point.y, 0, canvas.height),
+  };
+}
+

@@ -20,6 +20,7 @@ export default function useEffectLayers({
   function syncEffectLayers(nextLayers) {
     effectLayersRef.current = nextLayers;
     setEffectLayers(nextLayers);
+
     setSelectedEffects(
       nextLayers
         .filter((layer) => layer.visible !== false)
@@ -34,7 +35,6 @@ export default function useEffectLayers({
     setEditingEffectLayerId(null);
   }
 
-  // Used by Undo/Redo.
   function restoreEffectLayers(layers) {
     syncEffectLayers(layers);
     setEditingEffectLayerId(null);
@@ -42,99 +42,228 @@ export default function useEffectLayers({
 
   function createEffectLayer(effectId) {
     const preset = getEffectPreset(effectId);
+
     return {
-      id: `effect-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: `effect-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+
       effectId,
-      name: preset?.name || preset?.label || effectId,
+
+      name:
+        preset?.name ||
+        preset?.label ||
+        getEffectLabel(effectId) ||
+        effectId,
+
       visible: true,
     };
   }
 
   function toggleEffect(effectId) {
-    if (editorControlsDisabled || effectId === "Preview") return;
+    if (
+      editorControlsDisabled ||
+      effectId === "Preview"
+    ) {
+      return;
+    }
 
-    const current = effectLayersRef.current || [];
+    const current =
+      effectLayersRef.current || [];
+
+    /*
+    ========================================================
+    EDIT EXISTING EFFECT
+    ========================================================
+    */
 
     if (editingEffectLayerId) {
-      const next = current.map((layer) =>
-        layer.id === editingEffectLayerId
-          ? {
-              ...layer,
-              effectId,
-              name: getEffectLabel(effectId),
-              visible: true,
-            }
-          : layer
+      const next = current.map(
+        (layer) =>
+          layer.id === editingEffectLayerId
+            ? {
+                ...layer,
+                effectId,
+                name:
+                  getEffectLabel(effectId),
+                visible: true,
+              }
+            : layer
       );
+
       syncEffectLayers(next);
+
       setEditingEffectLayerId(null);
+
       return;
     }
 
-    const existingIndex = current.findIndex(
-      (layer) => layer.effectId === effectId && layer.visible !== false
-    );
+    /*
+    ========================================================
+    REMOVE EFFECT IF ALREADY ACTIVE
+    ========================================================
+    */
+
+    const existingIndex =
+      current.findIndex(
+        (layer) =>
+          layer.effectId === effectId &&
+          layer.visible !== false
+      );
 
     if (existingIndex !== -1) {
-      syncEffectLayers(current.filter((_, index) => index !== existingIndex));
+      syncEffectLayers(
+        current.filter(
+          (_, index) =>
+            index !== existingIndex
+        )
+      );
+
       return;
     }
 
-    syncEffectLayers([...current, createEffectLayer(effectId)]);
+    /*
+    ========================================================
+    ADD NEW EFFECT
+    ========================================================
+    */
+
+    syncEffectLayers([
+      ...current,
+      createEffectLayer(effectId),
+    ]);
   }
 
   function handleDeleteEffectLayer(layerId) {
-    if (editorControlsDisabled) return;
+    if (editorControlsDisabled) {
+      return;
+    }
+
     syncEffectLayers(
-      (effectLayersRef.current || []).filter((layer) => layer.id !== layerId)
+      (effectLayersRef.current || []).filter(
+        (layer) =>
+          layer.id !== layerId
+      )
     );
-    if (editingEffectLayerId === layerId) setEditingEffectLayerId(null);
+
+    if (
+      editingEffectLayerId === layerId
+    ) {
+      setEditingEffectLayerId(null);
+    }
   }
 
   function handleToggleEffectLayer(layerId) {
-    if (editorControlsDisabled) return;
+    if (editorControlsDisabled) {
+      return;
+    }
+
     syncEffectLayers(
-      (effectLayersRef.current || []).map((layer) =>
-        layer.id === layerId
-          ? { ...layer, visible: layer.visible === false }
-          : layer
+      (effectLayersRef.current || []).map(
+        (layer) =>
+          layer.id === layerId
+            ? {
+                ...layer,
+                visible:
+                  layer.visible === false,
+              }
+            : layer
       )
     );
   }
 
-  function handleMoveEffectLayer(layerId, direction) {
-    if (editorControlsDisabled) return;
-    const current = [...(effectLayersRef.current || [])];
-    const index = current.findIndex((layer) => layer.id === layerId);
-    if (index < 0) return;
-    const target = direction === "up" ? index - 1 : index + 1;
-    if (target < 0 || target >= current.length) return;
-    [current[index], current[target]] = [current[target], current[index]];
+  function handleMoveEffectLayer(
+    layerId,
+    direction
+  ) {
+    if (editorControlsDisabled) {
+      return;
+    }
+
+    const current = [
+      ...(effectLayersRef.current || []),
+    ];
+
+    const index =
+      current.findIndex(
+        (layer) =>
+          layer.id === layerId
+      );
+
+    if (index < 0) {
+      return;
+    }
+
+    const target =
+      direction === "up"
+        ? index - 1
+        : index + 1;
+
+    if (
+      target < 0 ||
+      target >= current.length
+    ) {
+      return;
+    }
+
+    [
+      current[index],
+      current[target],
+    ] = [
+      current[target],
+      current[index],
+    ];
+
     syncEffectLayers(current);
   }
 
-  function handleEditEffectLayer(layerId) {
-    if (editorControlsDisabled) return;
-    setEditingEffectLayerId(layerId);
+  function handleEditEffectLayer(
+    layerId
+  ) {
+    if (editorControlsDisabled) {
+      return;
+    }
+
+    setEditingEffectLayerId(
+      layerId
+    );
+
     setShowLayers(false);
+
     try {
       if (canvasRef.current) {
-        setEffectPreviewSrc(canvasRef.current.toDataURL("image/png"));
+        setEffectPreviewSrc(
+          canvasRef.current.toDataURL(
+            "image/png"
+          )
+        );
       }
     } catch {}
+
     setShowEffects(true);
   }
 
   return {
     selectedEffects,
+
     effectLayers,
+
+    effectLayersRef,
+
     editingEffectLayerId,
+
     clearEffects,
+
     restoreEffectLayers,
+
     toggleEffect,
+
     handleDeleteEffectLayer,
+
     handleToggleEffectLayer,
+
     handleMoveEffectLayer,
+
     handleEditEffectLayer,
   };
 }

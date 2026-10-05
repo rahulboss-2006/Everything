@@ -1,5 +1,10 @@
-﻿const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-const SERVER_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
+﻿const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api";
+
+const SERVER_BASE_URL =
+  API_BASE_URL.replace(/\/api\/?$/, "");
+
 
 /* ================================
    RESPONSE
@@ -18,6 +23,7 @@ async function parseResponse(response) {
     );
 
     error.status = response.status;
+
     error.data = {
       success: false,
       message: `Invalid server response (${response.status}).`,
@@ -45,77 +51,114 @@ async function parseResponse(response) {
    REFRESH ACCESS TOKEN
 ================================ */
 
+let refreshPromise = null;
+
 async function refreshAccessToken() {
-  try {
-    const refreshToken =
-      localStorage.getItem("refreshToken");
+  /*
+    Prevent multiple simultaneous refresh requests.
 
-    if (!refreshToken) {
-      console.warn(
-        "REFRESH: No refresh token found."
-      );
+    Example:
+    Request A → 401
+    Request B → 401
+    Request C → 401
 
-      return false;
-    }
+    Only ONE refresh request will be sent.
+  */
 
-    const response = await fetch(
-      `${API_BASE_URL}/auth/refresh`,
-      {
-        method: "POST",
-
-        credentials: "include",
-
-        headers: {
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify({
-          refreshToken,
-        }),
-      }
-    );
-
-    const data =
-      await response.json().catch(() => ({}));
-
-    if (!response.ok || !data?.accessToken) {
-      console.error(
-        "REFRESH FAILED:",
-        response.status,
-        data
-      );
-
-      return false;
-    }
-
-    /* Save new access token */
-    localStorage.setItem(
-      "accessToken",
-      data.accessToken
-    );
-
-    /* Backend rotates refresh token */
-    if (data.refreshToken) {
-      localStorage.setItem(
-        "refreshToken",
-        data.refreshToken
-      );
-    }
-
-    console.log(
-      "TOKEN REFRESH SUCCESS"
-    );
-
-    return true;
-
-  } catch (error) {
-    console.error(
-      "TOKEN REFRESH ERROR:",
-      error
-    );
-
-    return false;
+  if (refreshPromise) {
+    return refreshPromise;
   }
+
+  refreshPromise = (async () => {
+    try {
+      const refreshToken =
+        localStorage.getItem("refreshToken");
+
+      if (!refreshToken) {
+        console.warn(
+          "REFRESH: No refresh token found."
+        );
+
+        return false;
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/auth/refresh`,
+        {
+          method: "POST",
+
+          credentials: "include",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            refreshToken,
+          }),
+        }
+      );
+
+      const data =
+        await response.json().catch(() => ({}));
+
+      if (
+        !response.ok ||
+        !data?.accessToken
+      ) {
+        console.error(
+          "REFRESH FAILED:",
+          response.status,
+          data
+        );
+
+        return false;
+      }
+
+      /*
+        Save NEW access token first.
+      */
+
+      localStorage.setItem(
+        "accessToken",
+        data.accessToken
+      );
+
+      /*
+        Backend may rotate refresh token.
+      */
+
+      if (data.refreshToken) {
+        localStorage.setItem(
+          "refreshToken",
+          data.refreshToken
+        );
+      }
+
+      console.log(
+        "TOKEN REFRESH SUCCESS"
+      );
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        "TOKEN REFRESH ERROR:",
+        error
+      );
+
+      return false;
+
+    } finally {
+      /*
+        Allow future refresh operations.
+      */
+
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 
@@ -146,43 +189,90 @@ async function authenticatedFetch(
   options = {},
   retry = true
 ) {
+  /*
+    IMPORTANT:
+    Never reuse an old Authorization header.
+
+    Always read the latest token from
+    localStorage immediately before fetch.
+  */
+
   const headers = {
     ...(options.headers || {}),
     ...getAuthHeaders(),
   };
 
-  let response = await fetch(url, {
-    ...options,
+  let response;
 
-    headers,
+  try {
+    response = await fetch(url, {
+      ...options,
 
-    credentials: "include",
-  });
+      headers,
+
+      credentials: "include",
+    });
+
+  } catch (error) {
+    console.error(
+      "NETWORK ERROR:",
+      error
+    );
+
+    throw error;
+  }
 
 
   /* ================================
      ACCESS TOKEN EXPIRED
   ================================ */
 
-  if (response.status === 401 && retry) {
+  if (
+    response.status === 401 &&
+    retry
+  ) {
+    console.warn(
+      "ACCESS TOKEN EXPIRED — REFRESHING..."
+    );
+
     const refreshed =
       await refreshAccessToken();
 
     if (refreshed) {
+      /*
+        IMPORTANT:
+        Do NOT reuse the old request headers.
+
+        Call authenticatedFetch again so
+        getAuthHeaders() reads the NEW token.
+      */
+
       return authenticatedFetch(
         url,
-        options,
+        {
+          ...options,
+
+          /*
+            Remove any stale Authorization
+            header supplied by the previous request.
+          */
+
+          headers: {
+            ...(options.headers || {}),
+          },
+        },
         false
       );
     }
   }
+
 
   return response;
 }
 
 
 /* ================================
-   IMAGE â†’ IMAGE
+   IMAGE → IMAGE
 ================================ */
 
 export async function convertImage(
@@ -227,7 +317,7 @@ export async function convertImage(
 
 
 /* ================================
-   IMAGE â†’ PDF
+   IMAGE → PDF
 ================================ */
 
 export async function convertImageToPdf(
@@ -266,7 +356,7 @@ export async function convertImageToPdf(
 
 
 /* ================================
-   PDF â†’ IMAGE
+   PDF → IMAGE
 ================================ */
 
 export async function convertPdfToImage(
@@ -308,7 +398,4 @@ export async function convertPdfToImage(
       `${SERVER_BASE_URL}${data.downloadUrl}`,
   };
 }
-
-
-
 

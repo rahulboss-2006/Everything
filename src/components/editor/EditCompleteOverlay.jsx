@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -16,43 +17,60 @@ function EditCompleteOverlay({
   onComplete,
   processing = false,
 }) {
-  const [visibleItems, setVisibleItems] = useState(0);
+  const [visibleItems, setVisibleItems] =
+    useState(0);
 
-  const completedRef = useRef(false);
-  const editListRef = useRef(null);
+  const completedRef =
+    useRef(false);
 
-  /*
-  =========================================================
-  SAFE EDIT LIST
-  =========================================================
-  */
+  const editListRef =
+    useRef(null);
 
-  const uniqueEdits = Array.from(
-    new Set(
-      Array.isArray(edits)
-        ? edits.filter(Boolean)
-        : []
-    )
-  );
+  const onCompleteRef =
+    useRef(onComplete);
 
   /*
   =========================================================
-  AUTO SCROLL EDIT LIST
+  KEEP LATEST CALLBACK
   =========================================================
   */
 
   useEffect(() => {
-    if (!editListRef.current) return;
+    onCompleteRef.current =
+      onComplete;
+  }, [onComplete]);
 
-    const container = editListRef.current;
+  /*
+  =========================================================
+  NORMALIZE EDITS
+  =========================================================
+  */
 
-    requestAnimationFrame(() => {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: "smooth",
-      });
-    });
-  }, [visibleItems]);
+  const uniqueEdits = useMemo(() => {
+    if (!Array.isArray(edits)) {
+      return [];
+    }
+
+    return Array.from(
+      new Set(
+        edits
+          .filter(Boolean)
+          .map((edit) =>
+            String(edit).trim()
+          )
+          .filter(Boolean)
+      )
+    );
+  }, [edits]);
+
+  /*
+  =========================================================
+  STABLE EDIT SIGNATURE
+  =========================================================
+  */
+
+  const editSignature =
+    uniqueEdits.join("|");
 
   /*
   =========================================================
@@ -61,136 +79,265 @@ function EditCompleteOverlay({
   */
 
   useEffect(() => {
-    const body = document.body;
-    const html = document.documentElement;
+    const body =
+      document.body;
 
-    const previousBodyOverflow =
+    const html =
+      document.documentElement;
+
+    const oldBodyOverflow =
       body.style.overflow;
 
-    const previousHtmlOverflow =
+    const oldHtmlOverflow =
       html.style.overflow;
 
-    const previousBodyTouchAction =
+    const oldBodyTouch =
       body.style.touchAction;
 
-    const previousHtmlTouchAction =
+    const oldHtmlTouch =
       html.style.touchAction;
 
-    body.style.overflow = "hidden";
-    html.style.overflow = "hidden";
+    body.style.overflow =
+      "hidden";
 
-    body.style.touchAction = "none";
-    html.style.touchAction = "none";
+    html.style.overflow =
+      "hidden";
+
+    body.style.touchAction =
+      "none";
+
+    html.style.touchAction =
+      "none";
 
     return () => {
       body.style.overflow =
-        previousBodyOverflow;
+        oldBodyOverflow;
 
       html.style.overflow =
-        previousHtmlOverflow;
+        oldHtmlOverflow;
 
       body.style.touchAction =
-        previousBodyTouchAction;
+        oldBodyTouch;
 
       html.style.touchAction =
-        previousHtmlTouchAction;
+        oldHtmlTouch;
     };
   }, []);
 
   /*
   =========================================================
-  COMPLETE ANIMATION
+  AUTO SCROLL
   =========================================================
   */
 
   useEffect(() => {
+    const container =
+      editListRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      container.scrollTo({
+        top:
+          container.scrollHeight,
+        behavior: "smooth",
+      });
+    });
+  }, [visibleItems]);
+
+  /*
+  =========================================================
+  PROGRESS
+  =========================================================
+
+  IMPORTANT:
+
+  0 visible edits = 1%
+
+  This prevents the progress bar from
+  starting at 0%.
+
+  Example with 4 edits:
+
+  Start  = 1%
+  Edit 1 = 25%
+  Edit 2 = 50%
+  Edit 3 = 75%
+  Edit 4 = 100%
+  =========================================================
+  */
+
+  const progress =
+    uniqueEdits.length === 0
+      ? 100
+      : visibleItems === 0
+        ? 1
+        : Math.min(
+            100,
+            Math.round(
+              (visibleItems /
+                uniqueEdits.length) *
+                100
+            )
+          );
+
+  /*
+  =========================================================
+  PROGRESSIVE ANIMATION
+  =========================================================
+  */
+
+  useEffect(() => {
+    completedRef.current =
+      false;
+
     /*
-    ---------------------------------------------------------
-    PROCESSING
-    ---------------------------------------------------------
+    -------------------------------------------------------
+    PROCESSING MODE
+    -------------------------------------------------------
     */
 
     if (processing) {
       setVisibleItems(0);
-      completedRef.current = false;
-
       return;
     }
 
     /*
-    ---------------------------------------------------------
+    -------------------------------------------------------
     RESET
-    ---------------------------------------------------------
+    -------------------------------------------------------
     */
 
     setVisibleItems(0);
-    completedRef.current = false;
 
-    const total = uniqueEdits.length;
+    const total =
+      uniqueEdits.length;
+
+    const timers = [];
 
     /*
-    ---------------------------------------------------------
+    -------------------------------------------------------
     NO EDITS
-    ---------------------------------------------------------
+    -------------------------------------------------------
     */
 
-    if (!total) {
-      const timer = setTimeout(() => {
-        if (!completedRef.current) {
-          completedRef.current = true;
-          onComplete?.();
-        }
-      }, 900);
+    if (total === 0) {
+      const timer =
+        setTimeout(() => {
+          if (
+            completedRef.current
+          ) {
+            return;
+          }
+
+          completedRef.current =
+            true;
+
+          onCompleteRef
+            .current?.();
+        }, 1800);
+
+      timers.push(timer);
 
       return () => {
-        clearTimeout(timer);
+        timers.forEach(
+          clearTimeout
+        );
       };
     }
 
     /*
-    ---------------------------------------------------------
-    SHOW EDITS ONE BY ONE
-    ---------------------------------------------------------
+    -------------------------------------------------------
+    SHOW EACH EDIT
+    -------------------------------------------------------
+
+    Start:
+      1%
+
+    Edit 1:
+      25% for 4 edits
+
+    Edit 2:
+      50%
+
+    Edit 3:
+      75%
+
+    Edit 4:
+      100%
+
+    First edit appears after 400ms.
+    Every next edit appears 500ms later.
+    -------------------------------------------------------
     */
 
-    const timers = [];
+    uniqueEdits.forEach(
+      (_, index) => {
+        const timer =
+          setTimeout(
+            () => {
+              setVisibleItems(
+                index + 1
+              );
+            },
+            400 +
+              index * 500
+          );
 
-    uniqueEdits.forEach((_, index) => {
-      const timer = setTimeout(() => {
-        setVisibleItems(index + 1);
-      }, 350 + index * 280);
-
-      timers.push(timer);
-    });
+        timers.push(timer);
+      }
+    );
 
     /*
-    ---------------------------------------------------------
-    FINISH
-    ---------------------------------------------------------
+    -------------------------------------------------------
+    COMPLETE
+    -------------------------------------------------------
+
+    Wait until the final edit has appeared,
+    then keep 100% visible for 1.5 seconds.
+    -------------------------------------------------------
     */
 
-    const finishDelay =
-      350 +
-      total * 280 +
-      900;
+    const completeDelay =
+      400 +
+      (total - 1) * 500 +
+      1500;
 
-    const completeTimer = setTimeout(() => {
-      if (!completedRef.current) {
-        completedRef.current = true;
+    const completeTimer =
+      setTimeout(() => {
+        if (
+          completedRef.current
+        ) {
+          return;
+        }
 
-        onComplete?.();
-      }
-    }, finishDelay);
+        completedRef.current =
+          true;
 
-    timers.push(completeTimer);
+        onCompleteRef
+          .current?.();
+      }, completeDelay);
+
+    timers.push(
+      completeTimer
+    );
+
+    /*
+    -------------------------------------------------------
+    CLEANUP
+    -------------------------------------------------------
+    */
 
     return () => {
-      timers.forEach(clearTimeout);
+      timers.forEach(
+        clearTimeout
+      );
     };
   }, [
+    editSignature,
     processing,
-    onComplete,
-    uniqueEdits.length,
   ]);
 
   /*
@@ -206,6 +353,9 @@ function EditCompleteOverlay({
           fixed
           inset-0
           z-[200]
+          flex
+          items-center
+          justify-center
           overflow-hidden
           overscroll-none
           bg-slate-950/70
@@ -218,171 +368,161 @@ function EditCompleteOverlay({
       >
         <div
           className="
+            relative
             flex
-            h-full
-            items-center
-            justify-center
-            py-6
+            max-h-[calc(100vh-2rem)]
+            w-full
+            max-w-md
+            flex-col
+            overflow-hidden
+            rounded-[28px]
+            border
+            border-white/10
+            bg-white
+            p-6
+            shadow-[0_30px_100px_rgba(0,0,0,0.45)]
+            dark:bg-slate-950
+            sm:p-8
           "
         >
           <div
             className="
+              pointer-events-none
+              absolute
+              -right-20
+              -top-20
+              h-48
+              w-48
+              rounded-full
+              bg-violet-500/20
+              blur-3xl
+            "
+          />
+
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -bottom-20
+              -left-20
+              h-48
+              w-48
+              rounded-full
+              bg-fuchsia-500/10
+              blur-3xl
+            "
+          />
+
+          <div
+            className="
               relative
+              mx-auto
+              mb-5
               flex
-              max-h-[calc(100vh-3rem)]
-              w-full
-              max-w-md
-              flex-col
-              overflow-hidden
-              rounded-[28px]
-              border
-              border-white/10
-              bg-white
-              p-6
-              shadow-[0_30px_100px_rgba(0,0,0,0.45)]
-              dark:bg-slate-950
-              sm:p-8
+              h-16
+              w-16
+              shrink-0
+              items-center
+              justify-center
             "
           >
-            {/* =================================================
-                GLOW
-            ================================================= */}
-
             <div
               className="
-                pointer-events-none
                 absolute
-                -right-20
-                -top-20
-                h-48
-                w-48
+                inset-0
+                animate-ping
                 rounded-full
                 bg-violet-500/20
-                blur-3xl
               "
             />
-
-            <div
-              className="
-                pointer-events-none
-                absolute
-                -bottom-20
-                -left-20
-                h-48
-                w-48
-                rounded-full
-                bg-fuchsia-500/10
-                blur-3xl
-              "
-            />
-
-            {/* =================================================
-                ICON
-            ================================================= */}
 
             <div
               className="
                 relative
-                mx-auto
-                mb-5
                 flex
                 h-16
                 w-16
-                shrink-0
                 items-center
                 justify-center
+                rounded-2xl
+                bg-violet-600
+                text-white
+                shadow-lg
+                shadow-violet-600/30
               "
             >
-              <div
-                className="
-                  absolute
-                  inset-0
-                  animate-ping
-                  rounded-full
-                  bg-violet-500/20
-                "
+              <Loader2
+                size={28}
+                className="animate-spin"
               />
-
-              <div
-                className="
-                  relative
-                  flex
-                  h-16
-                  w-16
-                  items-center
-                  justify-center
-                  rounded-2xl
-                  bg-violet-600
-                  text-white
-                  shadow-lg
-                  shadow-violet-600/30
-                "
-              >
-                <Loader2
-                  size={28}
-                  className="animate-spin"
-                />
-              </div>
             </div>
+          </div>
 
-            {/* =================================================
-                TITLE
-            ================================================= */}
+          <div
+            className="
+              relative
+              shrink-0
+              text-center
+            "
+          >
+            <h2
+              className="
+                text-xl
+                font-bold
+                text-slate-900
+                dark:text-white
+                sm:text-2xl
+              "
+            >
+              Applying Edits
+            </h2>
 
-            <div className="relative shrink-0 text-center">
-              <h2
-                className="
-                  text-xl
-                  font-bold
-                  text-slate-900
-                  dark:text-white
-                  sm:text-2xl
-                "
-              >
-                Applying Edits
-              </h2>
+            <p
+              className="
+                mt-1
+                text-sm
+                text-slate-500
+                dark:text-slate-400
+              "
+            >
+              Please wait while your image
+              is being processed
+            </p>
+          </div>
 
-              <p
-                className="
-                  mt-1
-                  text-sm
-                  text-slate-500
-                  dark:text-slate-400
-                "
-              >
-                Please wait while your image is being processed
-              </p>
-            </div>
-
-            {/* =================================================
-                EDIT LIST
-            ================================================= */}
-
-            {visibleItems > 0 && (
-              <div
-                ref={editListRef}
-                className="
-                  relative
-                  mt-6
-                  max-h-[270px]
-                  min-h-0
-                  shrink
-                  overflow-y-auto
-                  overscroll-contain
-                  pr-1
-                  space-y-2
-                  scrollbar-thin
-                  scrollbar-thumb-violet-500/40
-                  scrollbar-track-transparent
-                "
-                style={{
-                  touchAction: "pan-y",
-                  WebkitOverflowScrolling: "touch",
-                }}
-              >
-                {uniqueEdits
-                  .slice(0, visibleItems)
-                  .map((edit, index) => (
+          {uniqueEdits.length > 0 && (
+            <div
+              ref={editListRef}
+              className="
+                relative
+                mt-6
+                max-h-[270px]
+                min-h-0
+                shrink
+                space-y-2
+                overflow-y-auto
+                overscroll-contain
+                pr-1
+                scrollbar-thin
+                scrollbar-thumb-violet-500/40
+                scrollbar-track-transparent
+              "
+              style={{
+                touchAction: "pan-y",
+                WebkitOverflowScrolling:
+                  "touch",
+              }}
+            >
+              {uniqueEdits
+                .slice(
+                  0,
+                  visibleItems
+                )
+                .map(
+                  (
+                    edit,
+                    index
+                  ) => (
                     <div
                       key={`${edit}-${index}`}
                       className="
@@ -432,57 +572,54 @@ function EditCompleteOverlay({
                         {edit}
                       </span>
                     </div>
-                  ))}
-              </div>
-            )}
+                  )
+                )}
+            </div>
+          )}
 
-            {/* =================================================
-                PROGRESS
-            ================================================= */}
-
-            <div className="relative mt-6 shrink-0">
+          <div
+            className="
+              relative
+              mt-6
+              shrink-0
+            "
+          >
+            <div
+              className="
+                h-1.5
+                overflow-hidden
+                rounded-full
+                bg-slate-200
+                dark:bg-white/10
+              "
+            >
               <div
                 className="
-                  h-1.5
-                  overflow-hidden
+                  h-full
                   rounded-full
-                  bg-slate-200
-                  dark:bg-white/10
+                  bg-violet-600
+                  transition-[width]
+                  duration-500
+                  ease-out
                 "
-              >
-                <div
-                  className="
-                    h-full
-                    rounded-full
-                    bg-violet-600
-                    transition-all
-                    duration-500
-                    ease-out
-                  "
-                  style={{
-                    width:
-                      uniqueEdits.length
-                        ? `${
-                            (visibleItems /
-                              uniqueEdits.length) *
-                            100
-                          }%`
-                        : "0%",
-                  }}
-                />
-              </div>
-
-              <p
-                className="
-                  mt-2
-                  text-center
-                  text-[11px]
-                  text-slate-400
-                "
-              >
-                Processing your image...
-              </p>
+                style={{
+                  width: `${progress}%`,
+                }}
+              />
             </div>
+
+            <p
+              className="
+                mt-2
+                text-center
+                text-[11px]
+                text-slate-400
+              "
+            >
+              {uniqueEdits.length > 0
+                ? `${visibleItems} of ${uniqueEdits.length} changes completed`
+                : "Processing your image..."}
+            </p>
           </div>
         </div>
       </div>
@@ -501,6 +638,9 @@ function EditCompleteOverlay({
         fixed
         inset-0
         z-[200]
+        flex
+        items-center
+        justify-center
         overflow-hidden
         overscroll-none
         bg-slate-950/70
@@ -513,171 +653,167 @@ function EditCompleteOverlay({
     >
       <div
         className="
+          relative
           flex
-          h-full
-          items-center
-          justify-center
-          py-6
+          max-h-[calc(100vh-2rem)]
+          w-full
+          max-w-md
+          flex-col
+          overflow-hidden
+          rounded-[28px]
+          border
+          border-white/10
+          bg-white
+          p-6
+          shadow-[0_30px_100px_rgba(0,0,0,0.45)]
+          dark:bg-slate-950
+          sm:p-8
         "
       >
         <div
           className="
+            pointer-events-none
+            absolute
+            -right-20
+            -top-20
+            h-48
+            w-48
+            rounded-full
+            bg-violet-500/20
+            blur-3xl
+          "
+        />
+
+        <div
+          className="
+            pointer-events-none
+            absolute
+            -bottom-20
+            -left-20
+            h-48
+            w-48
+            rounded-full
+            bg-fuchsia-500/10
+            blur-3xl
+          "
+        />
+
+        {/* SUCCESS ICON */}
+
+        <div
+          className="
             relative
+            mx-auto
+            mb-5
             flex
-            max-h-[calc(100vh-3rem)]
-            w-full
-            max-w-md
-            flex-col
-            overflow-hidden
-            rounded-[28px]
-            border
-            border-white/10
-            bg-white
-            p-6
-            shadow-[0_30px_100px_rgba(0,0,0,0.45)]
-            dark:bg-slate-950
-            sm:p-8
+            h-20
+            w-20
+            shrink-0
+            items-center
+            justify-center
           "
         >
-          {/* =================================================
-              GLOW
-          ================================================= */}
-
           <div
             className="
-              pointer-events-none
               absolute
-              -right-20
-              -top-20
-              h-48
-              w-48
+              inset-0
+              animate-ping
               rounded-full
-              bg-violet-500/20
-              blur-3xl
+              bg-emerald-500/15
             "
           />
-
-          <div
-            className="
-              pointer-events-none
-              absolute
-              -bottom-20
-              -left-20
-              h-48
-              w-48
-              rounded-full
-              bg-fuchsia-500/10
-              blur-3xl
-            "
-          />
-
-          {/* =================================================
-              ICON
-          ================================================= */}
 
           <div
             className="
               relative
-              mx-auto
-              mb-5
               flex
-              h-16
-              w-16
-              shrink-0
+              h-20
+              w-20
               items-center
               justify-center
+              rounded-2xl
+              bg-emerald-500
+              text-white
+              shadow-lg
+              shadow-emerald-500/30
             "
           >
-            <div
-              className="
-                absolute
-                inset-0
-                animate-ping
-                rounded-full
-                bg-violet-500/20
-              "
+            <Check
+              size={38}
+              strokeWidth={3}
             />
-
-            <div
-              className="
-                relative
-                flex
-                h-16
-                w-16
-                items-center
-                justify-center
-                rounded-2xl
-                bg-violet-600
-                text-white
-                shadow-lg
-                shadow-violet-600/30
-              "
-            >
-              <Sparkles
-                size={28}
-                className="animate-pulse"
-              />
-            </div>
           </div>
+        </div>
 
-          {/* =================================================
-              TITLE
-          ================================================= */}
+        {/* TITLE */}
 
-          <div className="relative shrink-0 text-center">
-            <h2
-              className="
-                text-xl
-                font-bold
-                text-slate-900
-                dark:text-white
-                sm:text-2xl
-              "
-            >
-              Image Updated
-            </h2>
+        <div
+          className="
+            relative
+            shrink-0
+            text-center
+          "
+        >
+          <h2
+            className="
+              text-2xl
+              font-bold
+              text-slate-900
+              dark:text-white
+              sm:text-3xl
+            "
+          >
+            Image Updated
+          </h2>
 
-            <p
-              className="
-                mt-1
-                text-sm
-                text-slate-500
-                dark:text-slate-400
-              "
-            >
-              Your changes have been applied
-            </p>
-          </div>
+          <p
+            className="
+              mt-2
+              text-sm
+              text-slate-500
+              dark:text-slate-400
+            "
+          >
+            Your changes have been
+            applied successfully
+          </p>
+        </div>
 
-          {/* =================================================
-              EDIT LIST
-          ================================================= */}
+        {/* EDIT LIST */}
 
-          {uniqueEdits.length > 0 && (
-            <div
-              ref={editListRef}
-              className="
-                relative
-                mt-6
-                max-h-[240px]
-                min-h-0
-                shrink
-                overflow-y-auto
-                overscroll-contain
-                pr-1
-                space-y-2
-                scrollbar-thin
-                scrollbar-thumb-violet-500/40
-                scrollbar-track-transparent
-              "
-              style={{
-                touchAction: "pan-y",
-                WebkitOverflowScrolling: "touch",
-              }}
-            >
-              {uniqueEdits
-                .slice(0, visibleItems)
-                .map((edit, index) => (
+        {uniqueEdits.length > 0 && (
+          <div
+            ref={editListRef}
+            className="
+              relative
+              mt-6
+              max-h-[240px]
+              min-h-0
+              shrink
+              space-y-2
+              overflow-y-auto
+              overscroll-contain
+              pr-1
+              scrollbar-thin
+              scrollbar-thumb-emerald-500/40
+              scrollbar-track-transparent
+            "
+            style={{
+              touchAction: "pan-y",
+              WebkitOverflowScrolling:
+                "touch",
+            }}
+          >
+            {uniqueEdits
+              .slice(
+                0,
+                visibleItems
+              )
+              .map(
+                (
+                  edit,
+                  index
+                ) => (
                   <div
                     key={`${edit}-${index}`}
                     className="
@@ -727,57 +863,88 @@ function EditCompleteOverlay({
                       {edit}
                     </span>
                   </div>
-                ))}
-            </div>
-          )}
+                )
+              )}
+          </div>
+        )}
 
-          {/* =================================================
-              PROGRESS
-          ================================================= */}
+        {/* PROGRESS */}
 
-          <div className="relative mt-6 shrink-0">
+        <div
+          className="
+            relative
+            mt-6
+            shrink-0
+          "
+        >
+          <div
+            className="
+              h-1.5
+              overflow-hidden
+              rounded-full
+              bg-slate-200
+              dark:bg-white/10
+            "
+          >
             <div
               className="
-                h-1.5
-                overflow-hidden
+                h-full
                 rounded-full
-                bg-slate-200
-                dark:bg-white/10
+                bg-emerald-500
+                transition-[width]
+                duration-500
+                ease-out
               "
-            >
-              <div
-                className="
-                  h-full
-                  rounded-full
-                  bg-violet-600
-                  transition-all
-                  duration-500
-                  ease-out
-                "
-                style={{
-                  width:
-                    uniqueEdits.length
-                      ? `${
-                          (visibleItems /
-                            uniqueEdits.length) *
-                          100
-                        }%`
-                      : "100%",
-                }}
-              />
-            </div>
-
-            <p
-              className="
-                mt-2
-                text-center
-                text-[11px]
-                text-slate-400
-              "
-            >
-              Finalizing your image...
-            </p>
+              style={{
+                width:
+                  uniqueEdits.length > 0
+                    ? `${progress}%`
+                    : "100%",
+              }}
+            />
           </div>
+
+          <p
+            className="
+              mt-2
+              text-center
+              text-[11px]
+              text-slate-400
+            "
+          >
+            {uniqueEdits.length > 0
+              ? `${visibleItems} of ${uniqueEdits.length} changes completed`
+              : "Changes completed"}
+          </p>
+        </div>
+
+        {/* BADGE */}
+
+        <div
+          className="
+            relative
+            mx-auto
+            mt-5
+            inline-flex
+            items-center
+            gap-2
+            rounded-full
+            border
+            border-emerald-500/20
+            bg-emerald-500/10
+            px-4
+            py-2
+            text-xs
+            font-semibold
+            text-emerald-600
+            dark:text-emerald-400
+          "
+        >
+          <Sparkles size={14} />
+
+          <span>
+            Edit complete
+          </span>
         </div>
       </div>
     </div>

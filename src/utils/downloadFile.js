@@ -1,15 +1,18 @@
 /*
-  Reliable download for converted files.
+  Fast download for converted files.
 
-  - Fetches the file as a Blob and saves it with an <a download>, so the
-    page never navigates away (the old window.location.assign replaced the
-    whole app with a JSON error if the file was missing).
-  - If the browser blocks the fetch (CORS / network), falls back to a plain
-    link click, which still downloads thanks to Content-Disposition.
+  - Uses the browser's native download handling.
+  - Does NOT fetch the entire file into a Blob first.
+  - Does NOT create an object URL.
+  - Large PDF/ZIP/Image downloads can start immediately.
+  - The backend Content-Disposition header controls the filename.
 */
+
 function nameFromUrl(url) {
   try {
-    return decodeURIComponent(new URL(url).pathname.split("/").pop() || "download");
+    return decodeURIComponent(
+      new URL(url).pathname.split("/").pop() || "download"
+    );
   } catch {
     return "download";
   }
@@ -17,10 +20,12 @@ function nameFromUrl(url) {
 
 function clickLink(href, fileName) {
   const a = document.createElement("a");
+
   a.href = href;
   a.download = fileName || "";
   a.rel = "noopener";
   a.style.display = "none";
+
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -29,24 +34,7 @@ function clickLink(href, fileName) {
 export async function downloadFile(url, fileName) {
   const name = fileName || nameFromUrl(url);
 
-  let response;
-  try {
-    response = await fetch(url);
-  } catch {
-    clickLink(url, name); // network/CORS problem -> let the browser handle it
-    return;
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      response.status === 404
-        ? "File expired or not found. Please convert again."
-        : `Download failed (${response.status}).`
-    );
-  }
-
-  const blob = await response.blob();
-  const objectUrl = URL.createObjectURL(blob);
-  clickLink(objectUrl, name);
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  // Let the browser download the file directly.
+  // No fetch(), no Blob(), no object URL.
+  clickLink(url, name);
 }
