@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   canvasToBlob,
-  canvasToDataURLSafe,
   captureStandardObjectMask,
 } from "../utils/editorTools/canvasHelpers";
 
@@ -33,16 +32,31 @@ export default function useObjectRemove({
   setActiveTool,
 }) {
   const [objectRemovalMode, setObjectRemovalMode] = useState(null);
+
+  const [objectBrushSize, setObjectBrushSize] = useState(50);
+
   const [objectApplying, setObjectApplying] = useState(false);
+
   const [aiObjectRemoved, setAiObjectRemoved] = useState(false);
-  const [standardObjectRemoved, setStandardObjectRemoved] = useState(false);
+
+  const [standardObjectRemoved, setStandardObjectRemoved] =
+    useState(false);
+
   const [aiProgress, setAiProgress] = useState(0);
+
   const [aiProgressText, setAiProgressText] = useState("");
 
   const objectDrawingRef = useRef(false);
   const objectLastPointRef = useRef(null);
+
   const objectBaseCanvasRef = useRef(null);
   const aiObjectMaskCanvasRef = useRef(null);
+
+  /*
+   * ---------------------------------------------------------
+   * OBJECT BASE CANVAS
+   * ---------------------------------------------------------
+   */
 
   const snapshotObjectBaseCanvas = useCallback(() => {
     if (!image) return null;
@@ -53,6 +67,7 @@ export default function useObjectRemove({
     if (!width || !height) return null;
 
     const canvas = document.createElement("canvas");
+
     canvas.width = width;
     canvas.height = height;
 
@@ -61,12 +76,25 @@ export default function useObjectRemove({
     if (!ctx) return null;
 
     ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(image, 0, 0, width, height);
+
+    ctx.drawImage(
+      image,
+      0,
+      0,
+      width,
+      height
+    );
 
     objectBaseCanvasRef.current = canvas;
 
     return canvas;
   }, [image]);
+
+  /*
+   * ---------------------------------------------------------
+   * AI MASK CANVAS
+   * ---------------------------------------------------------
+   */
 
   const ensureAIObjectMaskCanvas = useCallback(() => {
     if (!image) return null;
@@ -96,6 +124,12 @@ export default function useObjectRemove({
     return canvas;
   }, [image]);
 
+  /*
+   * ---------------------------------------------------------
+   * CLEAR AI MASK
+   * ---------------------------------------------------------
+   */
+
   const clearAIObjectMask = useCallback(() => {
     const canvas = ensureAIObjectMaskCanvas();
 
@@ -105,14 +139,26 @@ export default function useObjectRemove({
 
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
   }, [ensureAIObjectMaskCanvas]);
+
+  /*
+   * ---------------------------------------------------------
+   * CLEANUP
+   * ---------------------------------------------------------
+   */
 
   const cleanupObjectState = useCallback(() => {
     objectDrawingRef.current = false;
     objectLastPointRef.current = null;
 
     setObjectRemovalMode(null);
+
     setAiProgress(0);
     setAiProgressText("");
 
@@ -120,13 +166,14 @@ export default function useObjectRemove({
   }, [clearAIObjectMask]);
 
   /*
-   * IMPORTANT:
-   * MI-GAN is lazy loaded only when the user opens AI Object Remove.
-   * This keeps the initial editor bundle fast.
+   * ---------------------------------------------------------
+   * MI-GAN PRELOAD
    *
-   * The model session itself is cached inside miganInpaint.js,
-   * so Apply can reuse the same session promise.
+   * Lazy-loads the MI-GAN module and immediately starts
+   * loading/warming the inference session.
+   * ---------------------------------------------------------
    */
+
   const preloadMiGan = useCallback(() => {
     return getMiGanModule()
       .then(({ getMiGanSession }) => {
@@ -148,14 +195,26 @@ export default function useObjectRemove({
       });
   }, []);
 
-  function handleAIObjectRemove() {
-    if (!workingFile || removingBackground || objectApplying) {
+  /*
+   * ---------------------------------------------------------
+   * OPEN AI OBJECT REMOVE
+   * ---------------------------------------------------------
+   */
+
+  const handleAIObjectRemove = useCallback(() => {
+    if (
+      !workingFile ||
+      removingBackground ||
+      objectApplying
+    ) {
       return;
     }
 
     setAiObjectRemoved(false);
+    setStandardObjectRemoved(false);
 
     setShowEffects(false);
+
     setObjectRemovalMode("ai");
 
     resetImageDrag();
@@ -173,25 +232,44 @@ export default function useObjectRemove({
     /*
      * Start MI-GAN loading immediately.
      *
-     * This replaces the broken:
-     *
-     * getMiGanSession()
-     *
-     * which caused:
-     *
-     * ReferenceError: getMiGanSession is not defined
+     * This means the model starts loading as soon as
+     * AI Object Remove is opened instead of waiting
+     * until Apply.
      */
     void preloadMiGan();
-  }
+  }, [
+    workingFile,
+    removingBackground,
+    objectApplying,
+    setShowEffects,
+    resetImageDrag,
+    snapshotObjectBaseCanvas,
+    ensureAIObjectMaskCanvas,
+    clearAIObjectMask,
+    setActiveTool,
+    preloadMiGan,
+  ]);
 
-  function handleStandardObjectRemove() {
-    if (!workingFile || removingBackground || objectApplying) {
+  /*
+   * ---------------------------------------------------------
+   * OPEN STANDARD OBJECT REMOVE
+   * ---------------------------------------------------------
+   */
+
+  const handleStandardObjectRemove = useCallback(() => {
+    if (
+      !workingFile ||
+      removingBackground ||
+      objectApplying
+    ) {
       return;
     }
 
     setAiObjectRemoved(false);
+    setStandardObjectRemoved(false);
 
     setShowEffects(false);
+
     setObjectRemovalMode("standard");
 
     resetImageDrag();
@@ -205,7 +283,23 @@ export default function useObjectRemove({
     clearAIObjectMask();
 
     setActiveTool("object");
-  }
+  }, [
+    workingFile,
+    removingBackground,
+    objectApplying,
+    setShowEffects,
+    resetImageDrag,
+    snapshotObjectBaseCanvas,
+    ensureAIObjectMaskCanvas,
+    clearAIObjectMask,
+    setActiveTool,
+  ]);
+
+  /*
+   * ---------------------------------------------------------
+   * START DRAWING
+   * ---------------------------------------------------------
+   */
 
   const startObjectDrawing = useCallback(
     (point) => {
@@ -228,8 +322,17 @@ export default function useObjectRemove({
     ]
   );
 
+  /*
+   * ---------------------------------------------------------
+   * DRAW OBJECT MASK
+   *
+   * Uses objectBrushSize by default.
+   * Caller can still pass an explicit brush size.
+   * ---------------------------------------------------------
+   */
+
   const drawObjectMask = useCallback(
-    (point, brushSize = 30) => {
+    (point, brushSize = objectBrushSize) => {
       if (
         !objectDrawingRef.current ||
         !point ||
@@ -246,45 +349,93 @@ export default function useObjectRemove({
 
       if (!ctx) return;
 
-      const previous = objectLastPointRef.current || point;
+      const previous =
+        objectLastPointRef.current || point;
+
+      const safeBrushSize = Math.max(
+        10,
+        Math.min(
+          150,
+          Number(brushSize) || 50
+        )
+      );
 
       ctx.save();
 
+      /*
+       * Red visual brush.
+       *
+       * The actual AI mask is converted later by
+       * buildAIInpaintMaskCanvas().
+       */
       ctx.strokeStyle = "#ff0000";
       ctx.fillStyle = "#ff0000";
+
       ctx.globalAlpha = 0.7;
-      ctx.lineWidth = Math.max(4, brushSize);
+
+      ctx.lineWidth = safeBrushSize;
+
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
       ctx.beginPath();
-      ctx.moveTo(previous.x, previous.y);
-      ctx.lineTo(point.x, point.y);
+
+      ctx.moveTo(
+        previous.x,
+        previous.y
+      );
+
+      ctx.lineTo(
+        point.x,
+        point.y
+      );
+
       ctx.stroke();
 
       ctx.beginPath();
+
       ctx.arc(
         point.x,
         point.y,
-        Math.max(2, brushSize / 2),
+        Math.max(
+          2,
+          safeBrushSize / 2
+        ),
         0,
         Math.PI * 2
       );
+
       ctx.fill();
 
       ctx.restore();
 
       objectLastPointRef.current = point;
     },
-    [ensureAIObjectMaskCanvas, objectRemovalMode]
+    [
+      ensureAIObjectMaskCanvas,
+      objectRemovalMode,
+      objectBrushSize,
+    ]
   );
+
+  /*
+   * ---------------------------------------------------------
+   * STOP DRAWING
+   * ---------------------------------------------------------
+   */
 
   const stopObjectDrawing = useCallback(() => {
     objectDrawingRef.current = false;
     objectLastPointRef.current = null;
   }, []);
 
-  async function applyAIObjectRemove() {
+  /*
+   * ---------------------------------------------------------
+   * APPLY AI OBJECT REMOVE
+   * ---------------------------------------------------------
+   */
+
+  const applyAIObjectRemove = useCallback(async () => {
     if (
       !workingFile ||
       !image ||
@@ -294,35 +445,57 @@ export default function useObjectRemove({
       return;
     }
 
-    const maskCanvas = aiObjectMaskCanvasRef.current;
+    const maskCanvas =
+      aiObjectMaskCanvasRef.current;
 
     if (!maskCanvas) {
       return;
     }
 
     setObjectApplying(true);
+
     setAiProgress(1);
-    setAiProgressText("Preparing AI Object Remove...");
+    setAiProgressText(
+      "Preparing AI Object Remove..."
+    );
 
     try {
+      /*
+       * Load the MI-GAN module.
+       *
+       * If preloadMiGan() already completed,
+       * this resolves from the cached module/session.
+       */
       const {
         buildAIInpaintMaskCanvas,
         runLocalAIObjectRemoval,
       } = await getMiGanModule();
 
       if (
-        typeof buildAIInpaintMaskCanvas !== "function" ||
-        typeof runLocalAIObjectRemoval !== "function"
+        typeof buildAIInpaintMaskCanvas !==
+          "function" ||
+        typeof runLocalAIObjectRemoval !==
+          "function"
       ) {
         throw new Error(
           "MI-GAN object removal functions are unavailable."
         );
       }
 
+      /*
+       * -----------------------------------------------------
+       * CHECK WHETHER USER ACTUALLY PAINTED A MASK
+       * -----------------------------------------------------
+       */
+
       const maskHasPixels = (() => {
-        const ctx = maskCanvas.getContext("2d", {
-          willReadFrequently: true,
-        });
+        const ctx =
+          maskCanvas.getContext(
+            "2d",
+            {
+              willReadFrequently: true,
+            }
+          );
 
         if (!ctx) return false;
 
@@ -333,7 +506,11 @@ export default function useObjectRemove({
           maskCanvas.height
         ).data;
 
-        for (let i = 3; i < pixels.length; i += 4) {
+        for (
+          let i = 3;
+          i < pixels.length;
+          i += 4
+        ) {
           if (pixels[i] > 10) {
             return true;
           }
@@ -349,7 +526,15 @@ export default function useObjectRemove({
       }
 
       setAiProgress(5);
-      setAiProgressText("Preparing object mask...");
+      setAiProgressText(
+        "Preparing object mask..."
+      );
+
+      /*
+       * -----------------------------------------------------
+       * ORIGINAL IMAGE
+       * -----------------------------------------------------
+       */
 
       const baseCanvas =
         objectBaseCanvasRef.current ||
@@ -361,10 +546,17 @@ export default function useObjectRemove({
         );
       }
 
-      const aiMaskCanvas = buildAIInpaintMaskCanvas(
-        baseCanvas,
-        maskCanvas
-      );
+      /*
+       * -----------------------------------------------------
+       * BUILD AI MASK
+       * -----------------------------------------------------
+       */
+
+      const aiMaskCanvas =
+        buildAIInpaintMaskCanvas(
+          baseCanvas,
+          maskCanvas
+        );
 
       if (!aiMaskCanvas) {
         throw new Error(
@@ -373,24 +565,54 @@ export default function useObjectRemove({
       }
 
       setAiProgress(15);
-      setAiProgressText("Starting local AI...");
 
-      const resultCanvas = await runLocalAIObjectRemoval({
-        sourceCanvas: baseCanvas,
-        maskCanvas: aiMaskCanvas,
-        onProgress: (progress, message) => {
-          const safeProgress = Math.max(
-            15,
-            Math.min(99, Number(progress) || 0)
-          );
+      setAiProgressText(
+        "Starting local AI..."
+      );
 
-          setAiProgress(safeProgress);
+      /*
+       * -----------------------------------------------------
+       * RUN LOCAL MI-GAN
+       * -----------------------------------------------------
+       */
 
-          if (message) {
-            setAiProgressText(message);
-          }
-        },
-      });
+      const resultCanvas =
+        await runLocalAIObjectRemoval({
+          sourceCanvas: baseCanvas,
+
+          maskCanvas: aiMaskCanvas,
+
+          onProgress: (
+            progress,
+            message
+          ) => {
+            const numericProgress =
+              Number(progress);
+
+            const safeProgress =
+              Math.max(
+                15,
+                Math.min(
+                  99,
+                  Number.isFinite(
+                    numericProgress
+                  )
+                    ? numericProgress
+                    : 15
+                )
+              );
+
+            setAiProgress(
+              safeProgress
+            );
+
+            if (message) {
+              setAiProgressText(
+                message
+              );
+            }
+          },
+        });
 
       if (!resultCanvas) {
         throw new Error(
@@ -398,14 +620,24 @@ export default function useObjectRemove({
         );
       }
 
-      setAiProgress(95);
-      setAiProgressText("Creating final image...");
+      /*
+       * -----------------------------------------------------
+       * CREATE PNG
+       * -----------------------------------------------------
+       */
 
-      const blob = await canvasToBlob(
-        resultCanvas,
-        "image/png",
-        1
+      setAiProgress(95);
+
+      setAiProgressText(
+        "Creating final image..."
       );
+
+      const blob =
+        await canvasToBlob(
+          resultCanvas,
+          "image/png",
+          1
+        );
 
       if (!blob) {
         throw new Error(
@@ -414,56 +646,108 @@ export default function useObjectRemove({
       }
 
       const baseName =
-        workingFile.name?.replace(/\.[^/.]+$/, "") ||
-        "image";
+        workingFile.name?.replace(
+          /\.[^/.]+$/,
+          ""
+        ) || "image";
 
-      const outputFile = new File(
-        [blob],
-        `${baseName}-object-removed.png`,
-        {
-          type: "image/png",
-          lastModified: Date.now(),
-        }
-      );
+      const outputFile =
+        new File(
+          [blob],
+          `${baseName}-object-removed.png`,
+          {
+            type: "image/png",
+            lastModified:
+              Date.now(),
+          }
+        );
 
-      const loadedImage = await new Promise(
-        (resolve, reject) => {
-          const url = URL.createObjectURL(outputFile);
-          const img = new Image();
+      /*
+       * -----------------------------------------------------
+       * LOAD RESULT IMAGE
+       * -----------------------------------------------------
+       */
 
-          img.onload = () => {
-            URL.revokeObjectURL(url);
-            resolve(img);
-          };
+      const loadedImage =
+        await new Promise(
+          (resolve, reject) => {
+            const url =
+              URL.createObjectURL(
+                outputFile
+              );
 
-          img.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(
-              new Error(
-                "Could not load the processed image."
-              )
-            );
-          };
+            const img =
+              new Image();
 
-          img.src = url;
-        }
-      );
+            img.onload = () => {
+              URL.revokeObjectURL(
+                url
+              );
+
+              resolve(img);
+            };
+
+            img.onerror = () => {
+              URL.revokeObjectURL(
+                url
+              );
+
+              reject(
+                new Error(
+                  "Could not load the processed image."
+                )
+              );
+            };
+
+            img.src = url;
+          }
+        );
+
+      /*
+       * -----------------------------------------------------
+       * UPDATE EDITOR IMAGE
+       * -----------------------------------------------------
+       */
 
       setWorkingFile(outputFile);
+
       setImage(loadedImage);
 
       setAiObjectRemoved(true);
-      setAiProgress(100);
-      setAiProgressText("Object removed successfully.");
 
-      if (layers?.addToolLayer) {
+      setStandardObjectRemoved(
+        false
+      );
+
+      setAiProgress(100);
+
+      setAiProgressText(
+        "Object removed successfully."
+      );
+
+      /*
+       * -----------------------------------------------------
+       * LAYER SYSTEM
+       * -----------------------------------------------------
+       */
+
+      if (
+        layers?.addToolLayer
+      ) {
         try {
           layers.addToolLayer({
-            type: "ai-object-remove",
-            name: "AI Object Remove",
-            file: outputFile,
+            type:
+              "ai-object-remove",
+
+            name:
+              "AI Object Remove",
+
+            file:
+              outputFile,
           });
-        } catch (layerError) {
+        } catch (
+          layerError
+        ) {
           console.warn(
             "Could not add AI Object Remove layer:",
             layerError
@@ -471,13 +755,20 @@ export default function useObjectRemove({
         }
       }
 
-      if (layers?.addAppliedAction) {
+      if (
+        layers?.addAppliedAction
+      ) {
         try {
           layers.addAppliedAction({
-            type: "ai-object-remove",
-            name: "AI Object Remove",
+            type:
+              "ai-object-remove",
+
+            name:
+              "AI Object Remove",
           });
-        } catch (actionError) {
+        } catch (
+          actionError
+        ) {
           console.warn(
             "Could not record AI Object Remove action:",
             actionError
@@ -485,6 +776,11 @@ export default function useObjectRemove({
         }
       }
 
+      /*
+       * Keep the successful state.
+       *
+       * This also closes the object-removal mode.
+       */
       cleanupObjectState();
     } catch (error) {
       console.error(
@@ -493,97 +789,189 @@ export default function useObjectRemove({
       );
 
       setAiProgress(0);
-      setAiProgressText("");
 
-      window.setTimeout(() => {
-        setAiProgressText(
-          error?.message ||
-            "AI Object Remove failed. Please try again."
-        );
-      }, 0);
+      setAiProgressText(
+        error?.message ||
+          "AI Object Remove failed. Please try again."
+      );
     } finally {
       setObjectApplying(false);
     }
-  }
+  }, [
+    workingFile,
+    image,
+    objectApplying,
+    removingBackground,
+    snapshotObjectBaseCanvas,
+    cleanupObjectState,
+    layers,
+    setWorkingFile,
+    setImage,
+  ]);
 
-  async function applyStandardObjectRemove() {
-    if (
-      !workingFile ||
-      !image ||
-      objectApplying ||
-      removingBackground
-    ) {
-      return;
-    }
+  /*
+   * ---------------------------------------------------------
+   * APPLY STANDARD OBJECT REMOVE
+   * ---------------------------------------------------------
+   */
 
-    const baseCanvas =
-      objectBaseCanvasRef.current ||
-      snapshotObjectBaseCanvas();
+  const applyStandardObjectRemove =
+    useCallback(async () => {
+      if (
+        !workingFile ||
+        !image ||
+        objectApplying ||
+        removingBackground
+      ) {
+        return;
+      }
 
-    if (!baseCanvas) return;
+      const baseCanvas =
+        objectBaseCanvasRef.current ||
+        snapshotObjectBaseCanvas();
 
-    const editedCanvas = document.createElement("canvas");
+      if (!baseCanvas) {
+        return;
+      }
 
-    editedCanvas.width = image.naturalWidth || image.width;
-    editedCanvas.height = image.naturalHeight || image.height;
+      const editedCanvas =
+        document.createElement(
+          "canvas"
+        );
 
-    const editedCtx = editedCanvas.getContext("2d");
+      editedCanvas.width =
+        image.naturalWidth ||
+        image.width;
 
-    if (!editedCtx) return;
+      editedCanvas.height =
+        image.naturalHeight ||
+        image.height;
 
-    editedCtx.clearRect(
-      0,
-      0,
-      editedCanvas.width,
-      editedCanvas.height
-    );
+      const editedCtx =
+        editedCanvas.getContext(
+          "2d"
+        );
 
-    editedCtx.drawImage(
+      if (!editedCtx) {
+        return;
+      }
+
+      editedCtx.clearRect(
+        0,
+        0,
+        editedCanvas.width,
+        editedCanvas.height
+      );
+
+      editedCtx.drawImage(
+        image,
+        0,
+        0,
+        editedCanvas.width,
+        editedCanvas.height
+      );
+
+      const maskDataURL =
+        captureStandardObjectMask(
+          baseCanvas,
+          editedCanvas
+        );
+
+      if (!maskDataURL) {
+        return;
+      }
+
+      setStandardObjectRemoved(
+        true
+      );
+
+      setAiObjectRemoved(
+        false
+      );
+
+      setObjectRemovalMode(
+        null
+      );
+    }, [
+      workingFile,
       image,
-      0,
-      0,
-      editedCanvas.width,
-      editedCanvas.height
-    );
+      objectApplying,
+      removingBackground,
+      snapshotObjectBaseCanvas,
+    ]);
 
-    const maskDataURL = captureStandardObjectMask(
-      baseCanvas,
-      editedCanvas
-    );
-
-    if (!maskDataURL) {
-      return;
-    }
-
-    setStandardObjectRemoved(true);
-    setObjectRemovalMode(null);
-  }
+  /*
+   * ---------------------------------------------------------
+   * RESET WHEN WORKING FILE CHANGES
+   * ---------------------------------------------------------
+   */
 
   useEffect(() => {
     if (!workingFile) {
-      objectBaseCanvasRef.current = null;
-      aiObjectMaskCanvasRef.current = null;
+      objectBaseCanvasRef.current =
+        null;
 
-      setObjectRemovalMode(null);
-      setAiObjectRemoved(false);
-      setStandardObjectRemoved(false);
+      aiObjectMaskCanvasRef.current =
+        null;
+
+      objectDrawingRef.current =
+        false;
+
+      objectLastPointRef.current =
+        null;
+
+      setObjectRemovalMode(
+        null
+      );
+
+      setAiObjectRemoved(
+        false
+      );
+
+      setStandardObjectRemoved(
+        false
+      );
+
       setAiProgress(0);
+
       setAiProgressText("");
     }
   }, [workingFile]);
 
+  /*
+   * ---------------------------------------------------------
+   * CLEANUP ON UNMOUNT
+   * ---------------------------------------------------------
+   */
+
   useEffect(() => {
     return () => {
-      objectDrawingRef.current = false;
-      objectLastPointRef.current = null;
-      objectBaseCanvasRef.current = null;
-      aiObjectMaskCanvasRef.current = null;
+      objectDrawingRef.current =
+        false;
+
+      objectLastPointRef.current =
+        null;
+
+      objectBaseCanvasRef.current =
+        null;
+
+      aiObjectMaskCanvasRef.current =
+        null;
     };
   }, []);
+
+  /*
+   * ---------------------------------------------------------
+   * PUBLIC API
+   * ---------------------------------------------------------
+   */
 
   return {
     objectRemovalMode,
     setObjectRemovalMode,
+
+    objectBrushSize,
+    setObjectBrushSize,
 
     objectApplying,
 
