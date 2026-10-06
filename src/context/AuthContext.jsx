@@ -1,4 +1,4 @@
-﻿import {
+import {
   createContext,
   useCallback,
   useContext,
@@ -62,6 +62,7 @@ export function AuthProvider({ children }) {
   const mountedRef = useRef(false);
   const refreshTimerRef = useRef(null);
   const bootstrapPromiseRef = useRef(null);
+  const scheduleRefreshRef = useRef(null);
 
   /*
    * =========================================
@@ -178,7 +179,7 @@ export function AuthProvider({ children }) {
             }
 
             if (mountedRef.current) {
-              scheduleRefresh();
+              scheduleRefreshRef.current?.();
             }
           } catch {
             if (mountedRef.current) {
@@ -196,6 +197,10 @@ export function AuthProvider({ children }) {
     clearRefreshTimer,
     clearUserCache,
   ]);
+
+  useEffect(() => {
+    scheduleRefreshRef.current = scheduleRefresh;
+  }, [scheduleRefresh]);
 
   /*
    * =========================================
@@ -256,7 +261,7 @@ export function AuthProvider({ children }) {
           }
 
           return null;
-        } catch (error) {
+        } catch {
           /*
            * IMPORTANT:
            *

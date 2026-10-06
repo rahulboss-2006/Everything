@@ -1,4 +1,4 @@
-﻿const API_BASE_URL =
+const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const ACCESS_TOKEN_KEY = "accessToken";
@@ -167,7 +167,7 @@ export const apiRequest = async (
     response = await rawApiRequest(endpoint, options);
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error("Request timed out. Please try again.");
+      throw new Error("Request timed out. Please try again.", { cause: error });
     }
 
     throw error;
@@ -194,7 +194,7 @@ export const apiRequest = async (
     return await rawApiRequest(endpoint, options);
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error("Request timed out. Please try again.");
+      throw new Error("Request timed out. Please try again.", { cause: error });
     }
 
     throw error;
@@ -234,6 +234,32 @@ export const apiJson = async (
   }
 
   return data;
+};
+
+export { API_BASE_URL };
+
+/*
+  Free hosting (Render) puts the backend to sleep after ~15 minutes.
+  The first request then takes 30-60 seconds and looks like a hang.
+  Calling this once when the site opens wakes the server while the
+  user is still choosing a file, so the real request is fast.
+*/
+let warmUpStarted = false;
+
+export const warmUpServer = () => {
+  if (warmUpStarted) return;
+
+  warmUpStarted = true;
+
+  try {
+    fetch(`${API_BASE_URL}/health`, {
+      method: "GET",
+      cache: "no-store",
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // Warm-up is best effort only.
+  }
 };
 
 export default apiRequest;

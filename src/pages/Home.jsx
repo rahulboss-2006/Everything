@@ -40,6 +40,7 @@ const Home = () => {
   const [file, setFile] = useState(null);
 
   const { user, updateCredits } = useAuth();
+  const navigate = useNavigate();
 
   // -----------------------------
   // Conversion state
@@ -139,6 +140,18 @@ const Home = () => {
   // Convert file
   // -----------------------------
   async function handleConvert() {
+    // Not logged in: send to login instead of showing a raw API error.
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    // Out of credits: go straight to recharge (no full page reload).
+    if (Number(user.credits ?? 0) <= 0) {
+      navigate("/recharge");
+      return;
+    }
+
     if (!file) {
       setError("Please select a file.");
       return;
@@ -155,7 +168,7 @@ const Home = () => {
 
       let result;
 
-      // Image Ã¢â€ â€™ PDF
+      // Image -> PDF
       if (
         extension !== "pdf" &&
         selectedFormat === "pdf"
@@ -167,7 +180,7 @@ const Home = () => {
         result = await convertImageToPdf(file);
       }
 
-      // Image Ã¢â€ â€™ Image
+      // Image -> Image
       else if (extension !== "pdf") {
         setConversionStatus(
           `Converting to ${selectedFormat.toUpperCase()}...`
@@ -179,7 +192,7 @@ const Home = () => {
         );
       }
 
-      // PDF Ã¢â€ â€™ Image
+      // PDF -> Image
       else {
         setConversionStatus(
           `Converting PDF to ${selectedFormat.toUpperCase()}...`
@@ -230,8 +243,6 @@ const Home = () => {
 
     } catch (conversionError) {
   console.error("FRONTEND CONVERSION ERROR:", conversionError);
-  console.error("ERROR STATUS:", conversionError?.status);
-  console.error("ERROR DATA:", conversionError?.data);
 
   if (
     conversionError?.status === 402 ||
@@ -240,7 +251,7 @@ const Home = () => {
     setConversionStatus("");
     setIsConverting(false);
 
-    window.location.href = "/Everything/recharge";
+    navigate("/recharge");
     return;
   }
 

@@ -1,10 +1,19 @@
-﻿const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+import {
+  API_BASE_URL,
+  getRefreshToken,
+  refreshAccessTokenOnce,
+} from "../utils/api";
 
-const SERVER_BASE_URL =
-  API_BASE_URL.replace(/\/api\/?$/, "");
+/* ================================
+   SETTINGS
+================================ */
 
+// Image conversions are quick; PDF work can take longer.
+const IMAGE_TIMEOUT_MS = 90 * 1000;
+const PDF_TIMEOUT_MS = 4 * 60 * 1000;
+
+// Wait before the single automatic retry (server waking up).
+const RETRY_DELAY_MS = 2500;
 
 /* ================================
    DOWNLOAD URL
@@ -24,15 +33,11 @@ function resolveDownloadUrl(downloadUrl) {
    */
 
   try {
-    return new URL(
-      downloadUrl,
-      API_BASE_URL
-    ).toString();
+    return new URL(downloadUrl, API_BASE_URL).toString();
   } catch {
     return downloadUrl;
   }
 }
-
 
 /* ================================
    RESPONSE
@@ -41,29 +46,31 @@ function resolveDownloadUrl(downloadUrl) {
 async function parseResponse(response) {
   const text = await response.text();
 
-  let data = {};
+  let data;
 
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
     const error = new Error(
-      `Server returned invalid response (${response.status}).`
+      response.status === 413
+        ? "File is too large. Please upload a smaller file."
+        : response.status >= 500
+          ? "The server is busy right now. Please try again in a moment."
+          : `Server returned an invalid response (${response.status}).`
     );
 
     error.status = response.status;
 
     error.data = {
       success: false,
-      message: `Invalid server response (${response.status}).`,
+      message: error.message,
     };
 
     throw error;
   }
 
   if (!response.ok || data.success === false) {
-    const error = new Error(
-      data.message || "Conversion failed."
-    );
+    const error = new Error(data.message || "Conversion failed.");
 
     error.status = response.status;
     error.data = data;
@@ -74,300 +81,159 @@ async function parseResponse(response) {
   return data;
 }
 
-
 /* ================================
-   REFRESH ACCESS TOKEN
+   LOW-LEVEL REQUEST
 ================================ */
 
-let refreshPromise = null;
-
-async function refreshAccessToken() {
-  if (refreshPromise) {
-    return refreshPromise;
-  }
-
-  refreshPromise = (async () => {
-    try {
-      const refreshToken =
-        localStorage.getItem("refreshToken");
-
-      if (!refreshToken) {
-        console.warn(
-          "REFRESH: No refresh token found."
-        );
-
-        return false;
-      }
-
-      const response = await fetch(
-        `${API_BASE_URL}/auth/refresh`,
-        {
-          method: "POST",
-          credentials: "include",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            refreshToken,
-          }),
-        }
-      );
-
-      const data =
-        await response.json().catch(() => ({}));
-
-      if (
-        !response.ok ||
-        !data?.accessToken
-      ) {
-        console.error(
-          "REFRESH FAILED:",
-          response.status,
-          data
-        );
-
-        return false;
-      }
-
-      localStorage.setItem(
-        "accessToken",
-        data.accessToken
-      );
-
-      if (data.refreshToken) {
-        localStorage.setItem(
-          "refreshToken",
-          data.refreshToken
-        );
-      }
-
-      console.log(
-        "TOKEN REFRESH SUCCESS"
-      );
-
-      return true;
-
-    } catch (error) {
-      console.error(
-        "TOKEN REFRESH ERROR:",
-        error
-      );
-
-      return false;
-
-    } finally {
-      refreshPromise = null;
-    }
-  })();
-
-  return refreshPromise;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function authHeaders() {
+  const token = localStorage.getItem("accessToken");
 
-/* ================================
-   AUTH HEADERS
-================================ */
-
-function getAuthHeaders() {
-  const token =
-    localStorage.getItem("accessToken");
-
-  if (!token) {
-    return {};
-  }
-
-  return {
-    Authorization: `Bearer ${token}`,
-  };
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-
-/* ================================
-   AUTHENTICATED REQUEST
-================================ */
-
-async function authenticatedFetch(
-  url,
-  options = {},
-  retry = true
-) {
-  const headers = {
-    ...(options.headers || {}),
-    ...getAuthHeaders(),
-  };
-
-  let response;
+async function requestOnce(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    response = await fetch(url, {
+    return await fetch(url, {
       ...options,
-      headers,
+      headers: {
+        ...(options.headers || {}),
+        ...authHeaders(),
+      },
       credentials: "include",
+      signal: controller.signal,
     });
-  } catch (error) {
-    console.error(
-      "NETWORK ERROR:",
-      error
-    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-    throw error;
+function friendlyNetworkError(error) {
+  const friendly =
+    error?.name === "AbortError"
+      ? new Error(
+          "The server took too long to answer. Please try again."
+        )
+      : new Error(
+          "Cannot reach the server. Check your internet connection and try again."
+        );
+
+  friendly.cause = error;
+  friendly.status = 0;
+
+  return friendly;
+}
+
+/*
+ * Sends the request with:
+ *  - a timeout (no endless spinner),
+ *  - ONE shared token-refresh (same one the rest of the app uses,
+ *    so two refreshes can never race and log the user out),
+ *  - ONE automatic retry when the free server is still waking up.
+ */
+async function authenticatedFetch(url, options = {}, timeoutMs) {
+  let response;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await requestOnce(url, options, timeoutMs);
+    } catch (error) {
+      // Network failure / cold start: retry once, then give up politely.
+      if (attempt === 0 && error?.name !== "AbortError") {
+        await sleep(RETRY_DELAY_MS);
+        continue;
+      }
+
+      throw friendlyNetworkError(error);
+    }
+
+    // 502 / 503 = proxy up, app still booting. Safe to retry once.
+    if (attempt === 0 && (response.status === 502 || response.status === 503)) {
+      await sleep(RETRY_DELAY_MS);
+      continue;
+    }
+
+    break;
   }
 
+  /* ACCESS TOKEN EXPIRED -> refresh once, then repeat the request. */
+  if (response.status === 401 && getRefreshToken()) {
+    const newToken = await refreshAccessTokenOnce();
 
-  /* ================================
-     ACCESS TOKEN EXPIRED
-  ================================ */
-
-  if (
-    response.status === 401 &&
-    retry
-  ) {
-    console.warn(
-      "ACCESS TOKEN EXPIRED — REFRESHING..."
-    );
-
-    const refreshed =
-      await refreshAccessToken();
-
-    if (refreshed) {
-      return authenticatedFetch(
-        url,
-        {
-          ...options,
-
-          headers: {
-            ...(options.headers || {}),
-          },
-        },
-        false
-      );
+    if (newToken) {
+      try {
+        response = await requestOnce(url, options, timeoutMs);
+      } catch (error) {
+        throw friendlyNetworkError(error);
+      }
     }
   }
 
   return response;
 }
 
+async function postFile(endpoint, file, outputFormat, timeoutMs) {
+  const formData = new FormData();
+
+  formData.append("file", file);
+
+  if (outputFormat) {
+    formData.append("outputFormat", outputFormat);
+  }
+
+  const response = await authenticatedFetch(
+    `${API_BASE_URL}${endpoint}`,
+    {
+      method: "POST",
+      body: formData,
+    },
+    timeoutMs
+  );
+
+  const data = await parseResponse(response);
+
+  return {
+    ...data,
+    downloadUrl: resolveDownloadUrl(data.downloadUrl),
+  };
+}
 
 /* ================================
    IMAGE → IMAGE
 ================================ */
 
-export async function convertImage(
-  file,
-  outputFormat
-) {
-  const formData = new FormData();
-
-  formData.append(
-    "file",
-    file
+export function convertImage(file, outputFormat) {
+  return postFile(
+    "/converter/image",
+    file,
+    outputFormat,
+    IMAGE_TIMEOUT_MS
   );
-
-  formData.append(
-    "outputFormat",
-    outputFormat
-  );
-
-  const response =
-    await authenticatedFetch(
-      `${API_BASE_URL}/converter/image`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-  const data =
-    await parseResponse(response);
-
-  return {
-    ...data,
-
-    downloadUrl:
-      resolveDownloadUrl(
-        data.downloadUrl
-      ),
-  };
 }
-
 
 /* ================================
    IMAGE → PDF
 ================================ */
 
-export async function convertImageToPdf(
-  file
-) {
-  const formData = new FormData();
-
-  formData.append(
-    "file",
-    file
-  );
-
-  const response =
-    await authenticatedFetch(
-      `${API_BASE_URL}/pdf/image-to-pdf`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-  const data =
-    await parseResponse(response);
-
-  return {
-    ...data,
-
-    downloadUrl:
-      resolveDownloadUrl(
-        data.downloadUrl
-      ),
-  };
+export function convertImageToPdf(file) {
+  return postFile("/pdf/image-to-pdf", file, null, PDF_TIMEOUT_MS);
 }
-
 
 /* ================================
    PDF → IMAGE
 ================================ */
 
-export async function convertPdfToImage(
-  file,
-  outputFormat
-) {
-  const formData = new FormData();
-
-  formData.append(
-    "file",
-    file
+export function convertPdfToImage(file, outputFormat) {
+  return postFile(
+    "/pdf/pdf-to-image",
+    file,
+    outputFormat,
+    PDF_TIMEOUT_MS
   );
-
-  formData.append(
-    "outputFormat",
-    outputFormat
-  );
-
-  const response =
-    await authenticatedFetch(
-      `${API_BASE_URL}/pdf/pdf-to-image`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-  const data =
-    await parseResponse(response);
-
-  return {
-    ...data,
-
-    downloadUrl:
-      resolveDownloadUrl(
-        data.downloadUrl
-      ),
-  };
 }
