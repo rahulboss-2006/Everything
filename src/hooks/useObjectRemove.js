@@ -136,17 +136,74 @@ export default function useObjectRemove({
    */
 
   useEffect(() => {
-    if (
-      lastAIResultFileRef.current &&
-      workingFile !==
-        lastAIResultFileRef.current
-    ) {
-      lastAIResultFileRef.current =
-        null;
+  if (
+    lastAIResultFileRef.current &&
+    workingFile !==
+      lastAIResultFileRef.current
+  ) {
+    lastAIResultFileRef.current = null;
+    setAiObjectRemoved(false);
+  }
 
-      setAiObjectRemoved(false);
+  /*
+   * PRELOAD MI-GAN immediately when the image
+   * changes.
+   *
+   * This is intentionally background work.
+   * The editor UI does not wait for it.
+   */
+  if (!workingFile) {
+    return;
+  }
+
+  let cancelled = false;
+
+  const warmup = async () => {
+    try {
+      const module =
+        await getMiGanModule();
+
+      if (
+        cancelled ||
+        !module ||
+        typeof module.getMiGanSession !==
+          "function"
+      ) {
+        return;
+      }
+
+      /*
+       * Do not show model-loading UI just because
+       * background warmup is happening.
+       *
+       * The user should continue editing normally.
+       */
+      await module.getMiGanSession();
+    } catch (error) {
+      if (!cancelled) {
+        console.warn(
+          "MI-GAN background warm-up failed. It will retry when AI Object Remove is used.",
+          error
+        );
+      }
     }
-  }, [workingFile]);
+  };
+
+  /*
+   * Let the current image render first.
+   * Then start AI preparation.
+   */
+  const timer =
+    window.setTimeout(
+      warmup,
+      80
+    );
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timer);
+  };
+}, [workingFile]);
 
   /*
    * ---------------------------------------------------------
@@ -671,73 +728,83 @@ export default function useObjectRemove({
     }
   }
 
-  function paintAIObjectDot(
+  function paintAIObjectDot(x, y) {
+  const mask = ensureAIObjectMaskCanvas();
+
+  if (!mask) return;
+
+  const ctx = mask.getContext("2d");
+
+  if (!ctx) return;
+
+  const radius = Math.max(
+    5,
+    objectBrushSize / 2
+  );
+
+  /*
+   * IMPORTANT:
+   * The actual AI mask must be opaque.
+   *
+   * Previously this was 0.03 alpha.
+   * 0.03 * 255 = 7.65, while the old
+   * mask builder required alpha > 8.
+   *
+   * Result: almost empty mask -> MI-GAN
+   * received no object selection.
+   */
+  ctx.save();
+
+  ctx.fillStyle =
+    "rgba(255, 255, 255, 1)";
+
+  ctx.beginPath();
+
+  ctx.arc(
     x,
-    y
+    y,
+    radius,
+    0,
+    Math.PI * 2
+  );
+
+  ctx.fill();
+
+  ctx.restore();
+
+  /*
+   * Visual overlay is separate.
+   */
+  const overlay =
+    aiObjectOverlayCanvasRef.current;
+
+  const overlayCtx =
+    overlay?.getContext("2d");
+
+  if (
+    overlay &&
+    overlayCtx
   ) {
-    const mask =
-      ensureAIObjectMaskCanvas();
+    overlayCtx.save();
 
-    if (!mask) return;
+    overlayCtx.fillStyle =
+      "rgba(255, 0, 0, 0.18)";
 
-    const ctx =
-      mask.getContext("2d");
+    overlayCtx.beginPath();
 
-    if (!ctx) return;
+    overlayCtx.arc(
+      x,
+      y,
+      radius,
+      0,
+      Math.PI * 2
+    );
 
-    const radius =
-      Math.max(
-        5,
-        objectBrushSize / 2
-      );
+    overlayCtx.fill();
 
-    function paint(
-      targetCtx
-    ) {
-      targetCtx.save();
-
-      /*
-       * Keep the mask red/transparent for the
-       * visual overlay. buildAIInpaintMaskCanvas()
-       * converts it into the actual binary mask.
-       */
-      targetCtx.fillStyle =
-        "rgba(255, 0, 0, 0.03)";
-
-      targetCtx.beginPath();
-
-      targetCtx.arc(
-        x,
-        y,
-        radius,
-        0,
-        Math.PI * 2
-      );
-
-      targetCtx.fill();
-
-      targetCtx.restore();
-    }
-
-    paint(ctx);
-
-    const overlay =
-      aiObjectOverlayCanvasRef.current;
-
-    const overlayCtx =
-      overlay?.getContext(
-        "2d"
-      );
-
-    if (
-      overlay &&
-      overlayCtx
-    ) {
-      paint(
-        overlayCtx
-      );
-    }
+    overlayCtx.restore();
   }
+}
 
   function paintAIObjectLine(
     from,
