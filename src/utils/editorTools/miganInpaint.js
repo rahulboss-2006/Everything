@@ -387,9 +387,12 @@ function createWorkingCanvases(
     );
 
   const baseCtx =
-    workingBase.getContext(
-      "2d"
-    );
+  workingBase.getContext(
+    "2d",
+    {
+      willReadFrequently: true,
+    }
+  );
 
   const maskCtx =
     workingMask.getContext(
@@ -467,8 +470,10 @@ function restoreToOriginalSize(
     );
 
   const ctx =
-    restored.getContext("2d");
-
+  restored.getContext("2d", {
+    willReadFrequently: true,
+  });
+  
   if (!ctx) {
     throw new Error(
       "Could not restore AI result to original size."

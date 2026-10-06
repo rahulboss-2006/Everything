@@ -130,16 +130,29 @@ export default function useObjectRemove({
 
   objectDrawingRef.current = false;
   objectLastPointRef.current = null;
+
   ensureAIObjectMaskCanvas();
   clearAIObjectMask();
   setActiveTool("ai-object");
 
-  void getMiGanSession().catch((error) => {
-    console.warn(
-      "AI Object Remove model preload failed; it will retry on Apply.",
-      error
-    );
-  });
+  // Start loading MI-GAN immediately after entering AI Object Remove.
+  // The heavy module remains lazy-loaded from the initial editor bundle.
+  void getMiGanModule()
+    .then(({ getMiGanSession }) => {
+      if (typeof getMiGanSession !== "function") {
+        throw new Error(
+          "MI-GAN session loader is unavailable."
+        );
+      }
+
+      return getMiGanSession();
+    })
+    .catch((error) => {
+      console.warn(
+        "AI Object Remove model preload failed; it will retry on Apply.",
+        error
+      );
+    });
 }
 
   function cancelObjectRemove() {
