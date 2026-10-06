@@ -18,35 +18,26 @@ import {
 
 /*
  * =========================================================
- * IMG.LY MODULE
+ * IMG.LY MODULE / ENGINE SINGLETONS
+ * =========================================================
+ *
+ * IMPORTANT:
+ *
+ * These live OUTSIDE the React hook.
+ *
+ * So:
+ * - component re-render does not reload IMG.LY
+ * - hook remount does not reload IMG.LY
+ * - multiple callers share one module import
+ * - model initialization is shared
+ * - same image preparation is shared
  * =========================================================
  */
 
 let backgroundRemovalModulePromise = null;
+let backgroundEngineWarmupPromise = null;
 
-async function getBackgroundRemovalModule() {
-  if (
-    typeof window === "undefined" ||
-    typeof document === "undefined"
-  ) {
-    throw new Error(
-      "Background removal is only available in the browser."
-    );
-  }
-
-  if (!backgroundRemovalModulePromise) {
-    // Share one import across calls, but allow a retry if the chunk fails
-    // to download on a slow or unstable connection.
-    backgroundRemovalModulePromise = import("@imgly/background-removal").catch(
-      (error) => {
-        backgroundRemovalModulePromise = null;
-        throw error;
-      }
-    );
-  }
-
-  return backgroundRemovalModulePromise;
-}
+const globalPreparationPromises = new Map();
 
 /*
  * =========================================================
@@ -62,20 +53,6 @@ let globalWorkingConfig = null;
 /*
  * =========================================================
  * VISIBLE PROGRESS
- * =========================================================
- *
- * IMPORTANT:
- *
- * This progress is completely independent from IMG.LY.
- *
- * It always visually counts:
- *
- * 1 -> 2 -> 3 -> ... -> 100
- *
- * in approximately 2 seconds.
- *
- * Even if AI finishes in 200ms,
- * the visual loader continues until 100%.
  * =========================================================
  */
 
@@ -157,8 +134,6 @@ function getCpuConfig() {
   return {
     device: "cpu",
 
-    // Use the smaller quantized model on every CPU device. It reduces the
-    // first model download for low-bandwidth users and is suitable for CPU.
     model: "isnet_quint8",
 
     proxyToWorker: true,
@@ -194,6 +169,139 @@ function getFileKey(file) {
 
 /*
  * =========================================================
+ * LOAD IMG.LY MODULE
+ * =========================================================
+ */
+
+async function getBackgroundRemovalModule() {
+  if (!isBrowser()) {
+    throw new Error(
+      "Background removal is only available in the browser."
+    );
+  }
+
+  if (!backgroundRemovalModulePromise) {
+    backgroundRemovalModulePromise =
+      import("@imgly/background-removal").catch(
+        (error) => {
+          backgroundRemovalModulePromise =
+            null;
+
+          throw error;
+        }
+      );
+  }
+
+  return backgroundRemovalModulePromise;
+}
+
+/*
+ * =========================================================
+ * ENGINE CONFIG SINGLETON
+ * =========================================================
+ */
+
+function getGlobalConfig() {
+  if (!globalWorkingConfig) {
+    globalWorkingConfig =
+      getCpuConfig();
+  }
+
+  return globalWorkingConfig;
+}
+
+/*
+ * =========================================================
+ * MODEL PRELOAD / WARM-UP
+ * =========================================================
+ *
+ * This starts as soon as the first image arrives.
+ *
+ * preload() initializes the IMG.LY inference session
+ * before the user presses Remove Background.
+ *
+ * The same session is then reused by removeBackground().
+ * =========================================================
+ */
+
+async function warmupBackgroundEngine() {
+  if (!isBrowser()) {
+    throw new Error(
+      "Background removal is only available in the browser."
+    );
+  }
+
+  if (backgroundEngineWarmupPromise) {
+    return backgroundEngineWarmupPromise;
+  }
+
+  backgroundEngineWarmupPromise =
+    (async () => {
+      const module =
+        await getBackgroundRemovalModule();
+
+      const config =
+        getGlobalConfig();
+
+      console.log(
+        "[BG] WARMING AI ENGINE..."
+      );
+
+      if (
+        typeof module.preload ===
+        "function"
+      ) {
+        await module.preload({
+          device:
+            config.device,
+
+          model:
+            config.model,
+
+          proxyToWorker:
+            config.proxyToWorker,
+        });
+      } else {
+        /*
+         * Compatibility fallback for older
+         * IMG.LY versions.
+         *
+         * removeBackground() will initialize
+         * the engine itself.
+         */
+        console.log(
+          "[BG] preload() unavailable - using lazy engine init."
+        );
+      }
+
+      console.log(
+        "[BG] AI ENGINE READY"
+      );
+
+      return module;
+    })().catch(
+      (error) => {
+        /*
+         * Allow retry if model download or
+         * initialization failed.
+         */
+        backgroundEngineWarmupPromise =
+          null;
+
+        console.error(
+          "[BG] ENGINE WARM-UP FAILED:",
+          error
+        );
+
+        throw error;
+      }
+    );
+
+  return backgroundEngineWarmupPromise;
+}
+
+/*
+ * =========================================================
  * CREATE AI INPUT
  * =========================================================
  */
@@ -217,6 +325,7 @@ async function createAiInput(
   /*
    * Fast createImageBitmap path
    */
+
   if (
     typeof createImageBitmap ===
     "function"
@@ -240,6 +349,10 @@ async function createAiInput(
           width,
           height
         );
+
+      /*
+       * No resize required.
+       */
 
       if (
         width <= maxSize &&
@@ -354,6 +467,7 @@ async function createAiInput(
   /*
    * Canvas fallback
    */
+
   const image =
     await loadImage(
       source
@@ -603,93 +717,6 @@ async function scaleTransparentResult(
 
 /*
  * =========================================================
- * ENGINE PROGRESS
- * =========================================================
- *
- * Engine progress is intentionally NOT connected to
- * visible progress.
- * =========================================================
- */
-
-function getProgressFromEngine(
-  key,
-  current,
-  total
-) {
-  if (
-    typeof current === "number" &&
-    typeof total === "number" &&
-    total > 0
-  ) {
-    const ratio =
-      Math.max(
-        0,
-        Math.min(
-          1,
-          current / total
-        )
-      );
-
-    if (
-      key === "fetch" ||
-      key === "download" ||
-      key === "model"
-    ) {
-      return Math.round(
-        5 +
-          ratio * 25
-      );
-    }
-  }
-
-  const normalized =
-    String(
-      key || ""
-    ).toLowerCase();
-
-  if (
-    normalized.includes(
-      "decode"
-    )
-  ) {
-    return 25;
-  }
-
-  if (
-    normalized.includes(
-      "inference"
-    ) ||
-    normalized.includes(
-      "segment"
-    ) ||
-    normalized.includes(
-      "compute"
-    )
-  ) {
-    return 65;
-  }
-
-  if (
-    normalized.includes(
-      "mask"
-    )
-  ) {
-    return 82;
-  }
-
-  if (
-    normalized.includes(
-      "encode"
-    )
-  ) {
-    return 94;
-  }
-
-  return null;
-}
-
-/*
- * =========================================================
  * HOOK
  * =========================================================
  */
@@ -723,15 +750,12 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * RAF PROGRESS SYSTEM
+   * RAF PROGRESS
    * =======================================================
    */
 
   const progressAnimationFrameRef =
     useRef(null);
-
-  const progressStartTimeRef =
-    useRef(0);
 
   const progressAnimationActiveRef =
     useRef(false);
@@ -742,9 +766,6 @@ export default function useBackgroundRemove({
   const progressValueRef =
     useRef(0);
 
-  /*
-   * Loader timer
-   */
   const removeLoaderTimerRef =
     useRef(null);
 
@@ -815,7 +836,7 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * STOP RAF
+   * STOP PROGRESS
    * =======================================================
    */
 
@@ -827,7 +848,7 @@ export default function useBackgroundRemove({
       progressAnimationFrameRef.current !==
       null
     ) {
-      cancelAnimationFrame(
+      clearTimeout(
         progressAnimationFrameRef.current
       );
 
@@ -843,74 +864,97 @@ export default function useBackgroundRemove({
    */
 
   function startProgressAnimation() {
-  stopProgressAnimation();
+    stopProgressAnimation();
 
-  progressAnimationActiveRef.current = true;
-  progressValueRef.current = 1;
-  progressTargetRef.current = 100;
+    progressAnimationActiveRef.current =
+      true;
 
-  setBackgroundProgress(1);
+    progressValueRef.current =
+      1;
 
-  const startedAt = performance.now();
+    progressTargetRef.current =
+      100;
 
-  const animate = () => {
-    if (!progressAnimationActiveRef.current) {
-      return;
-    }
-
-    const elapsed = performance.now() - startedAt;
-
-    // Always calculate from real elapsed time.
-    // So timer delay can never make the progress permanently stuck.
-    const ratio = Math.min(
-      1,
-      elapsed / VISIBLE_PROGRESS_DURATION
+    setBackgroundProgress(
+      1
     );
 
-    const nextValue = Math.min(
-      100,
-      Math.max(
-        1,
-        Math.floor(1 + ratio * 99)
-      )
-    );
+    const startedAt =
+      performance.now();
 
-    if (nextValue !== progressValueRef.current) {
-      progressValueRef.current = nextValue;
-      setBackgroundProgress(nextValue);
-    }
+    const animate = () => {
+      if (
+        !progressAnimationActiveRef.current
+      ) {
+        return;
+      }
 
-    if (ratio >= 1) {
-      progressValueRef.current = 100;
-      progressTargetRef.current = 100;
-      setBackgroundProgress(100);
+      const elapsed =
+        performance.now() -
+        startedAt;
 
-      progressAnimationActiveRef.current = false;
-      progressAnimationFrameRef.current = null;
+      const ratio =
+        Math.min(
+          1,
+          elapsed /
+            VISIBLE_PROGRESS_DURATION
+        );
 
-      return;
-    }
+      const nextValue =
+        Math.min(
+          100,
+          Math.max(
+            1,
+            Math.floor(
+              1 +
+                ratio *
+                  99
+            )
+          )
+        );
 
-    progressAnimationFrameRef.current = setTimeout(
-      animate,
-      10
-    );
-  };
+      if (
+        nextValue !==
+        progressValueRef.current
+      ) {
+        progressValueRef.current =
+          nextValue;
 
-  animate();
-}
+        setBackgroundProgress(
+          nextValue
+        );
+      }
 
-  /*
-   * =======================================================
-   * ENGINE PROGRESS TARGET
-   * =======================================================
-   */
+      if (
+        ratio >= 1
+      ) {
+        progressValueRef.current =
+          100;
 
-  function setProgressTarget() {
-    /*
-     * Deliberately ignored.
-     */
-    return;
+        progressTargetRef.current =
+          100;
+
+        setBackgroundProgress(
+          100
+        );
+
+        progressAnimationActiveRef.current =
+          false;
+
+        progressAnimationFrameRef.current =
+          null;
+
+        return;
+      }
+
+      progressAnimationFrameRef.current =
+        setTimeout(
+          animate,
+          10
+        );
+    };
+
+    animate();
   }
 
   /*
@@ -986,7 +1030,7 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * MEMORY CACHE
+       * LOCAL MEMORY CACHE
        * ===================================================
        */
 
@@ -1009,7 +1053,42 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * EXISTING PROMISE
+       * GLOBAL PREPARATION DEDUPLICATION
+       * ===================================================
+       *
+       * If another hook/component is already preparing
+       * this exact image, reuse that promise.
+       * ===================================================
+       */
+
+      const globalExisting =
+        globalPreparationPromises.get(
+          key
+        );
+
+      if (globalExisting) {
+        console.log(
+          "[BG] GLOBAL PREPARATION PROMISE HIT"
+        );
+
+        const sharedResult =
+          await globalExisting;
+
+        if (
+          sharedResult
+        ) {
+          preparedCacheRef.current.set(
+            key,
+            sharedResult
+          );
+        }
+
+        return sharedResult;
+      }
+
+      /*
+       * ===================================================
+       * LOCAL PROMISE
        * ===================================================
        */
 
@@ -1046,20 +1125,22 @@ export default function useBackgroundRemove({
         );
       }
 
-      const promise =
+      /*
+       * ===================================================
+       * ACTUAL PREPARATION
+       * ===================================================
+       */
+
+      const preparationPromise =
         (async () => {
           /*
            * =================================================
-           * INDEXEDDB CACHE
+           * FIRST: CHECK INDEXEDDB
            * =================================================
            */
 
           console.log(
             "[BG] CHECKING INDEXEDDB CACHE..."
-          );
-
-          setProgressTarget(
-            3
           );
 
           let indexedDbBlob =
@@ -1079,19 +1160,13 @@ export default function useBackgroundRemove({
             );
           }
 
-          if (
-            preparingKeyRef.current !==
-            key
-          ) {
-            throw new Error(
-              "Background preparation cancelled."
-            );
-          }
-
           /*
-           * =================================================
-           * INDEXEDDB HIT
-           * =================================================
+           * IMPORTANT:
+           *
+           * Do not cancel the shared preparation
+           * just because React changed image.
+           *
+           * The result can still be cached and reused.
            */
 
           if (
@@ -1099,10 +1174,6 @@ export default function useBackgroundRemove({
           ) {
             console.log(
               "[BG] INDEXEDDB CACHE HIT"
-            );
-
-            setProgressTarget(
-              90
             );
 
             const finalFile =
@@ -1150,12 +1221,6 @@ export default function useBackgroundRemove({
               cachedResult
             );
 
-            if (
-              !removeOperationActiveRef.current
-            ) {
-              completeProgress();
-            }
-
             setBackgroundReady(
               true
             );
@@ -1164,49 +1229,42 @@ export default function useBackgroundRemove({
               false
             );
 
+            if (
+              !removeOperationActiveRef.current &&
+              preparingKeyRef.current ===
+                key
+            ) {
+              completeProgress();
+            }
+
             return cachedResult;
           }
 
           /*
            * =================================================
-           * LOAD IMG.LY
+           * WARM ENGINE FIRST
+           * =================================================
+           *
+           * This is the major performance improvement.
+           *
+           * The model/session is initialized before
+           * removeBackground() is called.
            * =================================================
            */
 
           console.log(
-            "[BG] LOADING ENGINE..."
+            "[BG] WARMING ENGINE BEFORE INFERENCE..."
           );
 
-          setProgressTarget(
-            5
-          );
+          const module =
+            await warmupBackgroundEngine();
 
           const {
             removeBackground,
-          } =
-            await getBackgroundRemovalModule();
-
-          if (
-            preparingKeyRef.current !==
-            key
-          ) {
-            throw new Error(
-              "Background preparation cancelled."
-            );
-          }
-
-          /*
-           * =================================================
-           * CONFIG
-           * =================================================
-           */
+          } = module;
 
           const config =
-            globalWorkingConfig ||
-            getCpuConfig();
-
-          globalWorkingConfig =
-            config;
+            getGlobalConfig();
 
           console.log(
             "[BG] USING ENGINE",
@@ -1223,10 +1281,6 @@ export default function useBackgroundRemove({
               weak:
                 config.weak,
             }
-          );
-
-          setProgressTarget(
-            10
           );
 
           /*
@@ -1253,57 +1307,55 @@ export default function useBackgroundRemove({
               aiSize
             );
 
-          if (
-            preparingKeyRef.current !==
-            key
-          ) {
-            throw new Error(
-              "Background preparation cancelled."
-            );
-          }
-
-          setProgressTarget(
-            18
-          );
-
           /*
            * =================================================
-           * AI INFERENCE
+           * INFERENCE
            * =================================================
            */
 
-          let transparentPreview;
+          console.log(
+            "[BG] BEFORE removeBackground"
+          );
 
-          try {
-            console.log(
-              "[BG] BEFORE removeBackground"
-            );
+          const transparentPreview =
+            await removeBackground(
+              aiInput,
+              {
+                device:
+                  config.device,
 
-            transparentPreview =
-              await removeBackground(
-                aiInput,
-                {
-                  device:
-                    config.device,
+                model:
+                  config.model,
 
-                  model:
-                    config.model,
+                proxyToWorker:
+                  config.proxyToWorker,
 
-                  proxyToWorker:
-                    config.proxyToWorker,
+                output: {
+                  format:
+                    "image/png",
 
-                  output: {
-                    format:
-                      "image/png",
+                  quality: 1,
+                },
 
-                    quality: 1,
-                  },
+                progress: (
+                  progressKey,
+                  current,
+                  total
+                ) => {
+                  /*
+                   * Keep logging available for debugging,
+                   * but don't cause React renders for every
+                   * model progress event.
+                   */
 
-                  progress: (
-                    progressKey,
-                    current,
-                    total
-                  ) => {
+                  if (
+                    progressKey ===
+                      "compute:inference" ||
+                    progressKey ===
+                      "compute:mask" ||
+                    progressKey ===
+                      "compute:encode"
+                  ) {
                     console.log(
                       "[BG] ENGINE:",
                       progressKey,
@@ -1311,41 +1363,14 @@ export default function useBackgroundRemove({
                       "/",
                       total
                     );
-
-                    /*
-                     * Intentionally ignored.
-                     */
-                    getProgressFromEngine(
-                      progressKey,
-                      current,
-                      total
-                    );
-                  },
-                }
-              );
-
-            console.log(
-              "[BG] AFTER removeBackground"
-            );
-          } catch (
-            error
-          ) {
-            console.error(
-              "[BG] removeBackground FAILED:",
-              error
+                  }
+                },
+              }
             );
 
-            throw error;
-          }
-
-          if (
-            preparingKeyRef.current !==
-            key
-          ) {
-            throw new Error(
-              "Background preparation cancelled."
-            );
-          }
+          console.log(
+            "[BG] AFTER removeBackground"
+          );
 
           if (
             !transparentPreview
@@ -1373,13 +1398,9 @@ export default function useBackgroundRemove({
             );
           }
 
-          setProgressTarget(
-            97
-          );
-
           /*
            * =================================================
-           * SAVE CACHE
+           * SAVE INDEXEDDB CACHE
            * =================================================
            */
 
@@ -1387,6 +1408,10 @@ export default function useBackgroundRemove({
             await savePreparedBackground(
               file,
               finalBlob
+            );
+
+            console.log(
+              "[BG] RESULT SAVED TO INDEXEDDB"
             );
           } catch (
             cacheError
@@ -1437,7 +1462,7 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * MEMORY CACHE RESULT
+           * FINAL RESULT
            * =================================================
            */
 
@@ -1460,19 +1485,6 @@ export default function useBackgroundRemove({
             result
           );
 
-          /*
-           * IMPORTANT:
-           *
-           * Active button operation owns progress.
-           * Therefore DO NOT complete it here.
-           */
-
-          if (
-            !removeOperationActiveRef.current
-          ) {
-            completeProgress();
-          }
-
           setBackgroundReady(
             true
           );
@@ -1481,6 +1493,14 @@ export default function useBackgroundRemove({
             false
           );
 
+          if (
+            !removeOperationActiveRef.current &&
+            preparingKeyRef.current ===
+              key
+          ) {
+            completeProgress();
+          }
+
           console.log(
             "[BG] READY"
           );
@@ -1488,17 +1508,53 @@ export default function useBackgroundRemove({
           return result;
         })();
 
+      /*
+       * ===================================================
+       * REGISTER GLOBAL PROMISE
+       * ===================================================
+       */
+
+      globalPreparationPromises.set(
+        key,
+        preparationPromise
+      );
+
+      /*
+       * ===================================================
+       * REGISTER LOCAL PROMISE
+       * ===================================================
+       */
+
       preparedCacheRef.current.set(
         key,
         {
-          promise,
+          promise:
+            preparationPromise,
+
           ready:
             false,
         }
       );
 
       try {
-        return await promise;
+        const result =
+          await preparationPromise;
+
+        /*
+         * Replace promise entry with actual
+         * prepared result.
+         */
+
+        if (
+          result
+        ) {
+          preparedCacheRef.current.set(
+            key,
+            result
+          );
+        }
+
+        return result;
       } catch (
         error
       ) {
@@ -1509,10 +1565,20 @@ export default function useBackgroundRemove({
 
         if (
           current?.promise ===
-          promise
+          preparationPromise
         ) {
           preparedCacheRef.current.delete(
             key
+          );
+        }
+
+        if (
+          error?.message !==
+          "Background preparation cancelled."
+        ) {
+          setBackgroundError(
+            error?.message ||
+              "Background preparation failed."
           );
         }
 
@@ -1526,23 +1592,44 @@ export default function useBackgroundRemove({
           stopProgressAnimation();
         }
 
+        throw error;
+      } finally {
+        /*
+         * Remove global promise only after completion.
+         *
+         * IndexedDB + local memory now contain the result.
+         */
+
         if (
-          error?.message !==
-          "Background preparation cancelled."
+          globalPreparationPromises.get(
+            key
+          ) ===
+          preparationPromise
         ) {
-          setBackgroundError(
-            error?.message ||
-              "Background preparation failed."
+          globalPreparationPromises.delete(
+            key
           );
         }
-
-        throw error;
       }
     };
 
   /*
    * =======================================================
    * AUTOMATIC PREPARATION
+   * =======================================================
+   *
+   * Image upload/change:
+   *
+   * 1. Check memory
+   * 2. Check IndexedDB
+   * 3. Warm IMG.LY engine
+   * 4. Download model if needed
+   * 5. Run AI inference
+   * 6. Restore original size
+   * 7. Save transparent result
+   *
+   * Therefore pressing Remove Background later
+   * does NOT need to start the AI work again.
    * =======================================================
    */
 
@@ -1581,10 +1668,12 @@ export default function useBackgroundRemove({
         workingFile
       );
 
+    if (!key) {
+      return;
+    }
+
     /*
-     * ===================================================
-     * BACKGROUND REMOVED STATE
-     * ===================================================
+     * New image means new remove operation.
      */
 
     if (
@@ -1595,17 +1684,10 @@ export default function useBackgroundRemove({
       setBackgroundRemoved(
         true
       );
-    } else if (
-      key !==
-      backgroundRemovedOutputKeyRef.current
-    ) {
+    } else {
       setBackgroundRemoved(
         false
       );
-    }
-
-    if (!key) {
-      return;
     }
 
     preparingKeyRef.current =
@@ -1670,31 +1752,31 @@ export default function useBackgroundRemove({
       );
     }
 
+    /*
+     * IMPORTANT:
+     *
+     * This starts immediately when the image changes.
+     */
+
     prepareBackgroundRemoval(
       workingFile,
       key
     ).catch(
       (error) => {
-        if (
-          error?.message !==
-          "Background preparation cancelled."
-        ) {
-          console.error(
-            "[BG] automatic preparation:",
-            error
-          );
-        }
+        console.error(
+          "[BG] automatic preparation:",
+          error
+        );
       }
     );
 
     return () => {
-      if (
-        preparingKeyRef.current ===
-        key
-      ) {
-        preparingKeyRef.current =
-          "";
-      }
+      /*
+       * Do NOT cancel the actual preparation.
+       *
+       * It may continue in the background and populate
+       * IndexedDB/global cache.
+       */
 
       if (
         !removeOperationActiveRef.current
@@ -1714,9 +1796,10 @@ export default function useBackgroundRemove({
 
   async function handleBackgroundRemove() {
     /*
-     * Once removed, button stays disabled until
+     * Once removed, button remains disabled until
      * image changes/reset.
      */
+
     if (
       !workingFile ||
       removingBackground ||
@@ -1734,9 +1817,6 @@ export default function useBackgroundRemove({
       return;
     }
 
-    /*
-     * Button owns visible progress.
-     */
     removeOperationActiveRef.current =
       true;
 
@@ -1751,7 +1831,7 @@ export default function useBackgroundRemove({
     try {
       /*
        * =================================================
-       * START LOADER
+       * START UI LOADER
        * =================================================
        */
 
@@ -1774,7 +1854,7 @@ export default function useBackgroundRemove({
 
       /*
        * =================================================
-       * CACHE
+       * GET READY RESULT
        * =================================================
        */
 
@@ -1789,9 +1869,10 @@ export default function useBackgroundRemove({
           : null;
 
       /*
-       * =================================================
-       * PREPARE
-       * =================================================
+       * If preparation is already running,
+       * wait for the SAME promise.
+       *
+       * No second AI inference.
        */
 
       if (
@@ -1834,11 +1915,16 @@ export default function useBackgroundRemove({
 
       layers.addToolLayer({
         type: "background",
-        name: "Background Removed",
+
+        name:
+          "Background Removed",
+
         detail:
           "AI background removal",
+
         beforeFile:
           workingFile,
+
         summary:
           "Background removed",
       });
@@ -1867,19 +1953,8 @@ export default function useBackgroundRemove({
 
       /*
        * =================================================
-       * SUCCESS
+       * SUCCESS STATE
        * =================================================
-       */
-
-      /*
-       * IMPORTANT:
-       *
-       * DO NOT call completeProgress() here.
-       *
-       * Otherwise fast AI instantly changes
-       * 1% -> 100%.
-       *
-       * RAF will continue naturally to 100%.
        */
 
       setBackgroundReady(
@@ -1903,8 +1978,9 @@ export default function useBackgroundRemove({
         outputKey;
 
       /*
-       * Button becomes disabled immediately.
+       * Button disabled immediately.
        */
+
       setBackgroundRemoved(
         true
       );
@@ -1915,12 +1991,6 @@ export default function useBackgroundRemove({
     } catch (
       error
     ) {
-      /*
-       * =================================================
-       * ERROR
-       * =================================================
-       */
-
       console.error(
         "[BG] REMOVE FAILED:",
         error
@@ -1970,12 +2040,6 @@ export default function useBackgroundRemove({
         false
       );
     } finally {
-      /*
-       * =================================================
-       * FAILURE
-       * =================================================
-       */
-
       if (
         backgroundRemoveFailedRef.current
       ) {
@@ -1999,13 +2063,6 @@ export default function useBackgroundRemove({
        * =================================================
        * SUCCESS
        * =================================================
-       *
-       * IMPORTANT:
-       *
-       * DO NOT stop RAF here.
-       *
-       * It must continue from current value to 100%.
-       * =================================================
        */
 
       const elapsed =
@@ -2021,12 +2078,6 @@ export default function useBackgroundRemove({
 
       clearRemoveLoaderTimer();
 
-      /*
-       * AI took 2+ seconds.
-       *
-       * RAF should already be at 100,
-       * so hide immediately.
-       */
       if (
         remaining <= 0
       ) {
@@ -2042,39 +2093,33 @@ export default function useBackgroundRemove({
         return;
       }
 
-      /*
-       * AI finished early.
-       *
-       * Keep loader visible until the full
-       * 2-second visual progress finishes.
-       */
       removeLoaderTimerRef.current =
-        setTimeout(() => {
-          removeLoaderTimerRef.current =
-            null;
+        setTimeout(
+          () => {
+            removeLoaderTimerRef.current =
+              null;
 
-          /*
-           * Force exact final 100%.
-           */
-          completeProgress();
+            completeProgress();
 
-          setRemovingBackground(
-            false
-          );
+            setRemovingBackground(
+              false
+            );
 
-          removeOperationActiveRef.current =
-            false;
+            removeOperationActiveRef.current =
+              false;
 
-          console.log(
-            "[BG] VISUAL PROGRESS COMPLETE"
-          );
-        }, remaining);
+            console.log(
+              "[BG] VISUAL PROGRESS COMPLETE"
+            );
+          },
+          remaining
+        );
     }
   }
 
   /*
    * =======================================================
-   * FINAL CLEANUP
+   * CLEANUP
    * =======================================================
    */
 
