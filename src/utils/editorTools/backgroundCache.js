@@ -1,6 +1,6 @@
 ﻿import { get, set, del } from "idb-keyval";
 
-const CACHE_PREFIX = "everything-bg-remove-v1";
+const CACHE_PREFIX = "everything-bg-remove-v2";
 
 function makeKey(file) {
   if (!file) return null;

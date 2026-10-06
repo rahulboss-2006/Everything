@@ -20,18 +20,6 @@ import {
  * =========================================================
  * IMG.LY MODULE / ENGINE SINGLETONS
  * =========================================================
- *
- * IMPORTANT:
- *
- * These live OUTSIDE the React hook.
- *
- * So:
- * - component re-render does not reload IMG.LY
- * - hook remount does not reload IMG.LY
- * - multiple callers share one module import
- * - model initialization is shared
- * - same image preparation is shared
- * =========================================================
  */
 
 let backgroundRemovalModulePromise = null;
@@ -41,12 +29,42 @@ const globalPreparationPromises = new Map();
 
 /*
  * =========================================================
- * ENGINE CONFIG
+ * QUALITY CONFIG
+ * =========================================================
+ *
+ * IMPORTANT:
+ *
+ * We NO LONGER resize the source image to 512/640 before
+ * inference.
+ *
+ * IMG.LY already handles the model input pipeline internally.
+ *
+ * Manual downscaling was causing:
+ *
+ * original
+ *   ↓
+ * 512/640px
+ *   ↓
+ * AI segmentation
+ *   ↓
+ * upscale to original
+ *
+ * That destroys fine hair / edges / small objects.
+ *
+ * Instead:
+ *
+ * original
+ *   ↓
+ * IMG.LY preprocessing
+ *   ↓
+ * AI segmentation
+ *   ↓
+ * IMG.LY output
+ *
+ * Strong devices use FP16.
+ * Weak devices use QUINT8.
  * =========================================================
  */
-
-const AI_MAX_SIZE_CPU = 640;
-const AI_MAX_SIZE_WEAK = 512;
 
 let globalWorkingConfig = null;
 
@@ -100,9 +118,25 @@ function getCores() {
   }
 }
 
+/*
+ * =========================================================
+ * DEVICE CLASSIFICATION
+ * =========================================================
+ *
+ * Quality is preferred on capable devices.
+ *
+ * Weak devices keep the smaller QUINT8 model so the editor
+ * remains responsive and memory usage stays reasonable.
+ * =========================================================
+ */
+
 function isWeakDevice() {
   const memory = getMemory();
   const cores = getCores();
+
+  /*
+   * Very low-memory devices.
+   */
 
   if (
     memory > 0 &&
@@ -110,6 +144,10 @@ function isWeakDevice() {
   ) {
     return true;
   }
+
+  /*
+   * Low CPU-core devices.
+   */
 
   if (
     cores > 0 &&
@@ -123,7 +161,45 @@ function isWeakDevice() {
 
 /*
  * =========================================================
- * CPU CONFIG
+ * GPU CAPABILITY
+ * =========================================================
+ */
+
+function hasUsableWebGPU() {
+  if (!isBrowser()) {
+    return false;
+  }
+
+  try {
+    return (
+      typeof navigator.gpu !==
+      "undefined"
+    );
+  } catch {
+    return false;
+  }
+}
+
+/*
+ * =========================================================
+ * CPU / GPU CONFIG
+ * =========================================================
+ *
+ * IMPORTANT:
+ *
+ * We keep CPU as the safest default.
+ *
+ * WebGPU is NOT automatically forced because browser/device
+ * compatibility varies.
+ *
+ * Strong devices use:
+ *
+ *   isnet_fp16
+ *
+ * Weak devices use:
+ *
+ *   isnet_quint8
+ *
  * =========================================================
  */
 
@@ -131,10 +207,26 @@ function getCpuConfig() {
   const weak =
     isWeakDevice();
 
+  /*
+   * Strong device:
+   *
+   * FP16 provides better quality than QUINT8 while remaining
+   * substantially smaller than the full isnet model.
+   *
+   * Weak device:
+   *
+   * Keep QUINT8 for memory/performance.
+   */
+
+  const model =
+    weak
+      ? "isnet_quint8"
+      : "isnet_fp16";
+
   return {
     device: "cpu",
 
-    model: "isnet_quint8",
+    model,
 
     proxyToWorker: true,
 
@@ -142,10 +234,33 @@ function getCpuConfig() {
   };
 }
 
-function getAiSize(config) {
-  return config?.weak
-    ? AI_MAX_SIZE_WEAK
-    : AI_MAX_SIZE_CPU;
+function getGlobalConfig() {
+  if (!globalWorkingConfig) {
+    globalWorkingConfig =
+      getCpuConfig();
+
+    console.log(
+      "[BG] GLOBAL CONFIG:",
+      {
+        device:
+          globalWorkingConfig.device,
+
+        model:
+          globalWorkingConfig.model,
+
+        proxyToWorker:
+          globalWorkingConfig.proxyToWorker,
+
+        weak:
+          globalWorkingConfig.weak,
+
+        webGPU:
+          hasUsableWebGPU(),
+      }
+    );
+  }
+
+  return globalWorkingConfig;
 }
 
 /*
@@ -180,9 +295,13 @@ async function getBackgroundRemovalModule() {
     );
   }
 
-  if (!backgroundRemovalModulePromise) {
+  if (
+    !backgroundRemovalModulePromise
+  ) {
     backgroundRemovalModulePromise =
-      import("@imgly/background-removal").catch(
+      import(
+        "@imgly/background-removal"
+      ).catch(
         (error) => {
           backgroundRemovalModulePromise =
             null;
@@ -197,30 +316,7 @@ async function getBackgroundRemovalModule() {
 
 /*
  * =========================================================
- * ENGINE CONFIG SINGLETON
- * =========================================================
- */
-
-function getGlobalConfig() {
-  if (!globalWorkingConfig) {
-    globalWorkingConfig =
-      getCpuConfig();
-  }
-
-  return globalWorkingConfig;
-}
-
-/*
- * =========================================================
- * MODEL PRELOAD / WARM-UP
- * =========================================================
- *
- * This starts as soon as the first image arrives.
- *
- * preload() initializes the IMG.LY inference session
- * before the user presses Remove Background.
- *
- * The same session is then reused by removeBackground().
+ * MODEL / ENGINE WARM-UP
  * =========================================================
  */
 
@@ -231,7 +327,9 @@ async function warmupBackgroundEngine() {
     );
   }
 
-  if (backgroundEngineWarmupPromise) {
+  if (
+    backgroundEngineWarmupPromise
+  ) {
     return backgroundEngineWarmupPromise;
   }
 
@@ -244,7 +342,13 @@ async function warmupBackgroundEngine() {
         getGlobalConfig();
 
       console.log(
-        "[BG] WARMING AI ENGINE..."
+        "[BG] WARMING AI ENGINE...",
+        {
+          model:
+            config.model,
+          device:
+            config.device,
+        }
       );
 
       if (
@@ -262,15 +366,8 @@ async function warmupBackgroundEngine() {
             config.proxyToWorker,
         });
       } else {
-        /*
-         * Compatibility fallback for older
-         * IMG.LY versions.
-         *
-         * removeBackground() will initialize
-         * the engine itself.
-         */
         console.log(
-          "[BG] preload() unavailable - using lazy engine init."
+          "[BG] preload() unavailable - lazy initialization will be used."
         );
       }
 
@@ -281,10 +378,6 @@ async function warmupBackgroundEngine() {
       return module;
     })().catch(
       (error) => {
-        /*
-         * Allow retry if model download or
-         * initialization failed.
-         */
         backgroundEngineWarmupPromise =
           null;
 
@@ -302,13 +395,35 @@ async function warmupBackgroundEngine() {
 
 /*
  * =========================================================
- * CREATE AI INPUT
+ * PREPARE SOURCE FOR AI
+ * =========================================================
+ *
+ * IMPORTANT:
+ *
+ * This function intentionally returns the ORIGINAL source.
+ *
+ * We previously resized the image to:
+ *
+ *   512px / 640px
+ *
+ * before segmentation.
+ *
+ * That caused:
+ *
+ *   - hair loss
+ *   - soft edges
+ *   - small object loss
+ *   - rough masks
+ *   - halo artifacts
+ *
+ * IMG.LY handles its own model input processing.
+ *
+ * Therefore do NOT manually resize here.
  * =========================================================
  */
 
 async function createAiInput(
-  source,
-  maxSize
+  source
 ) {
   if (!source) {
     throw new Error(
@@ -322,397 +437,7 @@ async function createAiInput(
     );
   }
 
-  /*
-   * Fast createImageBitmap path
-   */
-
-  if (
-    typeof createImageBitmap ===
-    "function"
-  ) {
-    let bitmap = null;
-
-    try {
-      bitmap =
-        await createImageBitmap(
-          source
-        );
-
-      const width =
-        bitmap.width;
-
-      const height =
-        bitmap.height;
-
-      const largest =
-        Math.max(
-          width,
-          height
-        );
-
-      /*
-       * No resize required.
-       */
-
-      if (
-        width <= maxSize &&
-        height <= maxSize
-      ) {
-        bitmap.close();
-
-        return source;
-      }
-
-      const scale =
-        maxSize /
-        largest;
-
-      const targetWidth =
-        Math.max(
-          1,
-          Math.round(
-            width * scale
-          )
-        );
-
-      const targetHeight =
-        Math.max(
-          1,
-          Math.round(
-            height * scale
-          )
-        );
-
-      const canvas =
-        document.createElement(
-          "canvas"
-        );
-
-      canvas.width =
-        targetWidth;
-
-      canvas.height =
-        targetHeight;
-
-      const ctx =
-        canvas.getContext(
-          "2d",
-          {
-            alpha: true,
-            willReadFrequently: false,
-          }
-        );
-
-      if (!ctx) {
-        bitmap.close();
-
-        throw new Error(
-          "Canvas is not available."
-        );
-      }
-
-      ctx.imageSmoothingEnabled =
-        true;
-
-      ctx.imageSmoothingQuality =
-        "high";
-
-      ctx.drawImage(
-        bitmap,
-        0,
-        0,
-        targetWidth,
-        targetHeight
-      );
-
-      bitmap.close();
-
-      return await new Promise(
-        (
-          resolve,
-          reject
-        ) => {
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                resolve(blob);
-              } else {
-                reject(
-                  new Error(
-                    "Could not create AI image."
-                  )
-                );
-              }
-            },
-            "image/png"
-          );
-        }
-      );
-    } catch (error) {
-      if (bitmap) {
-        try {
-          bitmap.close();
-        } catch {
-          // ignore
-        }
-      }
-
-      console.warn(
-        "[BG] createImageBitmap fallback:",
-        error
-      );
-    }
-  }
-
-  /*
-   * Canvas fallback
-   */
-
-  const image =
-    await loadImage(
-      source
-    );
-
-  if (!image) {
-    throw new Error(
-      "Could not load source image."
-    );
-  }
-
-  const width =
-    image.naturalWidth ||
-    image.width;
-
-  const height =
-    image.naturalHeight ||
-    image.height;
-
-  const largest =
-    Math.max(
-      width,
-      height
-    );
-
-  const scale =
-    Math.min(
-      1,
-      maxSize /
-        largest
-    );
-
-  const targetWidth =
-    Math.max(
-      1,
-      Math.round(
-        width * scale
-      )
-    );
-
-  const targetHeight =
-    Math.max(
-      1,
-      Math.round(
-        height * scale
-      )
-    );
-
-  const canvas =
-    document.createElement(
-      "canvas"
-    );
-
-  canvas.width =
-    targetWidth;
-
-  canvas.height =
-    targetHeight;
-
-  const ctx =
-    canvas.getContext(
-      "2d",
-      {
-        alpha: true,
-        willReadFrequently: false,
-      }
-    );
-
-  if (!ctx) {
-    throw new Error(
-      "Canvas context unavailable."
-    );
-  }
-
-  ctx.imageSmoothingEnabled =
-    true;
-
-  ctx.imageSmoothingQuality =
-    "high";
-
-  ctx.drawImage(
-    image,
-    0,
-    0,
-    targetWidth,
-    targetHeight
-  );
-
-  return await new Promise(
-    (
-      resolve,
-      reject
-    ) => {
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(
-              new Error(
-                "Could not create AI image."
-              )
-            );
-          }
-        },
-        "image/png"
-      );
-    }
-  );
-}
-
-/*
- * =========================================================
- * RESTORE ORIGINAL SIZE
- * =========================================================
- */
-
-async function scaleTransparentResult(
-  blob,
-  originalFile
-) {
-  if (
-    !blob ||
-    !originalFile
-  ) {
-    throw new Error(
-      "Invalid transparent result."
-    );
-  }
-
-  const image =
-    await loadImage(
-      blob
-    );
-
-  if (!image) {
-    throw new Error(
-      "Could not load transparent result."
-    );
-  }
-
-  const original =
-    await loadImage(
-      originalFile
-    );
-
-  if (!original) {
-    throw new Error(
-      "Could not load original image."
-    );
-  }
-
-  const originalWidth =
-    original.naturalWidth ||
-    original.width;
-
-  const originalHeight =
-    original.naturalHeight ||
-    original.height;
-
-  const resultWidth =
-    image.naturalWidth ||
-    image.width;
-
-  const resultHeight =
-    image.naturalHeight ||
-    image.height;
-
-  if (
-    originalWidth ===
-      resultWidth &&
-    originalHeight ===
-      resultHeight
-  ) {
-    return blob;
-  }
-
-  const canvas =
-    document.createElement(
-      "canvas"
-    );
-
-  canvas.width =
-    originalWidth;
-
-  canvas.height =
-    originalHeight;
-
-  const ctx =
-    canvas.getContext(
-      "2d",
-      {
-        alpha: true,
-        willReadFrequently: false,
-      }
-    );
-
-  if (!ctx) {
-    throw new Error(
-      "Canvas context unavailable."
-    );
-  }
-
-  ctx.clearRect(
-    0,
-    0,
-    originalWidth,
-    originalHeight
-  );
-
-  ctx.imageSmoothingEnabled =
-    true;
-
-  ctx.imageSmoothingQuality =
-    "high";
-
-  ctx.drawImage(
-    image,
-    0,
-    0,
-    originalWidth,
-    originalHeight
-  );
-
-  return await new Promise(
-    (
-      resolve,
-      reject
-    ) => {
-      canvas.toBlob(
-        (result) => {
-          if (result) {
-            resolve(result);
-          } else {
-            reject(
-              new Error(
-                "Could not create final PNG."
-              )
-            );
-          }
-        },
-        "image/png"
-      );
-    }
-  );
+  return source;
 }
 
 /*
@@ -750,7 +475,7 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * RAF PROGRESS
+   * RAF / TIMER PROGRESS
    * =======================================================
    */
 
@@ -1030,7 +755,7 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * LOCAL MEMORY CACHE
+       * MEMORY CACHE
        * ===================================================
        */
 
@@ -1053,11 +778,7 @@ export default function useBackgroundRemove({
 
       /*
        * ===================================================
-       * GLOBAL PREPARATION DEDUPLICATION
-       * ===================================================
-       *
-       * If another hook/component is already preparing
-       * this exact image, reuse that promise.
+       * GLOBAL DEDUPLICATION
        * ===================================================
        */
 
@@ -1135,7 +856,15 @@ export default function useBackgroundRemove({
         (async () => {
           /*
            * =================================================
-           * FIRST: CHECK INDEXEDDB
+           * INDEXEDDB CACHE
+           * =================================================
+           *
+           * IMPORTANT:
+           *
+           * backgroundCache.js will be updated to v2.
+           *
+           * Therefore old low-quality v1 results won't
+           * be reused.
            * =================================================
            */
 
@@ -1159,15 +888,6 @@ export default function useBackgroundRemove({
               cacheError
             );
           }
-
-          /*
-           * IMPORTANT:
-           *
-           * Do not cancel the shared preparation
-           * just because React changed image.
-           *
-           * The result can still be cached and reused.
-           */
 
           if (
             indexedDbBlob
@@ -1242,13 +962,7 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * WARM ENGINE FIRST
-           * =================================================
-           *
-           * This is the major performance improvement.
-           *
-           * The model/session is initialized before
-           * removeBackground() is called.
+           * WARM ENGINE
            * =================================================
            */
 
@@ -1267,7 +981,7 @@ export default function useBackgroundRemove({
             getGlobalConfig();
 
           console.log(
-            "[BG] USING ENGINE",
+            "[BG] USING ENGINE:",
             {
               device:
                 config.device,
@@ -1285,27 +999,21 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * AI INPUT
+           * ORIGINAL IMAGE
+           * =================================================
+           *
+           * NO 512px/640px resize.
            * =================================================
            */
 
-          const aiSize =
-            getAiSize(
-              config
+          const aiInput =
+            await createAiInput(
+              file
             );
 
           console.log(
-            "[BG] CREATING AI INPUT",
-            {
-              aiSize,
-            }
+            "[BG] USING ORIGINAL IMAGE FOR AI"
           );
-
-          const aiInput =
-            await createAiInput(
-              file,
-              aiSize
-            );
 
           /*
            * =================================================
@@ -1343,9 +1051,8 @@ export default function useBackgroundRemove({
                   total
                 ) => {
                   /*
-                   * Keep logging available for debugging,
-                   * but don't cause React renders for every
-                   * model progress event.
+                   * Avoid React render on every progress
+                   * callback.
                    */
 
                   if (
@@ -1382,15 +1089,17 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * RESTORE ORIGINAL SIZE
+           * IMPORTANT:
+           *
+           * DO NOT manually upscale the result.
+           *
+           * IMG.LY v1.3+ already returns output at the
+           * original image size.
            * =================================================
            */
 
           const finalBlob =
-            await scaleTransparentResult(
-              transparentPreview,
-              file
-            );
+            transparentPreview;
 
           if (!finalBlob) {
             throw new Error(
@@ -1540,11 +1249,6 @@ export default function useBackgroundRemove({
         const result =
           await preparationPromise;
 
-        /*
-         * Replace promise entry with actual
-         * prepared result.
-         */
-
         if (
           result
         ) {
@@ -1572,15 +1276,10 @@ export default function useBackgroundRemove({
           );
         }
 
-        if (
-          error?.message !==
-          "Background preparation cancelled."
-        ) {
-          setBackgroundError(
-            error?.message ||
-              "Background preparation failed."
-          );
-        }
+        setBackgroundError(
+          error?.message ||
+            "Background preparation failed."
+        );
 
         setBackgroundPreparing(
           false
@@ -1594,12 +1293,6 @@ export default function useBackgroundRemove({
 
         throw error;
       } finally {
-        /*
-         * Remove global promise only after completion.
-         *
-         * IndexedDB + local memory now contain the result.
-         */
-
         if (
           globalPreparationPromises.get(
             key
@@ -1616,20 +1309,6 @@ export default function useBackgroundRemove({
   /*
    * =======================================================
    * AUTOMATIC PREPARATION
-   * =======================================================
-   *
-   * Image upload/change:
-   *
-   * 1. Check memory
-   * 2. Check IndexedDB
-   * 3. Warm IMG.LY engine
-   * 4. Download model if needed
-   * 5. Run AI inference
-   * 6. Restore original size
-   * 7. Save transparent result
-   *
-   * Therefore pressing Remove Background later
-   * does NOT need to start the AI work again.
    * =======================================================
    */
 
@@ -1673,7 +1352,9 @@ export default function useBackgroundRemove({
     }
 
     /*
-     * New image means new remove operation.
+     * ===================================================
+     * NEW IMAGE / EXISTING OUTPUT
+     * ===================================================
      */
 
     if (
@@ -1732,7 +1413,7 @@ export default function useBackgroundRemove({
 
     /*
      * ===================================================
-     * AUTOMATIC PREPARATION
+     * START PREPARATION IMMEDIATELY
      * ===================================================
      */
 
@@ -1752,12 +1433,6 @@ export default function useBackgroundRemove({
       );
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * This starts immediately when the image changes.
-     */
-
     prepareBackgroundRemoval(
       workingFile,
       key
@@ -1771,13 +1446,6 @@ export default function useBackgroundRemove({
     );
 
     return () => {
-      /*
-       * Do NOT cancel the actual preparation.
-       *
-       * It may continue in the background and populate
-       * IndexedDB/global cache.
-       */
-
       if (
         !removeOperationActiveRef.current
       ) {
@@ -1795,11 +1463,6 @@ export default function useBackgroundRemove({
    */
 
   async function handleBackgroundRemove() {
-    /*
-     * Once removed, button remains disabled until
-     * image changes/reset.
-     */
-
     if (
       !workingFile ||
       removingBackground ||
@@ -1831,7 +1494,7 @@ export default function useBackgroundRemove({
     try {
       /*
        * =================================================
-       * START UI LOADER
+       * START LOADER
        * =================================================
        */
 
@@ -1854,7 +1517,7 @@ export default function useBackgroundRemove({
 
       /*
        * =================================================
-       * GET READY RESULT
+       * GET PREPARED RESULT
        * =================================================
        */
 
@@ -1867,13 +1530,6 @@ export default function useBackgroundRemove({
         cached?.ready
           ? cached
           : null;
-
-      /*
-       * If preparation is already running,
-       * wait for the SAME promise.
-       *
-       * No second AI inference.
-       */
 
       if (
         !result?.file ||
@@ -1914,7 +1570,8 @@ export default function useBackgroundRemove({
        */
 
       layers.addToolLayer({
-        type: "background",
+        type:
+          "background",
 
         name:
           "Background Removed",
@@ -1976,10 +1633,6 @@ export default function useBackgroundRemove({
 
       backgroundRemovedOutputKeyRef.current =
         outputKey;
-
-      /*
-       * Button disabled immediately.
-       */
 
       setBackgroundRemoved(
         true
