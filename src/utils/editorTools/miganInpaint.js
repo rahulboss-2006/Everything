@@ -806,103 +806,63 @@ function compositeAIResultOnlyInsideMask(
   generatedCanvas,
   maskCanvas
 ) {
-  const width =
-    originalCanvas.width;
+  const width = originalCanvas.width;
+  const height = originalCanvas.height;
 
-  const height =
-    originalCanvas.height;
+  const originalCtx = originalCanvas.getContext("2d", {
+    willReadFrequently: true,
+  });
 
-  const originalCtx =
-    originalCanvas.getContext(
-      "2d",
-      {
-        willReadFrequently: true,
-      }
-    );
+  const generatedCtx = generatedCanvas.getContext("2d", {
+    willReadFrequently: true,
+  });
 
-  const generatedCtx =
-    generatedCanvas.getContext(
-      "2d",
-      {
-        willReadFrequently: true,
-      }
-    );
+  const maskCtx = maskCanvas.getContext("2d", {
+    willReadFrequently: true,
+  });
 
-  const maskCtx =
-    maskCanvas.getContext(
-      "2d",
-      {
-        willReadFrequently: true,
-      }
-    );
-
-  if (
-    !originalCtx ||
-    !generatedCtx ||
-    !maskCtx
-  ) {
+  if (!originalCtx || !generatedCtx || !maskCtx) {
     throw new Error(
-      "Could not composite MI-GAN result."
+      "Could not composite the AI object-removal result."
     );
   }
 
-  const original =
-    originalCtx.getImageData(
-      0,
-      0,
-      width,
-      height
-    );
-
-  const generated =
-    generatedCtx.getImageData(
-      0,
-      0,
-      width,
-      height
-    );
-
-  const mask =
-    maskCtx.getImageData(
-      0,
-      0,
-      width,
-      height
-    );
-
-  const output =
-    originalCtx.createImageData(
-      width,
-      height
-    );
-
-  output.data.set(
-    original.data
+  const original = originalCtx.getImageData(
+    0,
+    0,
+    width,
+    height
   );
 
-  for (
-    let i = 0;
-    i < output.data.length;
-    i += 4
-  ) {
-    const alpha =
-      mask.data[i + 3];
+  const generated = generatedCtx.getImageData(
+    0,
+    0,
+    width,
+    height
+  );
 
-    if (alpha > 8) {
-      output.data[i] =
-        generated.data[i];
+  const mask = maskCtx.getImageData(
+    0,
+    0,
+    width,
+    height
+  );
 
-      output.data[i + 1] =
-        generated.data[i + 1];
+  const output = originalCtx.createImageData(
+    width,
+    height
+  );
 
-      output.data[i + 2] =
-        generated.data[i + 2];
+  output.data.set(original.data);
 
-      /*
-       * Preserve original alpha.
-       */
-      output.data[i + 3] =
-        original.data[i + 3];
+  for (let i = 0; i < output.data.length; i += 4) {
+    if (mask.data[i + 3] > 8) {
+      output.data[i] = generated.data[i];
+      output.data[i + 1] = generated.data[i + 1];
+      output.data[i + 2] = generated.data[i + 2];
+
+      // Preserve original alpha.
+      output.data[i + 3] = original.data[i + 3];
     }
   }
 
