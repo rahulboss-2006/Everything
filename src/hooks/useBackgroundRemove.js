@@ -204,33 +204,33 @@ function hasUsableWebGPU() {
  */
 
 function getCpuConfig() {
-  const weak =
-    isWeakDevice();
+  const memory = getMemory();
+  const cores = getCores();
 
-  /*
-   * Strong device:
-   *
-   * FP16 provides better quality than QUINT8 while remaining
-   * substantially smaller than the full isnet model.
-   *
-   * Weak device:
-   *
-   * Keep QUINT8 for memory/performance.
-   */
+  const veryWeak =
+    (memory > 0 && memory <= 4) ||
+    (cores > 0 && cores <= 4);
 
-  const model =
-    weak
-      ? "isnet_quint8"
-      : "isnet_fp16";
+  const strong =
+    (memory >= 8 && cores >= 8);
+
+  let model;
+
+  if (veryWeak) {
+    model = "isnet_quint8";
+  } else if (strong) {
+    model = "isnet";
+  } else {
+    model = "isnet_fp16";
+  }
 
   return {
     device: "cpu",
-
     model,
-
     proxyToWorker: true,
 
-    weak,
+    weak: veryWeak,
+    strong,
   };
 }
 
