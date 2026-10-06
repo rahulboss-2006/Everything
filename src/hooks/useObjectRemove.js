@@ -135,16 +135,16 @@ export default function useObjectRemove({
   clearAIObjectMask();
   setActiveTool("ai-object");
 
-  // Start loading MI-GAN immediately after entering AI Object Remove.
-  // The heavy module remains lazy-loaded from the initial editor bundle.
+  // Lazy-load MI-GAN only when AI Object Remove is opened.
+  // This keeps the initial editor bundle fast.
   void getMiGanModule()
     .then(({ getMiGanSession }) => {
       if (typeof getMiGanSession !== "function") {
-        throw new Error(
-          "MI-GAN session loader is unavailable."
-        );
+        throw new Error("MI-GAN session loader is unavailable.");
       }
 
+      // Start downloading/initializing the model immediately.
+      // Apply can reuse the same session promise.
       return getMiGanSession();
     })
     .catch((error) => {
