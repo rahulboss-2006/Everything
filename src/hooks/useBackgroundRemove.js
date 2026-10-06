@@ -29,40 +29,19 @@ const globalPreparationPromises = new Map();
 
 /*
  * =========================================================
- * QUALITY CONFIG
+ * CONFIG
  * =========================================================
  *
- * IMPORTANT:
+ * No manual resize is performed.
  *
- * We NO LONGER resize the source image to 512/640 before
- * inference.
+ * Strong:
+ *   isnet
  *
- * IMG.LY already handles the model input pipeline internally.
+ * Normal:
+ *   isnet_fp16
  *
- * Manual downscaling was causing:
- *
- * original
- *   ↓
- * 512/640px
- *   ↓
- * AI segmentation
- *   ↓
- * upscale to original
- *
- * That destroys fine hair / edges / small objects.
- *
- * Instead:
- *
- * original
- *   ↓
- * IMG.LY preprocessing
- *   ↓
- * AI segmentation
- *   ↓
- * IMG.LY output
- *
- * Strong devices use FP16.
- * Weak devices use QUINT8.
+ * Weak:
+ *   isnet_quint8
  * =========================================================
  */
 
@@ -72,9 +51,16 @@ let globalWorkingConfig = null;
  * =========================================================
  * VISIBLE PROGRESS
  * =========================================================
+ *
+ * This is only the minimum visual duration after an actual
+ * successful operation.
+ *
+ * We DO NOT fake the entire AI operation as 0 -> 100 in
+ * one second.
+ * =========================================================
  */
 
-const VISIBLE_PROGRESS_DURATION = 1000;
+const VISIBLE_PROGRESS_DURATION = 1200;
 
 /*
  * =========================================================
@@ -120,86 +106,7 @@ function getCores() {
 
 /*
  * =========================================================
- * DEVICE CLASSIFICATION
- * =========================================================
- *
- * Quality is preferred on capable devices.
- *
- * Weak devices keep the smaller QUINT8 model so the editor
- * remains responsive and memory usage stays reasonable.
- * =========================================================
- */
-
-function isWeakDevice() {
-  const memory = getMemory();
-  const cores = getCores();
-
-  /*
-   * Very low-memory devices.
-   */
-
-  if (
-    memory > 0 &&
-    memory <= 4
-  ) {
-    return true;
-  }
-
-  /*
-   * Low CPU-core devices.
-   */
-
-  if (
-    cores > 0 &&
-    cores <= 4
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/*
- * =========================================================
- * GPU CAPABILITY
- * =========================================================
- */
-
-function hasUsableWebGPU() {
-  if (!isBrowser()) {
-    return false;
-  }
-
-  try {
-    return (
-      typeof navigator.gpu !==
-      "undefined"
-    );
-  } catch {
-    return false;
-  }
-}
-
-/*
- * =========================================================
- * CPU / GPU CONFIG
- * =========================================================
- *
- * IMPORTANT:
- *
- * We keep CPU as the safest default.
- *
- * WebGPU is NOT automatically forced because browser/device
- * compatibility varies.
- *
- * Strong devices use:
- *
- *   isnet_fp16
- *
- * Weak devices use:
- *
- *   isnet_quint8
- *
+ * DEVICE CONFIG
  * =========================================================
  */
 
@@ -212,7 +119,8 @@ function getCpuConfig() {
     (cores > 0 && cores <= 4);
 
   const strong =
-    (memory >= 8 && cores >= 8);
+    memory >= 8 &&
+    cores >= 8;
 
   let model;
 
@@ -226,10 +134,13 @@ function getCpuConfig() {
 
   return {
     device: "cpu",
+
     model,
+
     proxyToWorker: true,
 
     weak: veryWeak,
+
     strong,
   };
 }
@@ -254,8 +165,14 @@ function getGlobalConfig() {
         weak:
           globalWorkingConfig.weak,
 
-        webGPU:
-          hasUsableWebGPU(),
+        strong:
+          globalWorkingConfig.strong,
+
+        memory:
+          getMemory(),
+
+        cores:
+          getCores(),
       }
     );
   }
@@ -298,6 +215,10 @@ async function getBackgroundRemovalModule() {
   if (
     !backgroundRemovalModulePromise
   ) {
+    console.log(
+      "[BG] LOADING IMG.LY MODULE..."
+    );
+
     backgroundRemovalModulePromise =
       import(
         "@imgly/background-removal"
@@ -305,6 +226,11 @@ async function getBackgroundRemovalModule() {
         (error) => {
           backgroundRemovalModulePromise =
             null;
+
+          console.error(
+            "[BG] IMG.LY MODULE IMPORT FAILED:",
+            error
+          );
 
           throw error;
         }
@@ -317,6 +243,11 @@ async function getBackgroundRemovalModule() {
 /*
  * =========================================================
  * MODEL / ENGINE WARM-UP
+ * =========================================================
+ *
+ * preload() is only an optimization.
+ *
+ * If preload fails, we DO NOT block inference.
  * =========================================================
  */
 
@@ -342,10 +273,11 @@ async function warmupBackgroundEngine() {
         getGlobalConfig();
 
       console.log(
-        "[BG] WARMING AI ENGINE...",
+        "[BG] AI MODULE READY:",
         {
           model:
             config.model,
+
           device:
             config.device,
         }
@@ -355,25 +287,43 @@ async function warmupBackgroundEngine() {
         typeof module.preload ===
         "function"
       ) {
-        await module.preload({
-          device:
-            config.device,
+        try {
+          console.log(
+            "[BG] AI PRELOAD START:",
+            config.model
+          );
 
-          model:
-            config.model,
+          await module.preload({
+            device:
+              config.device,
 
-          proxyToWorker:
-            config.proxyToWorker,
-        });
-      } else {
-        console.log(
-          "[BG] preload() unavailable - lazy initialization will be used."
-        );
+            model:
+              config.model,
+
+            proxyToWorker:
+              config.proxyToWorker,
+          });
+
+          console.log(
+            "[BG] AI PRELOAD READY:",
+            config.model
+          );
+        } catch (
+          preloadError
+        ) {
+          /*
+           * IMPORTANT:
+           *
+           * preload failure must never prevent
+           * actual removeBackground() inference.
+           */
+
+          console.warn(
+            "[BG] AI PRELOAD FAILED - CONTINUING WITH LAZY INFERENCE:",
+            preloadError
+          );
+        }
       }
-
-      console.log(
-        "[BG] AI ENGINE READY"
-      );
 
       return module;
     })().catch(
@@ -382,7 +332,7 @@ async function warmupBackgroundEngine() {
           null;
 
         console.error(
-          "[BG] ENGINE WARM-UP FAILED:",
+          "[BG] MODULE LOAD FAILED:",
           error
         );
 
@@ -395,30 +345,12 @@ async function warmupBackgroundEngine() {
 
 /*
  * =========================================================
- * PREPARE SOURCE FOR AI
+ * PREPARE SOURCE
  * =========================================================
  *
- * IMPORTANT:
+ * ORIGINAL FILE IS USED.
  *
- * This function intentionally returns the ORIGINAL source.
- *
- * We previously resized the image to:
- *
- *   512px / 640px
- *
- * before segmentation.
- *
- * That caused:
- *
- *   - hair loss
- *   - soft edges
- *   - small object loss
- *   - rough masks
- *   - halo artifacts
- *
- * IMG.LY handles its own model input processing.
- *
- * Therefore do NOT manually resize here.
+ * No manual 512px / 640px resize.
  * =========================================================
  */
 
@@ -438,6 +370,33 @@ async function createAiInput(
   }
 
   return source;
+}
+
+/*
+ * =========================================================
+ * PROGRESS HELPER
+ * =========================================================
+ */
+
+function normalizeProgress(
+  value
+) {
+  const number =
+    Number(value);
+
+  if (
+    !Number.isFinite(number)
+  ) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      number
+    )
+  );
 }
 
 /*
@@ -475,7 +434,7 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * RAF / TIMER PROGRESS
+   * PROGRESS
    * =======================================================
    */
 
@@ -485,10 +444,10 @@ export default function useBackgroundRemove({
   const progressAnimationActiveRef =
     useRef(false);
 
-  const progressTargetRef =
+  const progressValueRef =
     useRef(0);
 
-  const progressValueRef =
+  const progressTargetRef =
     useRef(0);
 
   const removeLoaderTimerRef =
@@ -533,6 +492,11 @@ export default function useBackgroundRemove({
     backgroundRemoved,
     setBackgroundRemoved,
   ] = useState(false);
+
+  /*
+   * This stores the FILE KEY of the generated transparent
+   * output.
+   */
 
   const backgroundRemovedOutputKeyRef =
     useRef("");
@@ -584,7 +548,12 @@ export default function useBackgroundRemove({
 
   /*
    * =======================================================
-   * START VISIBLE PROGRESS
+   * START PROGRESS
+   * =======================================================
+   *
+   * Used only for the visible Remove Background action.
+   *
+   * Preparation itself does not fake 0 -> 100.
    * =======================================================
    */
 
@@ -598,7 +567,7 @@ export default function useBackgroundRemove({
       1;
 
     progressTargetRef.current =
-      100;
+      99;
 
     setBackgroundProgress(
       1
@@ -618,22 +587,28 @@ export default function useBackgroundRemove({
         performance.now() -
         startedAt;
 
+      /*
+       * Slowly approach 99%.
+       *
+       * Actual completion sets 100%.
+       */
+
       const ratio =
         Math.min(
           1,
           elapsed /
-            VISIBLE_PROGRESS_DURATION
+            30000
         );
 
       const nextValue =
         Math.min(
-          100,
+          99,
           Math.max(
             1,
             Math.floor(
               1 +
                 ratio *
-                  99
+                  98
             )
           )
         );
@@ -651,18 +626,8 @@ export default function useBackgroundRemove({
       }
 
       if (
-        ratio >= 1
+        nextValue >= 99
       ) {
-        progressValueRef.current =
-          100;
-
-        progressTargetRef.current =
-          100;
-
-        setBackgroundProgress(
-          100
-        );
-
         progressAnimationActiveRef.current =
           false;
 
@@ -675,7 +640,7 @@ export default function useBackgroundRemove({
       progressAnimationFrameRef.current =
         setTimeout(
           animate,
-          10
+          80
         );
     };
 
@@ -694,14 +659,8 @@ export default function useBackgroundRemove({
     stopProgressAnimation();
 
     const next =
-      Math.max(
-        0,
-        Math.min(
-          100,
-          Math.round(
-            Number(value) || 0
-          )
-        )
+      normalizeProgress(
+        value
       );
 
     progressValueRef.current =
@@ -787,7 +746,9 @@ export default function useBackgroundRemove({
           key
         );
 
-      if (globalExisting) {
+      if (
+        globalExisting
+      ) {
         console.log(
           "[BG] GLOBAL PREPARATION PROMISE HIT"
         );
@@ -838,12 +799,15 @@ export default function useBackgroundRemove({
         ""
       );
 
+      /*
+       * DO NOT fake progress during automatic
+       * preparation.
+       */
+
       if (
         !removeOperationActiveRef.current
       ) {
-        resetProgress(
-          1
-        );
+        resetProgress(1);
       }
 
       /*
@@ -857,14 +821,6 @@ export default function useBackgroundRemove({
           /*
            * =================================================
            * INDEXEDDB CACHE
-           * =================================================
-           *
-           * IMPORTANT:
-           *
-           * backgroundCache.js will be updated to v2.
-           *
-           * Therefore old low-quality v1 results won't
-           * be reused.
            * =================================================
            */
 
@@ -884,10 +840,16 @@ export default function useBackgroundRemove({
             cacheError
           ) {
             console.warn(
-              "[BG] IndexedDB cache read failed:",
+              "[BG] IndexedDB CACHE READ FAILED:",
               cacheError
             );
           }
+
+          /*
+           * =================================================
+           * INDEXEDDB CACHE HIT
+           * =================================================
+           */
 
           if (
             indexedDbBlob
@@ -957,6 +919,10 @@ export default function useBackgroundRemove({
               completeProgress();
             }
 
+            console.log(
+              "[BG] CACHED RESULT READY"
+            );
+
             return cachedResult;
           }
 
@@ -994,15 +960,15 @@ export default function useBackgroundRemove({
 
               weak:
                 config.weak,
+
+              strong:
+                config.strong,
             }
           );
 
           /*
            * =================================================
            * ORIGINAL IMAGE
-           * =================================================
-           *
-           * NO 512px/640px resize.
            * =================================================
            */
 
@@ -1025,59 +991,178 @@ export default function useBackgroundRemove({
             "[BG] BEFORE removeBackground"
           );
 
-          const transparentPreview =
-            await removeBackground(
-              aiInput,
-              {
-                device:
-                  config.device,
+          let transparentPreview;
 
+          /*
+           * =================================================
+           * PRIMARY MODEL
+           * =================================================
+           */
+
+          try {
+            console.log(
+              "[BG] INFERENCE START:",
+              {
                 model:
                   config.model,
 
-                proxyToWorker:
-                  config.proxyToWorker,
-
-                output: {
-                  format:
-                    "image/png",
-
-                  quality: 1,
-                },
-
-                progress: (
-                  progressKey,
-                  current,
-                  total
-                ) => {
-                  /*
-                   * Avoid React render on every progress
-                   * callback.
-                   */
-
-                  if (
-                    progressKey ===
-                      "compute:inference" ||
-                    progressKey ===
-                      "compute:mask" ||
-                    progressKey ===
-                      "compute:encode"
-                  ) {
-                    console.log(
-                      "[BG] ENGINE:",
-                      progressKey,
-                      current,
-                      "/",
-                      total
-                    );
-                  }
-                },
+                device:
+                  config.device,
               }
             );
 
-          console.log(
-            "[BG] AFTER removeBackground"
-          );
+            transparentPreview =
+              await removeBackground(
+                aiInput,
+                {
+                  device:
+                    config.device,
+
+                  model:
+                    config.model,
+
+                  proxyToWorker:
+                    config.proxyToWorker,
+
+                  output: {
+                    format:
+                      "image/png",
+
+                    quality: 1,
+                  },
+
+                  progress: (
+                    progressKey,
+                    current,
+                    total
+                  ) => {
+                    /*
+                     * Do not set React state from
+                     * every engine callback.
+                     */
+
+                    if (
+                      progressKey ===
+                        "compute:inference" ||
+                      progressKey ===
+                        "compute:mask" ||
+                      progressKey ===
+                        "compute:encode"
+                    ) {
+                      console.log(
+                        "[BG] ENGINE:",
+                        progressKey,
+                        current,
+                        "/",
+                        total
+                      );
+                    }
+                  },
+                }
+              );
+
+            console.log(
+              "[BG] AFTER removeBackground:",
+              config.model
+            );
+          } catch (
+            primaryError
+          ) {
+            /*
+             * =================================================
+             * ISNET FALLBACK
+             * =================================================
+             *
+             * Strong devices use ISNet first.
+             *
+             * If ISNet cannot initialize/infer,
+             * retry with FP16.
+             * =================================================
+             */
+
+            if (
+              config.model !==
+              "isnet"
+            ) {
+              console.error(
+                "[BG] INFERENCE FAILED:",
+                primaryError
+              );
+
+              throw primaryError;
+            }
+
+            console.warn(
+              "[BG] ISNET FAILED - RETRYING WITH ISNET_FP16:",
+              primaryError
+            );
+
+            try {
+              transparentPreview =
+                await removeBackground(
+                  aiInput,
+                  {
+                    device:
+                      "cpu",
+
+                    model:
+                      "isnet_fp16",
+
+                    proxyToWorker:
+                      true,
+
+                    output: {
+                      format:
+                        "image/png",
+
+                      quality: 1,
+                    },
+
+                    progress: (
+                      progressKey,
+                      current,
+                      total
+                    ) => {
+                      if (
+                        progressKey ===
+                          "compute:inference" ||
+                        progressKey ===
+                          "compute:mask" ||
+                        progressKey ===
+                          "compute:encode"
+                      ) {
+                        console.log(
+                          "[BG] FALLBACK ENGINE:",
+                          progressKey,
+                          current,
+                          "/",
+                          total
+                        );
+                      }
+                    },
+                  }
+                );
+
+              console.log(
+                "[BG] FALLBACK INFERENCE COMPLETE"
+              );
+            } catch (
+              fallbackError
+            ) {
+              console.error(
+                "[BG] FALLBACK INFERENCE FAILED:",
+                fallbackError
+              );
+
+              throw fallbackError;
+            }
+          }
+
+          /*
+           * =================================================
+           * VALIDATE AI OUTPUT
+           * =================================================
+           */
 
           if (
             !transparentPreview
@@ -1089,12 +1174,10 @@ export default function useBackgroundRemove({
 
           /*
            * =================================================
-           * IMPORTANT:
+           * FINAL BLOB
+           * =================================================
            *
-           * DO NOT manually upscale the result.
-           *
-           * IMG.LY v1.3+ already returns output at the
-           * original image size.
+           * Do not manually upscale/downscale.
            * =================================================
            */
 
@@ -1114,26 +1197,33 @@ export default function useBackgroundRemove({
            */
 
           try {
-            await savePreparedBackground(
-              file,
-              finalBlob
-            );
+            const saved =
+              await savePreparedBackground(
+                file,
+                finalBlob
+              );
 
             console.log(
-              "[BG] RESULT SAVED TO INDEXEDDB"
+              "[BG] RESULT SAVED TO INDEXEDDB:",
+              saved
             );
           } catch (
             cacheError
           ) {
+            /*
+             * Cache failure must NEVER make
+             * background removal fail.
+             */
+
             console.warn(
-              "[BG] IndexedDB cache write failed:",
+              "[BG] IndexedDB CACHE WRITE FAILED:",
               cacheError
             );
           }
 
           /*
            * =================================================
-           * CREATE FINAL FILE
+           * CREATE FINAL PNG FILE
            * =================================================
            */
 
@@ -1285,10 +1375,14 @@ export default function useBackgroundRemove({
           false
         );
 
+        setBackgroundReady(
+          false
+        );
+
         if (
           !removeOperationActiveRef.current
         ) {
-          stopProgressAnimation();
+          resetProgress(0);
         }
 
         throw error;
@@ -1310,6 +1404,22 @@ export default function useBackgroundRemove({
    * =======================================================
    * AUTOMATIC PREPARATION
    * =======================================================
+   *
+   * Every time the source image changes:
+   *
+   * image
+   *   ↓
+   * preparation starts immediately
+   *   ↓
+   * model warmup
+   *   ↓
+   * AI inference
+   *   ↓
+   * cache result
+   *
+   * So when the user presses Remove Background,
+   * the result is normally already prepared.
+   * =======================================================
    */
 
   useEffect(() => {
@@ -1325,6 +1435,10 @@ export default function useBackgroundRemove({
 
         setBackgroundPreparing(
           false
+        );
+
+        setBackgroundError(
+          ""
         );
 
         resetProgress(
@@ -1353,7 +1467,7 @@ export default function useBackgroundRemove({
 
     /*
      * ===================================================
-     * NEW IMAGE / EXISTING OUTPUT
+     * DETECT CURRENT OUTPUT
      * ===================================================
      */
 
@@ -1439,13 +1553,20 @@ export default function useBackgroundRemove({
     ).catch(
       (error) => {
         console.error(
-          "[BG] automatic preparation:",
+          "[BG] AUTOMATIC PREPARATION FAILED:",
           error
         );
       }
     );
 
     return () => {
+      /*
+       * Do not cancel the actual preparation.
+       *
+       * Global promise deduplication allows the next
+       * render/effect to reuse the same operation.
+       */
+
       if (
         !removeOperationActiveRef.current
       ) {
@@ -1535,6 +1656,10 @@ export default function useBackgroundRemove({
         !result?.file ||
         !result?.image
       ) {
+        console.log(
+          "[BG] REMOVE CLICK - WAITING FOR PREPARATION..."
+        );
+
         result =
           await prepareBackgroundRemoval(
             workingFile,
@@ -1544,7 +1669,7 @@ export default function useBackgroundRemove({
 
       /*
        * =================================================
-       * VALIDATE
+       * VALIDATE RESULT
        * =================================================
        */
 
@@ -1644,6 +1769,12 @@ export default function useBackgroundRemove({
     } catch (
       error
     ) {
+      /*
+       * =================================================
+       * FAILURE
+       * =================================================
+       */
+
       console.error(
         "[BG] REMOVE FAILED:",
         error
@@ -1693,6 +1824,12 @@ export default function useBackgroundRemove({
         false
       );
     } finally {
+      /*
+       * =================================================
+       * FAILURE CLEANUP
+       * =================================================
+       */
+
       if (
         backgroundRemoveFailedRef.current
       ) {
@@ -1714,7 +1851,7 @@ export default function useBackgroundRemove({
 
       /*
        * =================================================
-       * SUCCESS
+       * SUCCESS VISUAL COMPLETION
        * =================================================
        */
 
