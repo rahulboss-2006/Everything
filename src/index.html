@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <link
+      id="favicon-light"
+      rel="icon"
+      type="image/png"
+      href="/src/assets/logo-light.png"
+      media="(prefers-color-scheme: light)"
+    />
+
+    <link
+      id="favicon-dark"
+      rel="icon"
+      type="image/png"
+      href="/src/assets/logo-dark.png"
+      media="(prefers-color-scheme: dark)"
+    />
+<script>
+      (() => {
+        const root = document.documentElement;
+
+        const systemDark = window.matchMedia(
+          "(prefers-color-scheme: dark)"
+        );
+
+        const updateFavicon = () => {
+          const lightIcon =
+            document.getElementById("favicon-light");
+
+          const darkIcon =
+            document.getElementById("favicon-dark");
+
+          if (!lightIcon || !darkIcon) return;
+
+          const body = document.body;
+
+          const theme =
+            root.dataset.theme ||
+            body?.dataset.theme;
+
+          const isDark = theme
+            ? theme === "dark"
+            : root.classList.contains("dark") ||
+              body?.classList.contains("dark") ||
+              (
+                !root.classList.contains("light") &&
+                systemDark.matches
+              );
+
+          lightIcon.media = isDark
+            ? "not all"
+            : "all";
+
+          darkIcon.media = isDark
+            ? "all"
+            : "not all";
+        };
+
+        /*
+         * HTML element already exists here.
+         */
+        const rootObserver =
+          new MutationObserver(updateFavicon);
+
+        rootObserver.observe(root, {
+          attributes: true,
+          attributeFilter: [
+            "class",
+            "data-theme"
+          ],
+        });
+
+        /*
+         * Body doesn't exist yet while <head>
+         * is being parsed.
+         *
+         * So observe it only after DOM is ready.
+         */
+        const setupBodyObserver = () => {
+          const body = document.body;
+
+          if (!body) return;
+
+          const bodyObserver =
+            new MutationObserver(updateFavicon);
+
+          bodyObserver.observe(body, {
+            attributes: true,
+            attributeFilter: [
+              "class",
+              "data-theme"
+            ],
+          });
+
+          updateFavicon();
+        };
+
+        if (document.readyState === "loading") {
+          document.addEventListener(
+            "DOMContentLoaded",
+            setupBodyObserver,
+            { once: true }
+          );
+        } else {
+          setupBodyObserver();
+        }
+
+        /*
+         * System theme change
+         */
+        systemDark.addEventListener(
+          "change",
+          updateFavicon
+        );
+      })();
+    </script>
+
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+
+    <meta name="theme-color" content="#0f172a" />
+
+    <meta
+      name="description"
+      content="Everything - fast image and PDF converter with a powerful online image editor."
+    />
+
+    <!-- Open the connection to the backend early (saves a few hundred ms on the first request). -->
+    <link
+      rel="preconnect"
+      href="https://everything-backend-0fwg.onrender.com"
+      crossorigin
+    />
+
+    <title>Everything</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <!-- IMPORTANT: Keep this as /src/main.jsx -->
+    <script
+      type="module"
+      src="/src/main.jsx"
+    ></script>
+  </body>
+</html>

@@ -1,3 +1,4 @@
+import { getSafeOrt } from "../utils/ortSafe";
 import {
   useRef,
   useState,
@@ -220,8 +221,15 @@ async function getBackgroundRemovalModule() {
     );
 
     backgroundRemovalModulePromise =
-      import(
-        "@imgly/background-removal"
+      Promise.all([
+        import(
+          "@imgly/background-removal"
+        ),
+        // Lock ONNX Runtime to a single thread BEFORE imgly configures it,
+        // otherwise its worker threads crash ("document is not defined").
+        getSafeOrt().catch(() => null),
+      ]).then(
+        ([module]) => module
       ).catch(
         (error) => {
           backgroundRemovalModulePromise =

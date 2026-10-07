@@ -1,5 +1,6 @@
 
 import { clamp } from "./canvasHelpers";
+import { getSafeOrt } from "../ortSafe";
 
 let ortModulePromise = null;
 let miGanSessionPromise = null;
@@ -64,7 +65,8 @@ function getDeviceTier() {
 
 async function getOrt() {
   if (!ortModulePromise) {
-    ortModulePromise = import("onnxruntime-web");
+    // Single-thread, no-worker ONNX Runtime (see utils/ortSafe.js).
+    ortModulePromise = getSafeOrt();
   }
 
   return ortModulePromise;
@@ -100,6 +102,12 @@ async function createMiGanSession() {
   }
 
   /*
+   * Hide harmless "[W:onnxruntime] ... VerifyEachNodeIsAssignedToAnEp"
+   * console warnings (some small shape operations run on the CPU).
+   */
+  ort.env.logLevel = "error";
+
+  /*
    * Prefer WebGPU when available.
    * Fall back to WASM automatically.
    */
@@ -120,6 +128,7 @@ async function createMiGanSession() {
     {
       executionProviders,
       graphOptimizationLevel: "all",
+      logSeverityLevel: 3,
     }
   );
 }
