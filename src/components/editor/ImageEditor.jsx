@@ -646,39 +646,37 @@ function ImageEditor({
    */
 
   function handleReset() {
-    if (editorControlsDisabled) {
-      return;
-    }
-
-    resetLiveEdits();
-
-    effects.clearEffectHistory();
-
-    crop.resetCrop();
-
-    setActiveTool(null);
-
-    setShowEffects(false);
-
-    setShowComplete(false);
-
-    setCompletionEdits([]);
-    setCompletionProcessing(false);
-
-    completionFileRef.current = null;
-
-    setEffectPreviewSrc("");
-
-    resize.clearResizeState();
-
-    object.resetObjectState();
-
-    layers.clearLayers();
-
-    if (workingFile !== file) {
-      setWorkingFile(file);
-    }
+  if (editorControlsDisabled) {
+    return;
   }
+
+  resetLiveEdits();
+
+  crop.resetCrop();
+
+  setActiveTool(null);
+
+  setShowEffects(false);
+
+  setShowComplete(false);
+
+  setCompletionEdits([]);
+  setCompletionProcessing(false);
+
+  completionFileRef.current = null;
+
+  setEffectPreviewSrc("");
+
+  resize.clearResizeState();
+
+  object.resetObjectState();
+
+  layers.clearLayers();
+
+  if (workingFile !== file) {
+    setWorkingFile(file);
+  }
+}
 
   /*
    * ======================================================
