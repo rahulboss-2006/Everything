@@ -4,7 +4,11 @@ const API_BASE_URL =
 const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
 
-const REQUEST_TIMEOUT = 15000;
+/*
+  The free backend can need 30-60 seconds to wake up after being idle.
+  A 15 s limit made the very first request fail with "timed out".
+*/
+const REQUEST_TIMEOUT = 45000;
 
 export const getAccessToken = () =>
   localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -111,31 +115,65 @@ const refreshAccessTokenInternal = async () => {
     return null;
   }
 
-  const response = await rawApiRequest(
-    "/auth/refresh",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        refreshToken,
-      }),
-    },
-    {
-      skipAuth: true,
-    }
-  );
+  let response;
 
-  if (!response.ok) {
-    clearTokens();
+  try {
+    response = await rawApiRequest(
+      "/auth/refresh",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          refreshToken,
+        }),
+      },
+      {
+        skipAuth: true,
+      }
+    );
+  } catch {
+    /*
+      Network problem / server still waking up: that is NOT a logout.
+      Keep the tokens so the user is still signed in on the next try.
+    */
     return null;
   }
 
-  const data = await response.json();
+  if (!response.ok) {
+    /*
+      Another browser tab may have just rotated the token (the old one is
+      then rejected). If a different token is now stored, use that instead
+      of throwing the session away.
+    */
+    const storedNow = getRefreshToken();
+
+    if (response.status === 401 && storedNow && storedNow !== refreshToken) {
+      const latestAccess = getAccessToken();
+
+      if (latestAccess) {
+        return latestAccess;
+      }
+    }
+
+    /* Only a real rejection (401/403) ends the session; 5xx/429 do not. */
+    if (response.status === 401 || response.status === 403) {
+      clearTokens();
+    }
+
+    return null;
+  }
+
+  let data;
+
+  try {
+    data = await response.json();
+  } catch {
+    return null;
+  }
 
   const newAccessToken = data?.accessToken;
   const newRefreshToken = data?.refreshToken;
 
   if (!newAccessToken) {
-    clearTokens();
     return null;
   }
 

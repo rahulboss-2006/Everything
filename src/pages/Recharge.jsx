@@ -1,12 +1,9 @@
-﻿import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../context/AuthContext";
 import ThemeToggle from "../components/ThemeToggle";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+import { apiRequest } from "../utils/api";
 
 const PACKAGES = [
   {
@@ -303,19 +300,16 @@ export default function Recharge() {
       /*
        * Create payment on backend.
        */
+      /*
+       * apiRequest adds the token, refreshes it automatically when it has
+       * expired (the old code failed with 401 after 15 minutes) and
+       * stops waiting after a timeout.
+       */
       const response =
-        await fetch(
-          `${API_BASE_URL}/recharge/create`,
+        await apiRequest(
+          "/recharge/create",
           {
             method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Authorization:
-                `Bearer ${token}`,
-            },
 
             body:
               JSON.stringify(
@@ -504,6 +498,8 @@ export default function Recharge() {
 
     try {
       setLoading(true);
+      setMessage("");
+      setError("");
 
       const token =
         localStorage.getItem(
@@ -518,27 +514,11 @@ export default function Recharge() {
       /*
        * Verify payment.
        */
-      const verifyUrl =
-        `${API_BASE_URL}/recharge/payment/${paymentId}/verify`;
-
-      console.log(
-        "VERIFY PAYMENT URL:",
-        verifyUrl
-      );
-
       const response =
-        await fetch(
-          verifyUrl,
+        await apiRequest(
+          `/recharge/payment/${paymentId}/verify`,
           {
             method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-
-              Authorization:
-                `Bearer ${token}`,
-            },
 
             body:
               JSON.stringify({
@@ -565,6 +545,18 @@ export default function Recharge() {
         response.status,
         data
       );
+
+      if (data.status === "awaiting_confirmation") {
+        /* The payment SMS has not reached the server yet. Keep the form. */
+        setError("");
+
+        setMessage(
+          data.message ||
+            "We have not received this payment yet. Please try again in a minute."
+        );
+
+        return;
+      }
 
       if (
         !response.ok ||
