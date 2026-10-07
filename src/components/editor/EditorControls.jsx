@@ -1,5 +1,4 @@
-﻿
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import {
   Crop,
   Eraser,
@@ -24,6 +23,7 @@ function EditorControls({
   setSaturation,
 
   editorControlsDisabled,
+  resetDisabled = false,
 
   activeTool,
 
@@ -61,12 +61,13 @@ function EditorControls({
    * A.O.R success feedback only.
    *
    * IMPORTANT:
-   * This does NOT disable A.O.R.
+   * aiObjectRemoved DOES NOT disable A.O.R.
    *
    * User can use A.O.R again and again.
    */
   useEffect(() => {
     if (!aiObjectRemoved) {
+      setShowObjectRemoved(false);
       return;
     }
 
@@ -82,8 +83,14 @@ function EditorControls({
   }, [aiObjectRemoved]);
 
   /*
-   * A.O.R can always be clicked unless the editor itself
-   * is globally disabled or an operation is currently running.
+   * A.O.R can be clicked again after a successful removal.
+   *
+   * It is disabled only when:
+   * - editorControlsDisabled is true
+   * - another A.O.R operation is currently running
+   *
+   * IMPORTANT:
+   * DO NOT add aiObjectRemoved here.
    */
   const aiObjectButtonDisabled =
     editorControlsDisabled ||
@@ -145,14 +152,10 @@ function EditorControls({
               max="100"
               step="10"
               value={item[1]}
-              disabled={
-                editorControlsDisabled
-              }
+              disabled={editorControlsDisabled}
               onChange={(event) =>
                 item[2](
-                  Number(
-                    event.target.value
-                  )
+                  Number(event.target.value)
                 )
               }
               className="block w-full min-w-0"
@@ -172,9 +175,7 @@ function EditorControls({
           <button
             type="button"
             onClick={startCrop}
-            disabled={
-              editorControlsDisabled
-            }
+            disabled={editorControlsDisabled}
             className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-medium transition sm:px-3 disabled:cursor-not-allowed disabled:opacity-50 ${
               activeTool === "crop"
                 ? "bg-violet-600 text-white"
@@ -195,9 +196,7 @@ function EditorControls({
           <button
             type="button"
             onClick={startResize}
-            disabled={
-              editorControlsDisabled
-            }
+            disabled={editorControlsDisabled}
             className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-medium transition sm:px-3 disabled:cursor-not-allowed disabled:opacity-50 ${
               activeTool === "resize"
                 ? "bg-violet-600 text-white"
@@ -217,9 +216,7 @@ function EditorControls({
           {/* Remove Background */}
           <button
             type="button"
-            onClick={
-              handleBackgroundRemove
-            }
+            onClick={handleBackgroundRemove}
             disabled={
               editorControlsDisabled ||
               removingBackground ||
@@ -250,9 +247,7 @@ function EditorControls({
           <button
             type="button"
             onClick={handleObjectRemove}
-            disabled={
-              editorControlsDisabled
-            }
+            disabled={editorControlsDisabled}
             className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-medium transition sm:px-3 disabled:cursor-not-allowed disabled:opacity-50 ${
               activeTool === "object"
                 ? "bg-violet-600 text-white"
@@ -295,9 +290,7 @@ function EditorControls({
 
               setShowEffects(true);
             }}
-            disabled={
-              editorControlsDisabled
-            }
+            disabled={editorControlsDisabled}
             className="flex min-w-0 items-center justify-center gap-2 rounded-xl bg-white px-2 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
           >
             <Sparkles
@@ -311,18 +304,14 @@ function EditorControls({
           </button>
 
           {/* =================================================
-              AI OBJECT REMOVE — REUSABLE
+              AI OBJECT REMOVE
           ================================================= */}
           <button
             type="button"
             title="AI Object Remove"
             aria-label="AI Object Remove"
-            onClick={
-              handleAIObjectRemove
-            }
-            disabled={
-              aiObjectButtonDisabled
-            }
+            onClick={handleAIObjectRemove}
+            disabled={aiObjectButtonDisabled}
             className={`flex min-w-0 items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-medium transition sm:px-3 disabled:cursor-not-allowed disabled:opacity-50 ${
               aiObjectMode
                 ? "bg-violet-600 text-white"
@@ -364,9 +353,7 @@ function EditorControls({
           <button
             type="button"
             onClick={handleRotate}
-            disabled={
-              editorControlsDisabled
-            }
+            disabled={editorControlsDisabled}
             className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl bg-white px-1.5 py-2.5 text-xs text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-3 sm:text-sm dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
           >
             <RotateCcw
@@ -382,12 +369,8 @@ function EditorControls({
           {/* Flip X */}
           <button
             type="button"
-            onClick={
-              handleFlipHorizontal
-            }
-            disabled={
-              editorControlsDisabled
-            }
+            onClick={handleFlipHorizontal}
+            disabled={editorControlsDisabled}
             className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl bg-white px-1.5 py-2.5 text-xs text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-3 sm:text-sm dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
           >
             <FlipHorizontal
@@ -403,12 +386,8 @@ function EditorControls({
           {/* Flip Y */}
           <button
             type="button"
-            onClick={
-              handleFlipVertical
-            }
-            disabled={
-              editorControlsDisabled
-            }
+            onClick={handleFlipVertical}
+            disabled={editorControlsDisabled}
             className="flex min-w-0 items-center justify-center gap-1.5 rounded-xl bg-white px-1.5 py-2.5 text-xs text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-3 sm:text-sm dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15"
           >
             <FlipVertical
@@ -427,9 +406,7 @@ function EditorControls({
       <button
         type="button"
         onClick={handleReset}
-        disabled={
-          editorControlsDisabled
-        }
+        disabled={resetDisabled}
         className="flex w-full min-w-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-4 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
       >
         <RotateCcw
@@ -446,9 +423,7 @@ function EditorControls({
       <button
         type="button"
         onClick={handleApply}
-        disabled={
-          editorControlsDisabled
-        }
+        disabled={editorControlsDisabled}
         className="flex w-full min-w-0 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 py-3 text-sm font-semibold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-4"
       >
         {applying ? (

@@ -52,13 +52,6 @@ let globalWorkingConfig = null;
  * =========================================================
  * VISIBLE PROGRESS
  * =========================================================
- *
- * This is only the minimum visual duration after an actual
- * successful operation.
- *
- * We DO NOT fake the entire AI operation as 0 -> 100 in
- * one second.
- * =========================================================
  */
 
 const VISIBLE_PROGRESS_DURATION = 1200;
@@ -135,13 +128,9 @@ function getCpuConfig() {
 
   return {
     device: "cpu",
-
     model,
-
     proxyToWorker: true,
-
     weak: veryWeak,
-
     strong,
   };
 }
@@ -213,9 +202,7 @@ async function getBackgroundRemovalModule() {
     );
   }
 
-  if (
-    !backgroundRemovalModulePromise
-  ) {
+  if (!backgroundRemovalModulePromise) {
     console.log(
       "[BG] LOADING IMG.LY MODULE..."
     );
@@ -225,24 +212,29 @@ async function getBackgroundRemovalModule() {
         import(
           "@imgly/background-removal"
         ),
-        // Lock ONNX Runtime to a single thread BEFORE imgly configures it,
-        // otherwise its worker threads crash ("document is not defined").
+
+        /*
+         * Lock ONNX Runtime to a single thread
+         * BEFORE imgly configures it.
+         */
         getSafeOrt().catch(() => null),
-      ]).then(
-        ([module]) => module
-      ).catch(
-        (error) => {
-          backgroundRemovalModulePromise =
-            null;
+      ])
+        .then(
+          ([module]) => module
+        )
+        .catch(
+          (error) => {
+            backgroundRemovalModulePromise =
+              null;
 
-          console.error(
-            "[BG] IMG.LY MODULE IMPORT FAILED:",
-            error
-          );
+            console.error(
+              "[BG] IMG.LY MODULE IMPORT FAILED:",
+              error
+            );
 
-          throw error;
-        }
-      );
+            throw error;
+          }
+        );
   }
 
   return backgroundRemovalModulePromise;
@@ -251,11 +243,6 @@ async function getBackgroundRemovalModule() {
 /*
  * =========================================================
  * MODEL / ENGINE WARM-UP
- * =========================================================
- *
- * preload() is only an optimization.
- *
- * If preload fails, we DO NOT block inference.
  * =========================================================
  */
 
@@ -266,9 +253,7 @@ async function warmupBackgroundEngine() {
     );
   }
 
-  if (
-    backgroundEngineWarmupPromise
-  ) {
+  if (backgroundEngineWarmupPromise) {
     return backgroundEngineWarmupPromise;
   }
 
@@ -319,13 +304,6 @@ async function warmupBackgroundEngine() {
         } catch (
           preloadError
         ) {
-          /*
-           * IMPORTANT:
-           *
-           * preload failure must never prevent
-           * actual removeBackground() inference.
-           */
-
           console.warn(
             "[BG] AI PRELOAD FAILED - CONTINUING WITH LAZY INFERENCE:",
             preloadError
@@ -355,16 +333,9 @@ async function warmupBackgroundEngine() {
  * =========================================================
  * PREPARE SOURCE
  * =========================================================
- *
- * ORIGINAL FILE IS USED.
- *
- * No manual 512px / 640px resize.
- * =========================================================
  */
 
-async function createAiInput(
-  source
-) {
+async function createAiInput(source) {
   if (!source) {
     throw new Error(
       "No image available."
@@ -386,9 +357,7 @@ async function createAiInput(
  * =========================================================
  */
 
-function normalizeProgress(
-  value
-) {
+function normalizeProgress(value) {
   const number =
     Number(value);
 
@@ -502,8 +471,8 @@ export default function useBackgroundRemove({
   ] = useState(false);
 
   /*
-   * This stores the FILE KEY of the generated transparent
-   * output.
+   * Stores the FILE KEY of the generated
+   * transparent output.
    */
 
   const backgroundRemovedOutputKeyRef =
@@ -558,11 +527,6 @@ export default function useBackgroundRemove({
    * =======================================================
    * START PROGRESS
    * =======================================================
-   *
-   * Used only for the visible Remove Background action.
-   *
-   * Preparation itself does not fake 0 -> 100.
-   * =======================================================
    */
 
   function startProgressAnimation() {
@@ -594,12 +558,6 @@ export default function useBackgroundRemove({
       const elapsed =
         performance.now() -
         startedAt;
-
-      /*
-       * Slowly approach 99%.
-       *
-       * Actual completion sets 100%.
-       */
 
       const ratio =
         Math.min(
@@ -661,9 +619,7 @@ export default function useBackgroundRemove({
    * =======================================================
    */
 
-  function resetProgress(
-    value = 0
-  ) {
+  function resetProgress(value = 0) {
     stopProgressAnimation();
 
     const next =
@@ -808,8 +764,8 @@ export default function useBackgroundRemove({
       );
 
       /*
-       * DO NOT fake progress during automatic
-       * preparation.
+       * DO NOT fake progress during
+       * automatic preparation.
        */
 
       if (
@@ -1044,11 +1000,6 @@ export default function useBackgroundRemove({
                     current,
                     total
                   ) => {
-                    /*
-                     * Do not set React state from
-                     * every engine callback.
-                     */
-
                     if (
                       progressKey ===
                         "compute:inference" ||
@@ -1077,15 +1028,8 @@ export default function useBackgroundRemove({
             primaryError
           ) {
             /*
-             * =================================================
-             * ISNET FALLBACK
-             * =================================================
-             *
-             * Strong devices use ISNet first.
-             *
-             * If ISNet cannot initialize/infer,
-             * retry with FP16.
-             * =================================================
+             * Strong devices:
+             * ISNet -> FP16 fallback.
              */
 
             if (
@@ -1184,9 +1128,6 @@ export default function useBackgroundRemove({
            * =================================================
            * FINAL BLOB
            * =================================================
-           *
-           * Do not manually upscale/downscale.
-           * =================================================
            */
 
           const finalBlob =
@@ -1218,11 +1159,6 @@ export default function useBackgroundRemove({
           } catch (
             cacheError
           ) {
-            /*
-             * Cache failure must NEVER make
-             * background removal fail.
-             */
-
             console.warn(
               "[BG] IndexedDB CACHE WRITE FAILED:",
               cacheError
@@ -1412,22 +1348,6 @@ export default function useBackgroundRemove({
    * =======================================================
    * AUTOMATIC PREPARATION
    * =======================================================
-   *
-   * Every time the source image changes:
-   *
-   * image
-   *   ↓
-   * preparation starts immediately
-   *   ↓
-   * model warmup
-   *   ↓
-   * AI inference
-   *   ↓
-   * cache result
-   *
-   * So when the user presses Remove Background,
-   * the result is normally already prepared.
-   * =======================================================
    */
 
   useEffect(() => {
@@ -1477,6 +1397,19 @@ export default function useBackgroundRemove({
      * ===================================================
      * DETECT CURRENT OUTPUT
      * ===================================================
+     *
+     * IMPORTANT FIX:
+     *
+     * Once Remove Background has successfully created
+     * a transparent output, that output is already
+     * processed.
+     *
+     * DO NOT send that generated file back through
+     * automatic AI inference.
+     *
+     * Previously the code only set backgroundRemoved(true)
+     * and then continued into prepareBackgroundRemoval().
+     * That caused a second unnecessary AI inference.
      */
 
     if (
@@ -1484,14 +1417,43 @@ export default function useBackgroundRemove({
       key ===
         backgroundRemovedOutputKeyRef.current
     ) {
+      console.log(
+        "[BG] CURRENT FILE IS ALREADY BACKGROUND REMOVED - SKIPPING PREPARATION"
+      );
+
       setBackgroundRemoved(
         true
       );
-    } else {
-      setBackgroundRemoved(
+
+      setBackgroundReady(
         false
       );
+
+      setBackgroundPreparing(
+        false
+      );
+
+      setBackgroundError(
+        ""
+      );
+
+      preparingKeyRef.current =
+        key;
+
+      if (
+        !removeOperationActiveRef.current
+      ) {
+        resetProgress(
+          0
+        );
+      }
+
+      return;
     }
+
+    setBackgroundRemoved(
+      false
+    );
 
     preparingKeyRef.current =
       key;
@@ -1569,10 +1531,7 @@ export default function useBackgroundRemove({
 
     return () => {
       /*
-       * Do not cancel the actual preparation.
-       *
-       * Global promise deduplication allows the next
-       * render/effect to reuse the same operation.
+       * Do not cancel actual preparation.
        */
 
       if (
@@ -1763,6 +1722,12 @@ export default function useBackgroundRemove({
         getFileKey(
           newFile
         );
+
+      /*
+       * Mark this exact generated file as already
+       * background-removed BEFORE the workingFile effect
+       * runs again.
+       */
 
       backgroundRemovedOutputKeyRef.current =
         outputKey;

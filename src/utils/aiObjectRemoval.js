@@ -1,13 +1,46 @@
 ﻿/* =========================================================
    aiObjectRemoval.js
    AI OBJECT REMOVAL / MI-GAN INPAINTING
+
+   IMPORTANT
+   ----------
+   ONNX Runtime MUST be loaded through ortSafe.js.
+
+   This prevents this file from bypassing the global ORT
+   safety configuration:
+
+     numThreads = 1
+     proxy      = false
+     simd       = true
+
+   This is important for GitHub Pages where worker/proxy
+   based WASM execution can be unreliable.
+========================================================= */
+
+import { getSafeOrt } from "./ortSafe";
+
+
+/* =========================================================
+   ONNX RUNTIME LOADER
 ========================================================= */
 
 let ortModulePromise = null;
 
 async function getOrt() {
   if (!ortModulePromise) {
-    ortModulePromise = import("onnxruntime-web");
+    ortModulePromise =
+      getSafeOrt().catch((error) => {
+        /*
+         * Do not permanently cache a failed ORT load.
+         *
+         * If the first attempt fails because an asset
+         * temporarily fails to load, the next AI operation
+         * can retry.
+         */
+        ortModulePromise = null;
+
+        throw error;
+      });
   }
 
   return ortModulePromise;
@@ -18,9 +51,16 @@ async function getOrt() {
    HELPERS
 ========================================================= */
 
-function clamp(value, min, max) {
+function clamp(
+  value,
+  min,
+  max
+) {
   return Math.min(
-    Math.max(value, min),
+    Math.max(
+      value,
+      min
+    ),
     max
   );
 }
@@ -35,31 +75,37 @@ export async function canvasToBlob(
   type = "image/png",
   quality = 1
 ) {
-  return new Promise((resolve, reject) => {
-    if (!sourceCanvas) {
-      reject(
-        new Error("Source canvas is missing.")
+  return new Promise(
+    (resolve, reject) => {
+      if (!sourceCanvas) {
+        reject(
+          new Error(
+            "Source canvas is missing."
+          )
+        );
+
+        return;
+      }
+
+      sourceCanvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(
+              new Error(
+                "Could not create image data."
+              )
+            );
+
+            return;
+          }
+
+          resolve(blob);
+        },
+        type,
+        quality
       );
-      return;
     }
-
-    sourceCanvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(
-            new Error(
-              "Could not create image data."
-            )
-          );
-          return;
-        }
-
-        resolve(blob);
-      },
-      type,
-      quality
-    );
-  });
+  );
 }
 
 
@@ -76,8 +122,11 @@ export function canvasToCHWUint8(
     );
   }
 
-  const width = sourceCanvas.width;
-  const height = sourceCanvas.height;
+  const width =
+    sourceCanvas.width;
+
+  const height =
+    sourceCanvas.height;
 
   const ctx =
     sourceCanvas.getContext(
@@ -280,8 +329,9 @@ export function buildAIInpaintMaskCanvas(
     /*
       Brush selection:
       alpha > 10 = selected object
-      selected = 0
-      everything else = 255
+
+      selected     = 0
+      everything   = 255
     */
 
     for (
@@ -455,6 +505,14 @@ export function buildAIInpaintMaskCanvas(
 
 /* =========================================================
    OUTPUT TENSOR -> CANVAS
+
+   Expected MI-GAN output:
+
+     [1, 3, H, W]
+
+   R plane
+   G plane
+   B plane
 ========================================================= */
 
 export function outputTensorToCanvas(
@@ -483,7 +541,12 @@ export function outputTensorToCanvas(
     height;
 
   const ctx =
-    canvas.getContext("2d", { willReadFrequently: true });
+    canvas.getContext(
+      "2d",
+      {
+        willReadFrequently: true,
+      }
+    );
 
   if (!ctx) {
     throw new Error(
@@ -508,33 +571,61 @@ export function outputTensorToCanvas(
     const i =
       p * 4;
 
+    let r =
+      Number(
+        output[p]
+      );
+
+    let g =
+      Number(
+        output[
+          planeSize + p
+        ]
+      );
+
+    let b =
+      Number(
+        output[
+          planeSize * 2 + p
+        ]
+      );
+
+    /*
+     * Some ONNX models return normalized
+     * floating point values [0, 1].
+     *
+     * Others return [0, 255].
+     */
+    if (
+      r >= 0 &&
+      r <= 1 &&
+      g >= 0 &&
+      g <= 1 &&
+      b >= 0 &&
+      b <= 1
+    ) {
+      r *= 255;
+      g *= 255;
+      b *= 255;
+    }
+
     imageData.data[i] =
       clamp(
-        Math.round(
-          output[p]
-        ),
+        Math.round(r),
         0,
         255
       );
 
     imageData.data[i + 1] =
       clamp(
-        Math.round(
-          output[
-            planeSize + p
-          ]
-        ),
+        Math.round(g),
         0,
         255
       );
 
     imageData.data[i + 2] =
       clamp(
-        Math.round(
-          output[
-            planeSize * 2 + p
-          ]
-        ),
+        Math.round(b),
         0,
         255
       );
@@ -558,6 +649,7 @@ export function outputTensorToCanvas(
 
    IMPORTANT:
    Original image remains untouched.
+
    AI generated image is inserted ONLY
    inside selected/removal area.
 ========================================================= */
@@ -635,7 +727,10 @@ export function compositeAIResultOnlyInsideMask(
 
   const alphaCtx =
     alphaCanvas.getContext(
-      "2d"
+      "2d",
+      {
+        willReadFrequently: true,
+      }
     );
 
   if (!alphaCtx) {
@@ -696,7 +791,10 @@ export function compositeAIResultOnlyInsideMask(
 
   const featherCtx =
     featherCanvas.getContext(
-      "2d"
+      "2d",
+      {
+        willReadFrequently: true,
+      }
     );
 
   if (!featherCtx) {
@@ -759,6 +857,9 @@ export function compositeAIResultOnlyInsideMask(
     0
   );
 
+  generatedCtx.globalCompositeOperation =
+    "source-over";
+
 
   /* -------------------------------------------------------
      FINAL IMAGE
@@ -815,7 +916,20 @@ export async function runLocalAIObjectRemoval({
   getMiGanSession,
   onProgress,
 }) {
-  const ort = await getOrt();
+  /*
+   * IMPORTANT:
+   *
+   * This now always goes through ortSafe.js.
+   *
+   * No direct:
+   *
+   *   import("onnxruntime-web")
+   *
+   * exists in this file.
+   */
+  const ort =
+    await getOrt();
+
   if (!baseCanvas) {
     throw new Error(
       "Base image is missing."
@@ -954,18 +1068,21 @@ export async function runLocalAIObjectRemoval({
     55;
 
   const progressTimer =
-    setInterval(() => {
-      simulated =
-        Math.min(
-          92,
-          simulated + 1
-        );
+    setInterval(
+      () => {
+        simulated =
+          Math.min(
+            92,
+            simulated + 1
+          );
 
-      onProgress?.(
-        simulated,
-        "AI is reconstructing the background..."
-      );
-    }, 120);
+        onProgress?.(
+          simulated,
+          "AI is reconstructing the background..."
+        );
+      },
+      120
+    );
 
   let results;
 
@@ -1111,8 +1228,3 @@ export function hasAIObjectSelection(
 
   return false;
 }
-
-
-
-
-

@@ -1,4 +1,3 @@
-
 import { clamp } from "./canvasHelpers";
 import { getSafeOrt } from "../ortSafe";
 
@@ -20,24 +19,6 @@ function getHardwareConcurrency() {
   return Math.max(
     1,
     Number(navigator.hardwareConcurrency) || 4
-  );
-}
-
-function isCrossOriginIsolated() {
-  return (
-    typeof window !== "undefined" &&
-    window.crossOriginIsolated === true
-  );
-}
-
-function getWasmThreads() {
-  if (!isCrossOriginIsolated()) {
-    return 1;
-  }
-
-  return Math.min(
-    4,
-    getHardwareConcurrency()
   );
 }
 
@@ -65,8 +46,18 @@ function getDeviceTier() {
 
 async function getOrt() {
   if (!ortModulePromise) {
-    // Single-thread, no-worker ONNX Runtime (see utils/ortSafe.js).
-    ortModulePromise = getSafeOrt();
+    ortModulePromise = getSafeOrt().catch((error) => {
+      /*
+       * IMPORTANT:
+       *
+       * If ORT loading fails, do not keep a rejected
+       * promise forever. Allow the next AI operation
+       * to retry.
+       */
+      ortModulePromise = null;
+
+      throw error;
+    });
   }
 
   return ortModulePromise;
@@ -84,7 +75,11 @@ export async function getMiGanSession() {
   try {
     return await miGanSessionPromise;
   } catch (error) {
+    /*
+     * Never permanently cache a failed session.
+     */
     miGanSessionPromise = null;
+
     throw error;
   }
 }
@@ -92,45 +87,109 @@ export async function getMiGanSession() {
 async function createMiGanSession() {
   const ort = await getOrt();
 
+  if (!ort) {
+    throw new Error(
+      "ONNX Runtime could not be loaded."
+    );
+  }
+
   /*
-   * Keep WASM local.
-   * This avoids depending on a remote CDN for wasm files.
+   * ---------------------------------------------------
+   * WASM configuration
+   * ---------------------------------------------------
+   *
+   * ortSafe.js already locks:
+   *
+   *   numThreads = 1
+   *   proxy = false
+   *
+   * Do NOT try to change numThreads here.
+   *
+   * SIMD is safe and does not require
+   * multi-threaded WASM.
    */
+
   if (ort.env?.wasm) {
-    ort.env.wasm.simd = true;
-    ort.env.wasm.numThreads = getWasmThreads();
-  }
-
-  /*
-   * Hide harmless "[W:onnxruntime] ... VerifyEachNodeIsAssignedToAnEp"
-   * console warnings (some small shape operations run on the CPU).
-   */
-  ort.env.logLevel = "error";
-
-  /*
-   * Prefer WebGPU when available.
-   * Fall back to WASM automatically.
-   */
-  let executionProviders = ["wasm"];
-
-  if (
-    typeof navigator !== "undefined" &&
-    navigator.gpu
-  ) {
-    executionProviders = [
-      "webgpu",
-      "wasm",
-    ];
-  }
-
-  return ort.InferenceSession.create(
-    MI_GAN_MODEL_URL,
-    {
-      executionProviders,
-      graphOptimizationLevel: "all",
-      logSeverityLevel: 3,
+    try {
+      ort.env.wasm.simd = true;
+    } catch {
+      /* Keep going if SIMD is unavailable. */
     }
+  }
+
+  /*
+   * Reduce noisy ONNX Runtime console output.
+   */
+  if (ort.env) {
+    try {
+      ort.env.logLevel = "error";
+    } catch {
+      /* Ignore unsupported logLevel property. */
+    }
+  }
+
+  /*
+   * ---------------------------------------------------
+   * Try WebGPU first
+   * ---------------------------------------------------
+   *
+   * WebGPU is attempted only when the browser exposes
+   * navigator.gpu.
+   *
+   * If WebGPU session creation fails, the code
+   * automatically falls back to WASM.
+   */
+
+  const hasWebGPU =
+    typeof navigator !== "undefined" &&
+    !!navigator.gpu;
+
+  if (hasWebGPU) {
+    try {
+      const webGpuSession =
+        await ort.InferenceSession.create(
+          MI_GAN_MODEL_URL,
+          {
+            executionProviders: ["webgpu"],
+            graphOptimizationLevel: "all",
+            logSeverityLevel: 3,
+          }
+        );
+
+      console.log(
+        "[MI-GAN] WebGPU session ready"
+      );
+
+      return webGpuSession;
+    } catch (webGpuError) {
+      console.warn(
+        "[MI-GAN] WebGPU unavailable, falling back to WASM.",
+        webGpuError
+      );
+    }
+  }
+
+  /*
+   * ---------------------------------------------------
+   * Reliable WASM fallback
+   * ---------------------------------------------------
+   */
+
+  const wasmSession =
+    await ort.InferenceSession.create(
+      MI_GAN_MODEL_URL,
+      {
+        executionProviders: ["wasm"],
+        graphOptimizationLevel: "all",
+        logSeverityLevel: 3,
+      }
+    );
+
+  console.log(
+    "[MI-GAN] WASM session ready"
   );
+
+  return wasmSession;
 }
 
 /* -------------------------------------------------------
@@ -142,7 +201,14 @@ export function preloadMiGan() {
     return Promise.resolve(null);
   }
 
-  return getMiGanSession().catch(() => null);
+  return getMiGanSession().catch((error) => {
+    console.warn(
+      "[MI-GAN] Background warm-up failed. It will retry when AI Object Remove is used.",
+      error
+    );
+
+    return null;
+  });
 }
 
 /* -------------------------------------------------------
@@ -150,7 +216,8 @@ export function preloadMiGan() {
  * ----------------------------------------------------- */
 
 function createCanvas(width, height) {
-  const canvas = document.createElement("canvas");
+  const canvas =
+    document.createElement("canvas");
 
   canvas.width = Math.max(
     1,
@@ -165,7 +232,10 @@ function createCanvas(width, height) {
   return canvas;
 }
 
-function getCanvasContext(canvas, options = {}) {
+function getCanvasContext(
+  canvas,
+  options = {}
+) {
   return canvas.getContext(
     "2d",
     {
@@ -177,12 +247,11 @@ function getCanvasContext(canvas, options = {}) {
 
 /* -------------------------------------------------------
  * Working resolution
- *
- * Keep inference reasonably fast on weaker devices.
  * ----------------------------------------------------- */
 
 function getWorkingMaxSize() {
-  const tier = getDeviceTier();
+  const tier =
+    getDeviceTier();
 
   if (tier === "weak") {
     return 640;
@@ -199,31 +268,45 @@ function getWorkingMaxSize() {
   return 1024;
 }
 
-function getWorkingSize(width, height) {
-  const maxSize = getWorkingMaxSize();
+function getWorkingSize(
+  width,
+  height
+) {
+  const maxSize =
+    getWorkingMaxSize();
 
-  const longestSide = Math.max(
-    width,
-    height
-  );
+  const longestSide =
+    Math.max(
+      width,
+      height
+    );
 
-  if (longestSide <= maxSize) {
+  if (
+    longestSide <= maxSize
+  ) {
     return {
       width,
       height,
     };
   }
 
-  const scale = maxSize / longestSide;
+  const scale =
+    maxSize /
+    longestSide;
 
   return {
     width: Math.max(
       1,
-      Math.round(width * scale)
+      Math.round(
+        width * scale
+      )
     ),
+
     height: Math.max(
       1,
-      Math.round(height * scale)
+      Math.round(
+        height * scale
+      )
     ),
   };
 }
@@ -235,34 +318,27 @@ function getWorkingSize(width, height) {
 function createWorkingCanvases(
   sourceCanvas
 ) {
-  const sourceWidth = sourceCanvas.width;
-  const sourceHeight = sourceCanvas.height;
+  const sourceWidth =
+    sourceCanvas.width;
+
+  const sourceHeight =
+    sourceCanvas.height;
 
   const {
     width,
     height,
-  } = getWorkingSize(
-    sourceWidth,
-    sourceHeight
-  );
+  } =
+    getWorkingSize(
+      sourceWidth,
+      sourceHeight
+    );
 
-  const workingBase = createCanvas(
-    width,
-    height
-  );
+  const workingBase =
+    createCanvas(
+      width,
+      height
+    );
 
-  /*
-   * IMPORTANT:
-   *
-   * workingSelectionMask:
-   *   white/alpha > 0 = user selected object
-   *
-   * workingMask:
-   *   0   = erase / inpaint
-   *   255 = keep
-   *
-   * These MUST remain separate.
-   */
   const workingSelectionMask =
     createCanvas(
       width,
@@ -300,8 +376,11 @@ function createWorkingCanvases(
     );
   }
 
-  baseCtx.imageSmoothingEnabled = true;
-  baseCtx.imageSmoothingQuality = "high";
+  baseCtx.imageSmoothingEnabled =
+    true;
+
+  baseCtx.imageSmoothingQuality =
+    "high";
 
   baseCtx.clearRect(
     0,
@@ -327,31 +406,21 @@ function createWorkingCanvases(
 
 /* -------------------------------------------------------
  * Selection mask -> MI-GAN mask
- *
- * MI-GAN pipeline contract:
- *
- *   0   = ERASE / INPAINT
- *   255 = KEEP
- *
- * Editor selection:
- *
- *   alpha > 0 = selected object
- *
- * Therefore:
- *
- *   selected -> 0
- *   unselected -> 255
  * ----------------------------------------------------- */
 
 function maskCanvasToCHWUint8(
   canvas
 ) {
-  const width = canvas.width;
-  const height = canvas.height;
+  const width =
+    canvas.width;
 
-  const ctx = getCanvasContext(
-    canvas
-  );
+  const height =
+    canvas.height;
+
+  const ctx =
+    getCanvasContext(
+      canvas
+    );
 
   if (!ctx) {
     throw new Error(
@@ -384,14 +453,13 @@ function maskCanvasToCHWUint8(
       src[i + 3] > 0;
 
     /*
-     * CRITICAL FIX:
-     *
-     * selected object = 0
-     * background       = 255
+     * Selected object = erase
+     * Background       = keep
      */
-    chw[p] = selected
-      ? 0
-      : 255;
+    chw[p] =
+      selected
+        ? 0
+        : 255;
   }
 
   return {
@@ -408,12 +476,16 @@ function maskCanvasToCHWUint8(
 function canvasToCHWUint8(
   canvas
 ) {
-  const width = canvas.width;
-  const height = canvas.height;
+  const width =
+    canvas.width;
 
-  const ctx = getCanvasContext(
-    canvas
-  );
+  const height =
+    canvas.height;
+
+  const ctx =
+    getCanvasContext(
+      canvas
+    );
 
   if (!ctx) {
     throw new Error(
@@ -440,23 +512,31 @@ function canvasToCHWUint8(
       pixelCount * 3
     );
 
-  const redOffset = 0;
-  const greenOffset = pixelCount;
-  const blueOffset = pixelCount * 2;
+  const redOffset =
+    0;
+
+  const greenOffset =
+    pixelCount;
+
+  const blueOffset =
+    pixelCount * 2;
 
   for (
     let i = 0, p = 0;
     i < src.length;
     i += 4, p++
   ) {
-    chw[redOffset + p] =
-      src[i];
+    chw[
+      redOffset + p
+    ] = src[i];
 
-    chw[greenOffset + p] =
-      src[i + 1];
+    chw[
+      greenOffset + p
+    ] = src[i + 1];
 
-    chw[blueOffset + p] =
-      src[i + 2];
+    chw[
+      blueOffset + p
+    ] = src[i + 2];
   }
 
   return {
@@ -479,7 +559,8 @@ function findImageInputName(
   const exact =
     names.find(
       (name) =>
-        name.toLowerCase() === "image"
+        name.toLowerCase() ===
+        "image"
     );
 
   if (exact) {
@@ -487,10 +568,11 @@ function findImageInputName(
   }
 
   const byShape =
-    names.find((name) =>
-      name
-        .toLowerCase()
-        .includes("image")
+    names.find(
+      (name) =>
+        name
+          .toLowerCase()
+          .includes("image")
     );
 
   return (
@@ -508,7 +590,8 @@ function findMaskInputName(
   const exact =
     names.find(
       (name) =>
-        name.toLowerCase() === "mask"
+        name.toLowerCase() ===
+        "mask"
     );
 
   if (exact) {
@@ -516,10 +599,11 @@ function findMaskInputName(
   }
 
   const byShape =
-    names.find((name) =>
-      name
-        .toLowerCase()
-        .includes("mask")
+    names.find(
+      (name) =>
+        name
+          .toLowerCase()
+          .includes("mask")
     );
 
   if (byShape) {
@@ -571,18 +655,14 @@ function tensorToCanvas(
     tensor.dims || [];
 
   /*
-   * Expected output:
+   * NCHW:
    *
    * [1, 3, H, W]
-   *
-   * Some ONNX pipelines may return
-   * [1, H, W, 3].
-   *
-   * Support both.
    */
 
   if (
     dims.length === 4 &&
+    dims[0] === 1 &&
     dims[1] === 3 &&
     dims[2] === height &&
     dims[3] === width
@@ -591,8 +671,12 @@ function tensorToCanvas(
       width * height;
 
     const rOffset = 0;
-    const gOffset = pixelCount;
-    const bOffset = pixelCount * 2;
+
+    const gOffset =
+      pixelCount;
+
+    const bOffset =
+      pixelCount * 2;
 
     for (
       let p = 0;
@@ -600,21 +684,25 @@ function tensorToCanvas(
       p++
     ) {
       let r =
-        Number(data[rOffset + p]);
+        Number(
+          data[
+            rOffset + p
+          ]
+        );
 
       let g =
-        Number(data[gOffset + p]);
+        Number(
+          data[
+            gOffset + p
+          ]
+        );
 
       let b =
-        Number(data[bOffset + p]);
-
-      /*
-       * Model output may be:
-       *   0..255
-       *
-       * or:
-       *   0..1
-       */
+        Number(
+          data[
+            bOffset + p
+          ]
+        );
 
       if (
         r >= 0 &&
@@ -656,7 +744,15 @@ function tensorToCanvas(
       dst[offset + 3] =
         255;
     }
-  } else if (
+  }
+
+  /*
+   * NHWC:
+   *
+   * [1, H, W, 3]
+   */
+
+  else if (
     dims.length === 4 &&
     dims[0] === 1 &&
     dims[1] === height &&
@@ -677,13 +773,19 @@ function tensorToCanvas(
           (y * width + x) * 3;
 
         let r =
-          Number(data[p]);
+          Number(
+            data[p]
+          );
 
         let g =
-          Number(data[p + 1]);
+          Number(
+            data[p + 1]
+          );
 
         let b =
-          Number(data[p + 2]);
+          Number(
+            data[p + 2]
+          );
 
         if (
           r >= 0 &&
@@ -746,10 +848,8 @@ function tensorToCanvas(
 /* -------------------------------------------------------
  * Final composite
  *
- * IMPORTANT:
- * This function receives the ORIGINAL
- * selection mask, not MI-GAN's inverted
- * model mask.
+ * Only the selected area receives
+ * the generated MI-GAN result.
  * ----------------------------------------------------- */
 
 function compositeAIResultOnlyInsideMask(
@@ -763,70 +863,6 @@ function compositeAIResultOnlyInsideMask(
   const height =
     baseCanvas.height;
 
-  const result =
-    createCanvas(
-      width,
-      height
-    );
-
-  const ctx =
-    getCanvasContext(
-      result
-    );
-
-  if (!ctx) {
-    throw new Error(
-      "Could not create final AI result canvas."
-    );
-  }
-
-  /*
-   * Start with original image.
-   */
-  ctx.clearRect(
-    0,
-    0,
-    width,
-    height
-  );
-
-  ctx.drawImage(
-    baseCanvas,
-    0,
-    0
-  );
-
-  /*
-   * Clip generated AI result
-   * to ONLY the selected object area.
-   *
-   * This prevents the AI result from
-   * changing unrelated parts of the image.
-   */
-  ctx.save();
-
-  ctx.globalCompositeOperation =
-    "destination-in";
-
-  ctx.drawImage(
-    selectionMaskCanvas,
-    0,
-    0,
-    width,
-    height
-  );
-
-  ctx.restore();
-
-  const generatedOnly =
-    result;
-
-  /*
-   * The previous operation left only the
-   * selection mask area on `result`.
-   *
-   * Build the final image separately.
-   */
   const finalCanvas =
     createCanvas(
       width,
@@ -845,7 +881,7 @@ function compositeAIResultOnlyInsideMask(
   }
 
   /*
-   * Original image.
+   * Start with the original image.
    */
   finalCtx.drawImage(
     baseCanvas,
@@ -854,15 +890,8 @@ function compositeAIResultOnlyInsideMask(
   );
 
   /*
-   * AI result clipped by selection.
-   */
-  finalCtx.save();
-
-  finalCtx.globalCompositeOperation =
-    "source-over";
-
-  /*
-   * Create temporary clipped AI canvas.
+   * Create only one temporary
+   * clipped AI canvas.
    */
   const clippedAI =
     createCanvas(
@@ -876,8 +905,6 @@ function compositeAIResultOnlyInsideMask(
     );
 
   if (!clippedCtx) {
-    finalCtx.restore();
-
     throw new Error(
       "Could not create clipped AI canvas."
     );
@@ -890,12 +917,19 @@ function compositeAIResultOnlyInsideMask(
     height
   );
 
+  /*
+   * Draw generated result.
+   */
   clippedCtx.drawImage(
     generatedCanvas,
     0,
     0
   );
 
+  /*
+   * Keep generated result ONLY
+   * inside user's selected area.
+   */
   clippedCtx.globalCompositeOperation =
     "destination-in";
 
@@ -907,20 +941,23 @@ function compositeAIResultOnlyInsideMask(
     height
   );
 
+  /*
+   * Put AI result over original image.
+   */
+  finalCtx.globalCompositeOperation =
+    "source-over";
+
   finalCtx.drawImage(
     clippedAI,
     0,
     0
   );
 
-  finalCtx.restore();
-
   /*
-   * Keep this variable referenced so
-   * the function remains explicit about
-   * the generated-only intermediate.
+   * Explicitly restore default state.
    */
-  void generatedOnly;
+  finalCtx.globalCompositeOperation =
+    "source-over";
 
   return finalCanvas;
 }
@@ -1011,9 +1048,6 @@ export async function runLocalAIObjectRemoval({
     );
   }
 
-  /*
-   * Progress helper.
-   */
   const progress = (
     value
   ) => {
@@ -1034,7 +1068,14 @@ export async function runLocalAIObjectRemoval({
   progress(2);
 
   /*
-   * Make sure model is ready.
+   * Get cached MI-GAN session.
+   *
+   * First call:
+   *   load ORT
+   *   create WebGPU/WASM session
+   *
+   * Later calls:
+   *   reuse session
    */
   const session =
     await getMiGanSession();
@@ -1042,7 +1083,7 @@ export async function runLocalAIObjectRemoval({
   progress(10);
 
   /*
-   * Create resized working canvases.
+   * Create working canvases.
    */
   const {
     workingBase,
@@ -1079,13 +1120,13 @@ export async function runLocalAIObjectRemoval({
   }
 
   /*
-   * ----------------------------------------------------
+   * ---------------------------------------------------
    * ORIGINAL USER SELECTION
-   * ----------------------------------------------------
+   * ---------------------------------------------------
    *
-   * White/alpha > 0 means:
-   * "this is the object the user wants removed"
+   * alpha > 0 = object to remove
    */
+
   selectionCtx.clearRect(
     0,
     0,
@@ -1102,21 +1143,14 @@ export async function runLocalAIObjectRemoval({
   );
 
   /*
-   * ----------------------------------------------------
+   * ---------------------------------------------------
    * MI-GAN MODEL MASK
-   * ----------------------------------------------------
+   * ---------------------------------------------------
    *
-   * MI-GAN expects:
-   *
-   *   0   = erase / hole
-   *   255 = keep
-   *
-   * User selection:
-   *
-   *   alpha > 0 = remove
-   *
-   * Therefore invert the selection.
+   * 0   = erase / inpaint
+   * 255 = keep
    */
+
   modelMaskCtx.clearRect(
     0,
     0,
@@ -1153,8 +1187,8 @@ export async function runLocalAIObjectRemoval({
 
     if (selected) {
       /*
-       * SELECTED OBJECT
-       * => ERASE / INPAINT
+       * Selected object:
+       * ERASE / INPAINT
        */
       maskPixels[i] = 0;
       maskPixels[i + 1] = 0;
@@ -1162,8 +1196,8 @@ export async function runLocalAIObjectRemoval({
       maskPixels[i + 3] = 255;
     } else {
       /*
-       * EVERYTHING ELSE
-       * => KEEP
+       * Everything else:
+       * KEEP
        */
       maskPixels[i] = 255;
       maskPixels[i + 1] = 255;
@@ -1189,8 +1223,7 @@ export async function runLocalAIObjectRemoval({
     );
 
   /*
-   * Convert INVERTED model mask
-   * to CHW uint8.
+   * Convert model mask to CHW uint8.
    */
   const modelMask =
     maskCanvasToCHWUint8(
@@ -1203,7 +1236,7 @@ export async function runLocalAIObjectRemoval({
     await getOrt();
 
   /*
-   * Create tensors.
+   * Create input tensors.
    */
   const imageTensor =
     new ort.Tensor(
@@ -1257,7 +1290,7 @@ export async function runLocalAIObjectRemoval({
   }
 
   /*
-   * Run inference.
+   * Run MI-GAN.
    */
   const outputs =
     await session.run({
@@ -1305,7 +1338,7 @@ export async function runLocalAIObjectRemoval({
   }
 
   /*
-   * Convert model output to canvas.
+   * Convert output tensor to canvas.
    */
   const generated =
     tensorToCanvas(
@@ -1319,10 +1352,9 @@ export async function runLocalAIObjectRemoval({
   /*
    * IMPORTANT:
    *
-   * Use ORIGINAL selection mask here.
+   * Use ORIGINAL selection mask.
    *
-   * Do NOT use workingMask because
-   * workingMask is inverted for MI-GAN.
+   * Do not use inverted model mask here.
    */
   const result =
     compositeAIResultOnlyInsideMask(
@@ -1346,12 +1378,20 @@ export async function runLocalAIObjectRemoval({
   progress(98);
 
   /*
-   * Give browser one frame to update UI.
+   * Give browser one frame to paint
+   * the completed progress state.
    */
-  await new Promise(
-    (resolve) =>
-      requestAnimationFrame(resolve)
-  );
+  if (
+    typeof requestAnimationFrame ===
+    "function"
+  ) {
+    await new Promise(
+      (resolve) =>
+        requestAnimationFrame(
+          resolve
+        )
+    );
+  }
 
   progress(100);
 
@@ -1361,15 +1401,16 @@ export async function runLocalAIObjectRemoval({
 /* -------------------------------------------------------
  * Build editor selection mask
  *
- * This is NOT the MI-GAN mask.
+ * This is the editor mask.
  *
- * It remains:
+ * selected:
+ *   white / alpha 255
  *
- *   selected = white / alpha
- *   unselected = transparent
+ * unselected:
+ *   transparent
  *
- * The inversion happens later only for
- * MI-GAN inference.
+ * Inversion happens only immediately
+ * before MI-GAN inference.
  * ----------------------------------------------------- */
 
 export function buildAIInpaintMaskCanvas(
@@ -1419,7 +1460,7 @@ export function buildAIInpaintMaskCanvas(
   );
 
   /*
-   * Preserve the user's selected area.
+   * Preserve user's selection.
    */
   ctx.drawImage(
     selectionCanvas,
@@ -1430,8 +1471,10 @@ export function buildAIInpaintMaskCanvas(
   );
 
   /*
-   * Normalize selection to solid white
-   * while preserving alpha.
+   * Normalize selected pixels:
+   *
+   * selected   = solid white
+   * unselected = transparent
    */
   const imageData =
     ctx.getImageData(
@@ -1473,4 +1516,3 @@ export function buildAIInpaintMaskCanvas(
 
   return maskCanvas;
 }
-

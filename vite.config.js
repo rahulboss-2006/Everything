@@ -11,27 +11,4 @@ export default defineConfig({
 
   // GitHub Pages
   base: "/Everything/",
-
-  // Enable cross-origin isolation
-  // Required for WebAssembly multi-threading
-  server: {
-    headers: {
-      "Cross-Origin-Opener-Policy":
-        "same-origin",
-
-      "Cross-Origin-Embedder-Policy":
-        "require-corp",
-    },
-  },
-
-  // Same headers for production preview
-  preview: {
-    headers: {
-      "Cross-Origin-Opener-Policy":
-        "same-origin",
-
-      "Cross-Origin-Embedder-Policy":
-        "require-corp",
-    },
-  },
 });
