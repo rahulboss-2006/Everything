@@ -857,111 +857,57 @@ function compositeAIResultOnlyInsideMask(
   generatedCanvas,
   selectionMaskCanvas
 ) {
-  const width =
-    baseCanvas.width;
+  const width = baseCanvas.width;
+  const height = baseCanvas.height;
 
-  const height =
-    baseCanvas.height;
-
-  const finalCanvas =
-    createCanvas(
-      width,
-      height
-    );
-
-  const finalCtx =
-    getCanvasContext(
-      finalCanvas
-    );
+  const finalCanvas = createCanvas(width, height);
+  const finalCtx = getCanvasContext(finalCanvas);
 
   if (!finalCtx) {
-    throw new Error(
-      "Could not create final composite canvas."
-    );
+    throw new Error("Could not create final composite canvas.");
   }
 
-  /*
-   * Start with the original image.
-   */
-  finalCtx.drawImage(
-    baseCanvas,
-    0,
-    0
-  );
+  // Preserve the original image outside the edited area.
+  finalCtx.drawImage(baseCanvas, 0, 0);
 
-  /*
-   * Create only one temporary
-   * clipped AI canvas.
-   */
-  const clippedAI =
-    createCanvas(
-      width,
-      height
-    );
-
-  const clippedCtx =
-    getCanvasContext(
-      clippedAI
-    );
+  const clippedAI = createCanvas(width, height);
+  const clippedCtx = getCanvasContext(clippedAI);
 
   if (!clippedCtx) {
-    throw new Error(
-      "Could not create clipped AI canvas."
-    );
+    throw new Error("Could not create clipped AI canvas.");
   }
 
-  clippedCtx.clearRect(
-    0,
-    0,
-    width,
-    height
+  clippedCtx.drawImage(generatedCanvas, 0, 0);
+
+  // Build a softly feathered mask to reduce hard edges.
+  const featherMask = createCanvas(width, height);
+  const featherCtx = getCanvasContext(featherMask);
+
+  if (!featherCtx) {
+    throw new Error("Could not create feather mask.");
+  }
+
+  const featherRadius = Math.max(
+    1,
+    Math.min(4, Math.round(Math.min(width, height) / 400))
   );
 
-  /*
-   * Draw generated result.
-   */
-  clippedCtx.drawImage(
-    generatedCanvas,
-    0,
-    0
-  );
+  featherCtx.save();
+  featherCtx.filter = `blur(${featherRadius}px)`;
+  featherCtx.drawImage(selectionMaskCanvas, 0, 0, width, height);
+  featherCtx.restore();
 
-  /*
-   * Keep generated result ONLY
-   * inside user's selected area.
-   */
-  clippedCtx.globalCompositeOperation =
-    "destination-in";
+  // Clip the generated result to the feathered selection.
+  clippedCtx.globalCompositeOperation = "destination-in";
+  clippedCtx.drawImage(featherMask, 0, 0);
+  clippedCtx.globalCompositeOperation = "source-over";
 
-  clippedCtx.drawImage(
-    selectionMaskCanvas,
-    0,
-    0,
-    width,
-    height
-  );
-
-  /*
-   * Put AI result over original image.
-   */
-  finalCtx.globalCompositeOperation =
-    "source-over";
-
-  finalCtx.drawImage(
-    clippedAI,
-    0,
-    0
-  );
-
-  /*
-   * Explicitly restore default state.
-   */
-  finalCtx.globalCompositeOperation =
-    "source-over";
+  // Blend the generated pixels with the original image.
+  finalCtx.drawImage(clippedAI, 0, 0);
+  finalCtx.globalCompositeOperation = "source-over";
 
   return finalCanvas;
 }
-
 /* -------------------------------------------------------
  * Restore working result to original resolution
  * ----------------------------------------------------- */
